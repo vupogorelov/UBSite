@@ -1,0 +1,453 @@
+// @ts-check
+import { DatabaseSync } from 'node:sqlite';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+export const DEFAULT_DB_PATH =
+  process.env.UB_DB ?? fileURLToPath(new URL('../data/ub.db', import.meta.url));
+
+/**
+ * Migrations run in order; PRAGMA user_version stores how many have been applied.
+ * Never edit an applied migration — append a new one.
+ */
+const MIGRATIONS = [
+  // 1: book text. Re-imported wholesale; user data must reference paragraphs by `ref`, not rowid.
+  `
+  CREATE TABLE parts (
+    id          INTEGER PRIMARY KEY,
+    title_ru    TEXT NOT NULL,
+    title_en    TEXT NOT NULL,
+    subtitle_ru TEXT
+  );
+  CREATE TABLE papers (
+    id       INTEGER PRIMARY KEY,
+    part_id  INTEGER NOT NULL REFERENCES parts(id),
+    title_ru TEXT NOT NULL,
+    title_en TEXT NOT NULL
+  );
+  CREATE TABLE sections (
+    paper_id INTEGER NOT NULL REFERENCES papers(id),
+    num      INTEGER NOT NULL,
+    title_ru TEXT,
+    title_en TEXT,
+    PRIMARY KEY (paper_id, num)
+  ) WITHOUT ROWID;
+  CREATE TABLE paragraphs (
+    ref         TEXT PRIMARY KEY,
+    seq         INTEGER NOT NULL UNIQUE,
+    paper_id    INTEGER NOT NULL REFERENCES papers(id),
+    section_num INTEGER NOT NULL,
+    num         INTEGER NOT NULL,
+    page_ref    TEXT NOT NULL,
+    html_ru     TEXT NOT NULL,
+    html_en     TEXT NOT NULL,
+    plain_ru    TEXT NOT NULL,
+    plain_en    TEXT NOT NULL
+  );
+  CREATE INDEX paragraphs_paper ON paragraphs (paper_id, seq);
+  `,
+  // 2: workspaces. Everything user-made (settings now; annotations, tags later) belongs to one.
+  // Users and membership arrive together with authentication.
+  `
+  CREATE TABLE workspaces (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    kind       TEXT NOT NULL CHECK (kind IN ('personal', 'group')),
+    settings   TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  INSERT INTO workspaces (id, name, kind) VALUES (1, 'Личное', 'personal');
+  `,
+  // 3: full-text search (pre-tokenized by server/search/text.js; rowid = paragraphs.seq),
+  // saved queries and search history.
+  `
+  CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+  CREATE VIRTUAL TABLE search_fts USING fts5(
+    ru_exact, ru_stem, en_exact, en_stem,
+    content = '', columnsize = 0, tokenize = 'unicode61 remove_diacritics 0'
+  );
+  CREATE TABLE saved_queries (
+    id           INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    title        TEXT NOT NULL,
+    query        TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX saved_queries_workspace ON saved_queries (workspace_id);
+  CREATE TABLE search_history (
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    query        TEXT NOT NULL,
+    used_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    uses         INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (workspace_id, query)
+  ) WITHOUT ROWID;
+  `,
+  // 4: annotations (highlights, comment threads, bookmarks) and tags.
+  // Paragraphs are referenced by `ref` text, not a foreign key: book tables are re-imported.
+  `
+  CREATE TABLE annotations (
+    id           INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    author_id    INTEGER,
+    ref          TEXT NOT NULL,
+    lang         TEXT CHECK (lang IN ('ru', 'en')),
+    start_pos    INTEGER,
+    end_pos      INTEGER,
+    quote        TEXT,
+    color        TEXT CHECK (color IN ('yellow', 'green', 'blue', 'pink', 'purple')),
+    bookmark     INTEGER NOT NULL DEFAULT 0,
+    title        TEXT,
+    resolved_at  TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    -- lang/start/end are all set (text fragment) or all NULL (whole paragraph)
+    CHECK ((lang IS NULL) = (start_pos IS NULL) AND (start_pos IS NULL) = (end_pos IS NULL))
+  );
+  CREATE INDEX annotations_workspace_ref ON annotations (workspace_id, ref);
+  CREATE TABLE comments (
+    id            INTEGER PRIMARY KEY,
+    annotation_id INTEGER NOT NULL REFERENCES annotations(id) ON DELETE CASCADE,
+    author_id     INTEGER,
+    body          TEXT NOT NULL,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX comments_annotation ON comments (annotation_id, id);
+  CREATE TABLE tags (
+    id           INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,          -- as typed, "/" separates levels: космология/Хавона
+    name_key     TEXT NOT NULL,          -- lower case, for case-insensitive uniqueness (NOCASE is ASCII-only)
+    color        TEXT,
+    description  TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (workspace_id, name_key)
+  );
+  CREATE TABLE annotation_tags (
+    annotation_id INTEGER NOT NULL REFERENCES annotations(id) ON DELETE CASCADE,
+    tag_id        INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    PRIMARY KEY (annotation_id, tag_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX annotation_tags_tag ON annotation_tags (tag_id);
+  `,
+  // 5: users, sessions, invitations, workspace membership, personal settings, personal history.
+  // Existing data (workspace 1, authorless notes) is claimed by the first admin (scripts/admin.js init).
+  `
+  CREATE TABLE users (
+    id            INTEGER PRIMARY KEY,
+    username      TEXT NOT NULL,
+    username_key  TEXT NOT NULL UNIQUE,
+    display_name  TEXT,
+    password_hash TEXT,
+    is_admin      INTEGER NOT NULL DEFAULT 0,
+    disabled      INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE sessions (
+    token_hash TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL
+  ) WITHOUT ROWID;
+  CREATE INDEX sessions_user ON sessions (user_id);
+  -- kind 'account': creates a user (optionally joining workspace_id with role);
+  -- kind 'reset': sets a new password for user_id.
+  CREATE TABLE invites (
+    token_hash   TEXT PRIMARY KEY,
+    kind         TEXT NOT NULL CHECK (kind IN ('account', 'reset')),
+    user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id INTEGER REFERENCES workspaces(id) ON DELETE CASCADE,
+    role         TEXT CHECK (role IN ('owner', 'editor', 'commenter', 'viewer')),
+    is_admin     INTEGER NOT NULL DEFAULT 0,
+    created_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at   TEXT NOT NULL,
+    used_at      TEXT
+  ) WITHOUT ROWID;
+  CREATE TABLE workspace_members (
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role         TEXT NOT NULL CHECK (role IN ('owner', 'editor', 'commenter', 'viewer')),
+    joined_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (workspace_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX workspace_members_user ON workspace_members (user_id);
+  ALTER TABLE workspaces ADD COLUMN owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+  CREATE TABLE user_settings (
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    settings     TEXT NOT NULL DEFAULT '{}',
+    PRIMARY KEY (user_id, workspace_id)
+  ) WITHOUT ROWID;
+  CREATE TABLE search_history_v2 (
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
+    query        TEXT NOT NULL,
+    used_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    uses         INTEGER NOT NULL DEFAULT 1,
+    UNIQUE (workspace_id, user_id, query)
+  );
+  INSERT INTO search_history_v2 (workspace_id, user_id, query, used_at, uses)
+    SELECT workspace_id, NULL, query, used_at, uses FROM search_history;
+  DROP TABLE search_history;
+  ALTER TABLE search_history_v2 RENAME TO search_history;
+  `,
+  // 6: collective translation — the platform-wide public layer: proposals for better wording of
+  // a fragment of the Russian text (offsets in paragraphs.plain_ru), their versions and votes,
+  // and public paragraph threads (messages, plus events such as "published", "approved").
+  `
+  ALTER TABLE users ADD COLUMN is_translator INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN is_coordinator INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE proposals (
+    id            INTEGER PRIMARY KEY,
+    ref           TEXT NOT NULL,
+    start_pos     INTEGER NOT NULL,
+    end_pos       INTEGER NOT NULL,
+    original      TEXT NOT NULL,
+    author_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status        TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'voting', 'approved', 'rejected', 'superseded')),
+    version       INTEGER NOT NULL DEFAULT 1,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    published_at  TEXT,
+    closes_at     TEXT,
+    decided_at    TEXT,
+    decision_note TEXT,
+    superseded_by INTEGER REFERENCES proposals(id) ON DELETE SET NULL
+  );
+  CREATE INDEX proposals_ref ON proposals (ref, status);
+  CREATE INDEX proposals_status ON proposals (status, closes_at);
+  CREATE TABLE proposal_versions (
+    proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+    version     INTEGER NOT NULL,
+    text        TEXT NOT NULL,
+    note        TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (proposal_id, version)
+  ) WITHOUT ROWID;
+  CREATE TABLE votes (
+    proposal_id INTEGER NOT NULL REFERENCES proposals(id) ON DELETE CASCADE,
+    version     INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    value       INTEGER NOT NULL CHECK (value IN (-1, 0, 1)),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (proposal_id, version, user_id)
+  ) WITHOUT ROWID;
+  CREATE TABLE public_messages (
+    id          INTEGER PRIMARY KEY,
+    ref         TEXT NOT NULL,
+    proposal_id INTEGER REFERENCES proposals(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL DEFAULT 'message' CHECK (kind IN ('message', 'event')),
+    author_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    body        TEXT NOT NULL,
+    hidden_at   TEXT,
+    hidden_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX public_messages_ref ON public_messages (ref, id);
+  CREATE INDEX public_messages_proposal ON public_messages (proposal_id, id);
+  `,
+  // 7: in-app notifications. A user follows a paragraph thread automatically by taking part in it
+  // (message, proposal, vote); thread_follows stores explicit choices: 1 = follow, 0 = muted.
+  // Everything up to notif_seen_id counts as read (the list is read as a whole when opened).
+  `
+  CREATE TABLE thread_follows (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ref        TEXT NOT NULL,
+    follow     INTEGER NOT NULL CHECK (follow IN (0, 1)),
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, ref)
+  ) WITHOUT ROWID;
+  ALTER TABLE users ADD COLUMN notif_seen_id INTEGER NOT NULL DEFAULT 0;
+  UPDATE users SET notif_seen_id = (SELECT coalesce(max(id), 0) FROM public_messages);
+  CREATE INDEX votes_user ON votes (user_id);
+  CREATE INDEX proposals_author ON proposals (author_id);
+  CREATE INDEX public_messages_author ON public_messages (author_id);
+  `,
+  // 8: translation glossary, kept by coordinators. `avoid`: undesirable Russian variants, one per line.
+  `
+  CREATE TABLE glossary (
+    id         INTEGER PRIMARY KEY,
+    en         TEXT NOT NULL,
+    ru         TEXT NOT NULL,
+    avoid      TEXT NOT NULL DEFAULT '',
+    note       TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX glossary_en ON glossary (lower(en));
+  `,
+  // 9: collections ("подборки") — a hand-ordered list of paragraphs (or ranges), notes and text
+  // blocks, kept in a workspace. `shared`: every user of the platform may read it, subscribe or copy.
+  // Items: kind 'para' (ref … ref_end), 'note' (annotation of the same workspace), 'text' (body,
+  // `heading` = a section title). `body` of para/note items is the compiler's comment.
+  `
+  CREATE TABLE collections (
+    id           INTEGER PRIMARY KEY,
+    workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    title        TEXT NOT NULL,
+    description  TEXT,
+    shared       INTEGER NOT NULL DEFAULT 0,
+    author_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    copied_from  INTEGER REFERENCES collections(id) ON DELETE SET NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at   TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX collections_ws ON collections (workspace_id);
+  CREATE TABLE collection_items (
+    id            INTEGER PRIMARY KEY,
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    pos           INTEGER NOT NULL,
+    kind          TEXT NOT NULL CHECK (kind IN ('para', 'note', 'text')),
+    ref           TEXT,
+    ref_end       TEXT,
+    annotation_id INTEGER REFERENCES annotations(id) ON DELETE CASCADE,
+    body          TEXT,
+    heading       INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX collection_items_order ON collection_items (collection_id, pos);
+  CREATE TABLE collection_subscriptions (
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, collection_id)
+  ) WITHOUT ROWID;
+  `,
+  // 10: personal tasks — each user's own, shared by all their workspaces. A task may point to a
+  // place in the book (paragraph or range), a note or a collection. `due`: a calendar date
+  // (YYYY-MM-DD, the user's own day); `tags`: JSON array of labels.
+  `
+  CREATE TABLE task_lists (
+    id         INTEGER PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    title      TEXT NOT NULL,
+    emoji      TEXT,
+    pos        INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX task_lists_user ON task_lists (user_id, pos);
+  CREATE TABLE tasks (
+    id            INTEGER PRIMARY KEY,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    list_id       INTEGER REFERENCES task_lists(id) ON DELETE SET NULL,
+    title         TEXT NOT NULL,
+    notes         TEXT,
+    status        TEXT NOT NULL DEFAULT 'todo' CHECK (status IN ('todo', 'doing', 'done')),
+    important     INTEGER NOT NULL DEFAULT 0,
+    due           TEXT,
+    tags          TEXT NOT NULL DEFAULT '[]',
+    ref           TEXT,
+    ref_end       TEXT,
+    annotation_id INTEGER REFERENCES annotations(id) ON DELETE SET NULL,
+    collection_id INTEGER REFERENCES collections(id) ON DELETE SET NULL,
+    pos           INTEGER NOT NULL DEFAULT 0,
+    done_at       TEXT,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX tasks_user ON tasks (user_id, status, pos);
+  CREATE TABLE subtasks (
+    id      INTEGER PRIMARY KEY,
+    task_id INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    title   TEXT NOT NULL,
+    done    INTEGER NOT NULL DEFAULT 0,
+    pos     INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX subtasks_task ON subtasks (task_id, pos);
+  `,
+  // 11: chat. Every conversation of the public layer lives in public_messages, keyed by `ref`:
+  // a paragraph ("5:1.2"), a channel ("chan:3") or a group workspace ("ws:2", members only).
+  // Replies, reactions, @mentions and read marks work the same for all of them.
+  `
+  ALTER TABLE public_messages ADD COLUMN reply_to INTEGER REFERENCES public_messages(id) ON DELETE SET NULL;
+  CREATE TABLE channels (
+    id          INTEGER PRIMARY KEY,
+    title       TEXT NOT NULL,
+    description TEXT,
+    created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    archived    INTEGER NOT NULL DEFAULT 0,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  INSERT INTO channels (title, description) VALUES ('Общий', 'Обо всём, что касается работы с книгой');
+  CREATE TABLE message_reactions (
+    message_id INTEGER NOT NULL REFERENCES public_messages(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    emoji      TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (message_id, user_id, emoji)
+  ) WITHOUT ROWID;
+  CREATE TABLE mentions (
+    message_id INTEGER NOT NULL REFERENCES public_messages(id) ON DELETE CASCADE,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY (message_id, user_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX mentions_user ON mentions (user_id);
+  CREATE TABLE chat_reads (
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    chat         TEXT NOT NULL,
+    last_read_id INTEGER NOT NULL,
+    PRIMARY KEY (user_id, chat)
+  ) WITHOUT ROWID;
+  `,
+  // 12: the pronunciation dictionary for reading aloud, shared by everybody (coordinators edit).
+  // `written` matches the start of a word (so every case form of a name is caught); `spoken` is
+  // what the voice gets instead, a stress as U+0301 after the vowel.
+  `
+  CREATE TABLE pronunciations (
+    id         INTEGER PRIMARY KEY,
+    lang       TEXT NOT NULL CHECK (lang IN ('ru', 'en')),
+    written    TEXT NOT NULL,
+    spoken     TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE UNIQUE INDEX pronunciations_written ON pronunciations (lang, lower(written));
+  `,
+];
+
+/**
+ * @param {string} [file]
+ * @returns {DatabaseSync}
+ */
+export function openDb(file = DEFAULT_DB_PATH) {
+  if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
+  const db = new DatabaseSync(file);
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  migrate(db);
+  return db;
+}
+
+/** @param {DatabaseSync} db */
+function migrate(db) {
+  const row = /** @type {{ user_version: number }} */ (db.prepare('PRAGMA user_version').get());
+  for (let v = row.user_version; v < MIGRATIONS.length; v++) {
+    transaction(db, () => {
+      db.exec(MIGRATIONS[v]);
+      db.exec(`PRAGMA user_version = ${v + 1}`);
+    });
+  }
+}
+
+/**
+ * @template T
+ * @param {DatabaseSync} db
+ * @param {() => T} fn
+ * @returns {T}
+ */
+export function transaction(db, fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+}
