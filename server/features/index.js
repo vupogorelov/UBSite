@@ -1,42 +1,43 @@
 // @ts-check
 // The platform's features, in the order their routes are registered. Each joins the core
 // (server/core.js) by its setup: its routes, its jobs, the paths a guest may read, what it answers in
-// advance, what it listens for. A new feature is a file of its own, added here.
-import { HttpError } from './http.js';
-import { registerAuthRoutes } from './api/auth.js';
-import { registerAdminRoutes } from './api/admin.js';
-import { registerPublicRoutes } from './api/public.js';
-import { registerChatRoutes } from './api/chat.js';
-import { createTextSync } from './textsync.js';
-import { registerIntegrationRoutes } from './api/integrations.js';
-import { createAnalytics } from './analytics.js';
-import { registerAnalyticsRoutes } from './api/analytics.js';
-import { registerGlossaryRoutes } from './api/glossary.js';
-import { registerPronunciationRoutes } from './api/pronunciations.js';
-import { createExport } from './export.js';
-import { registerExportRoutes } from './api/export.js';
-import { registerNotificationRoutes } from './api/notifications.js';
-import { registerBookRoutes } from './api/book.js';
-import { registerWorkspaceRoutes } from './api/workspaces.js';
-import { registerSearchRoutes } from './api/search.js';
-import { registerAnnotationRoutes } from './api/annotations.js';
-import { registerCollectionRoutes } from './api/collections.js';
-import { createMarkTasks } from './marktasks.js';
-import { registerTaskRoutes } from './api/tasks.js';
-import { registerTagRoutes } from './api/tags.js';
-import { registerPlaceRoutes } from './api/places.js';
-import { createAudio } from './audio.js';
-import { registerAudioRoutes } from './api/audio.js';
-import { registerAliasRoutes } from './api/aliases.js';
-import { createOffline, registerOfflineRoutes, storedAnswers } from './offline.js';
-import { createClientLog } from './clientlog.js';
-import { registerLogRoutes } from './api/log.js';
-import { createLive } from './live.js';
-import { lastBackup } from './backup.js';
+// advance, what it listens for. A new feature is a file of its own in this folder (as support.js), added here.
+import { HttpError } from '../http.js';
+import { registerAuthRoutes } from '../api/auth.js';
+import { registerAdminRoutes } from '../api/admin.js';
+import { registerPublicRoutes } from '../api/public.js';
+import { registerChatRoutes } from '../api/chat.js';
+import { createTextSync } from '../textsync.js';
+import { registerIntegrationRoutes } from '../api/integrations.js';
+import { createAnalytics } from '../analytics.js';
+import { registerAnalyticsRoutes } from '../api/analytics.js';
+import { registerGlossaryRoutes } from '../api/glossary.js';
+import { registerPronunciationRoutes } from '../api/pronunciations.js';
+import { createExport } from '../export.js';
+import { registerExportRoutes } from '../api/export.js';
+import { registerNotificationRoutes } from '../api/notifications.js';
+import { registerBookRoutes } from '../api/book.js';
+import { registerWorkspaceRoutes } from '../api/workspaces.js';
+import { registerSearchRoutes } from '../api/search.js';
+import { registerAnnotationRoutes } from '../api/annotations.js';
+import { registerCollectionRoutes } from '../api/collections.js';
+import { createMarkTasks } from '../marktasks.js';
+import { registerTaskRoutes } from '../api/tasks.js';
+import { registerTagRoutes } from '../api/tags.js';
+import { registerPlaceRoutes } from '../api/places.js';
+import { createAudio } from '../audio.js';
+import { registerAudioRoutes } from '../api/audio.js';
+import { registerAliasRoutes } from '../api/aliases.js';
+import { createOffline, registerOfflineRoutes, storedAnswers } from '../offline.js';
+import { createClientLog } from '../clientlog.js';
+import { registerLogRoutes } from '../api/log.js';
+import { createLive } from '../live.js';
+import { lastBackup } from '../backup.js';
+import support from './support.js';
 
 const MINUTE = 60_000;
 
-/** @type {import('./core.js').Feature[]} */
+/** @type {import('../core.js').Feature[]} */
 export const FEATURES = [
   { name: 'auth', setup: (c) => registerAuthRoutes(c.router, c.db, c.auth, c.mailer) },
   { name: 'admin', setup: (c) => registerAdminRoutes(c.router, c.db, c.auth, c.translation) },
@@ -115,6 +116,7 @@ export const FEATURES = [
     name: 'live',
     setup: (c) => void createLive(c.db, c.chat.hub, c.auth).start(),
   },
+  support,
   {
     // is it alive: the process answers and the database reads (503 — it does not); when the last copy
     // was made. For restart.ps1 and an outside watcher; nothing personal in it.

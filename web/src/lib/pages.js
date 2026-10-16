@@ -2,7 +2,8 @@
 // The pages shown in place of the book, in one list: the shell (Shell.svelte) shows the page of the
 // address, titles its header from here and loads its component when first opened; the router treats a
 // page's own address as a section (lib/router.svelte.js: "back" from it goes to the book). A new page =
-// a new item here (and, if it is a section of the navigation, an item in lib/sections.svelte.js).
+// a new item here (and, if it is a section of the navigation, an item in lib/sections.svelte.js). A feature
+// in a folder of its own (web/src/features/<name>/) gives its page from its index.js.
 //
 // kind: 'page' — it covers the book and its sidebar (the phone: a section's screen with ← and a title);
 //       'collection' — read in place of the book, the sidebar stays.
@@ -24,6 +25,8 @@
  * the section's header (a chat's conversation has its own).
  */
 
+import { page as supportPage } from '../features/support/index.js';
+
 /** "/x" or "/x?…". @param {string} base */
 const at = (base) => (/** @type {string} */ path) => path === base || path.startsWith(`${base}?`);
 
@@ -36,7 +39,7 @@ export const PAGES = [
   },
   { id: 'tasks', path: '/tasks', match: at('/tasks'), title: 'Мои задачи', phoneTitle: 'Задачи', kind: 'page', load: () => import('../components/TasksPage.svelte') },
   { id: 'about', path: '/about', match: (p) => p === '/about', title: 'О приложении', kind: 'page', load: () => import('../components/AboutPage.svelte') },
-  { id: 'support', path: '/support', match: (p) => p === '/support', title: 'Поддержать проект', kind: 'page', load: () => import('../components/SupportPage.svelte') },
+  supportPage, // (a feature in a folder of its own: web/src/features/support/)
   {
     // /c/12 — a collection read in place of the book
     id: 'collection', match: (p) => /^\/c\/\d+\/?$/.test(p), title: 'Подборка', kind: 'collection',

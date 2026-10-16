@@ -1,5 +1,5 @@
 <script>
-  /** "Поддержать проект" (/support): a few words and the YooMoney fundraising widget. */
+  /** "Поддержать проект" (/support): a few words and the YooMoney fundraising widget (features/support/). */
 
   const FUNDRAISE = 'https://yoomoney.ru/fundraise/1KPPD6KTOTC.261008';
   const WIDGET = 'https://yoomoney.ru/quickpay/fundraise/widget?billNumber=1KPPD6KTOTC.261008&';
@@ -17,3 +17,18 @@
     <p class="muted small">Форма не открылась? <a href={FUNDRAISE} target="_blank" rel="noopener">Перейти на страницу сбора в ЮMoney</a></p>
   </article>
 </div>
+
+<style>
+  /* the widget never wider than the screen */
+  .support-widget {
+    margin: var(--space-6) 0 var(--space-4);
+  }
+  .support-widget iframe {
+    display: block;
+    width: 100%;
+    max-width: 500px;
+    height: 480px;
+    border: 0;
+    color-scheme: light; /* keeps the frame transparent in dark themes */
+  }
+</style>

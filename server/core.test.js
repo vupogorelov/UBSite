@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from './db.js';
 import { createCore } from './core.js';
-import { FEATURES } from './features.js';
+import { FEATURES } from './features/index.js';
 
 test('the core: guest paths, interceptors, events between features, jobs that keep going after a failure', async (t) => {
   const core = createCore(openDb(':memory:'));

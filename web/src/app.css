@@ -6668,19 +6668,6 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   color: var(--accent);
 }
 
-/* "Поддержать проект" (/support): the YooMoney widget, never wider than the screen */
-.support-widget {
-  margin: var(--space-6) 0 var(--space-4);
-}
-.support-widget iframe {
-  display: block;
-  width: 100%;
-  max-width: 500px;
-  height: 480px;
-  border: 0;
-  color-scheme: light; /* keeps the frame transparent in dark themes */
-}
-
 /* ---- The bottom bar and the reading line: one block (phone, every style) ----
    The line's element is the surface of both: it reaches down under the buttons, and the bar over it
    is transparent — no line between them, and with glass one blur, not two meeting at a seam. (The

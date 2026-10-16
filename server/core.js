@@ -1,11 +1,12 @@
 // @ts-check
-// The core the platform's features are built on (server/features.js lists them). It holds what more
+// The core the platform's features are built on (server/features/ lists them). It holds what more
 // than one feature uses — the database, the router, the shared services (people, chats, the public
 // layer, the glossary, tags, the Book's voice, mail) — and the four ways a feature joins in:
 //   every(ms, name, fn)   a job done now and then (its failure written down, the next run still comes);
 //   guest(re)             GET paths read without signing in (a shared link: server/main.js lets them in);
 //   intercept(fn)         a look at a request before its route (an answer made in advance: offline.js);
-//   on(event, fn)/emit()  a word between features ("bookChanged": the book's text changed).
+//   on(event, fn)/emit()  a word between features ("bookChanged": the book's text changed);
+//   allowFrame(origin)    a page of another site shown inside ours (the security policy's frame-src).
 // A feature is { name, setup(core) }: it registers its routes and the rest, it imports nothing of the
 // others but what the core gives.
 import { createRouter } from './http.js';
@@ -37,6 +38,8 @@ export function createCore(db) {
   const interceptors = [];
   /** @type {Map<string, (() => void)[]>} */
   const listeners = new Map();
+  /** @type {Set<string>} */
+  const frames = new Set();
 
   return {
     db,
@@ -72,10 +75,17 @@ export function createCore(db) {
     emit(event) {
       for (const fn of listeners.get(event) ?? []) fn();
     },
+    /** A site whose pages may be shown inside ours (an https origin). @param {string} origin */
+    allowFrame(origin) {
+      if (!/^https:\/\/[a-z0-9.-]+$/i.test(origin)) throw new Error(`Not an https origin: ${origin}`);
+      frames.add(origin);
+    },
 
     // ---- for server/main.js ----
     /** @param {string} path */
     isGuestPath: (path) => guestPaths.some((re) => re.test(path)),
+    /** The sites allowed in frames (the security policy's frame-src, after 'self'). */
+    frameSources: () => [...frames],
     /** @type {Interceptor} */
     intercepted: (req, res, path) => interceptors.some((fn) => fn(req, res, path)),
     /** Starts the jobs (a failure is written down; the next run still comes). */

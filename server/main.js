@@ -8,7 +8,7 @@ import { createRateLimit } from './ratelimit.js';
 import { startBackups } from './backup.js';
 import { createOps, validOpId } from './ops.js';
 import { createCore } from './core.js';
-import { FEATURES } from './features.js';
+import { FEATURES } from './features/index.js';
 import { existsSync } from 'node:fs';
 
 // Settings kept out of the code — the mailbox letters go from (server/mail.js): deploy/mail.env, if it is there.
@@ -27,7 +27,7 @@ const db = openDb();
   const verdict = /** @type {{ quick_check: string }[]} */ (db.prepare('PRAGMA quick_check').all()).map((r) => r.quick_check).join('; ');
   if (verdict !== 'ok') console.error(`${new Date().toISOString()} DATABASE DAMAGED (quick_check): ${verdict.slice(0, 500)}`);
 }
-// The core, then the platform's features on it (server/core.js, server/features.js).
+// The core, then the platform's features on it (server/core.js, server/features/).
 const core = createCore(db);
 for (const f of FEATURES) f.setup(core);
 const { router, auth, mailer } = core;
@@ -40,8 +40,8 @@ const SECURITY_HEADERS = {
   'Referrer-Policy': 'same-origin',
   'Content-Security-Policy':
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; " +
-    // frame-src: the YooMoney fundraising widget on the "Поддержать проект" page
-    "connect-src 'self'; frame-src 'self' https://yoomoney.ru; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+    // frame-src: the other sites the features show inside ours (core.allowFrame: the fundraising widget)
+    `connect-src 'self'; frame-src ${["'self'", ...core.frameSources()].join(' ')}; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`,
 };
 
 /** A request slower than this is written to the log (where the time goes, seen before anyone complains). */
