@@ -26,6 +26,7 @@ import { log } from './log.js';
 import { listened } from './recordings.svelte.js';
 import { applyDict, loadDict } from './pronunciations.svelte.js';
 import { noteListen, setListenHandler } from './places.svelte.js';
+import { bookShare, locate, bookLoaded, loadBook } from './bookmap.svelte.js';
 
 const PREFS_KEY = 'ub.tts';
 /**
@@ -166,36 +167,6 @@ function readPlace() {
   }
 }
 tts.place = readPlace();
-/**
- * Paragraphs before each paper and in the whole book (from the contents); `papers` in book order.
- * @type {{ before: Map<number, number>, total: number, papers: { id: number, count: number }[] } | null}
- */
-let book = null;
-let bookLoading = false;
-/** The paragraph map of the book is loaded (the reading progress line waits for it). */
-export const bookMap = $state({ ready: false });
-export function loadBook() {
-  if (book || bookLoading) return;
-  bookLoading = true;
-  api.toc().then(
-    (t) => {
-      const before = new Map();
-      let total = 0;
-      for (const p of t.papers) {
-        before.set(p.id, total);
-        total += p.paragraphs ?? 0;
-      }
-      book = { before, total, papers: t.papers.map((p) => ({ id: p.id, count: p.paragraphs ?? 0 })) };
-      bookMap.ready = true;
-    },
-    () => (bookLoading = false),
-  );
-}
-/** Share of the book before paragraph `idx` (fractional) of `paper`, or null until the map is loaded. @param {number} paper @param {number} idx */
-export function bookShare(paper, idx) {
-  if (!book || !book.total) return null;
-  return Math.min(1, Math.max(0, ((book.before.get(paper) ?? 0) + idx) / book.total));
-}
 /** Saves where reading is and how far through the book that is. */
 function remember(heardShare = 0) {
   const c = current();
@@ -204,7 +175,7 @@ function remember(heardShare = 0) {
   // paragraph keys are refs ("5:1.3"); titles ("h2") do not count
   const before = c.list.slice(0, c.i).filter((el) => (el.dataset.ttsKey ?? '').includes(':')).length;
   const inPara = heard === 'audio' ? heardShare : c.block.sentences.length ? c.s / c.block.sentences.length : 0;
-  const progress = book && book.total ? Math.min(1, ((book.before.get(paper) ?? 0) + before + inPara) / book.total) : (tts.place?.progress ?? 0);
+  const progress = bookShare(paper, before + inPara) ?? tts.place?.progress ?? 0;
   const rec = heard === 'audio' && player && playing ? recordingFor(pos.key) : null;
   const file = rec ? rec.file : null;
   const t = rec && player && Number.isFinite(player.currentTime) ? Math.round(player.currentTime * 10) / 10 : null;
@@ -694,16 +665,6 @@ export function playFromSessionStart() {
 
 // ---- Seeking along the whole book (the progress line) ----
 
-/** The paper and its paragraph at a share of the book. @param {number} frac */
-export function locate(frac) {
-  if (!book || !book.total) return null;
-  const g = Math.min(book.total - 1, Math.max(0, Math.floor(frac * book.total)));
-  for (const p of book.papers) {
-    const before = book.before.get(p.id) ?? 0;
-    if (g < before + p.count) return { paper: p.id, idx: g - before };
-  }
-  return null;
-}
 
 /** A paragraph by its number in the paper (the progress line) or an exact place ("Вернуться"). @typedef {{ paper: number, idx?: number, key?: string, s?: number, play: boolean }} SeekTarget */
 /** @type {SeekTarget | null} */
@@ -758,7 +719,7 @@ export function seekBack(place) {
 }
 
 /** Contents loaded: the progress line can seek. */
-export const canSeek = () => book !== null;
+export const canSeek = bookLoaded;
 
 /** @param {1 | -1} dir */
 export function sentence(dir) {
@@ -1054,47 +1015,4 @@ function updatePositionState() {
   try {
     ms.setPositionState({ duration: player.duration, position: Math.min(player.currentTime, player.duration), playbackRate: player.playbackRate });
   } catch {}
-}
-
-// ---- The voice as people choose it: one list — the narrator (a recording) and the device's voices ----
-
-/** The narrator's value in the list of voices. */
-export const NARRATOR = 'narrator';
-/** Who reads the recording of each language. */
-export const NARRATORS = /** @type {Record<string, string>} */ ({ ru: 'Григорий Войнер', en: 'Merritt Horn' });
-/** The current language's voice as the list shows it: the narrator, or a synthesized voice ('' — the system's). */
-export const voiceChoice = () => (tts[tts.lang].source === 'audio' && tts.recorded.includes(tts.lang) ? NARRATOR : tts[tts.lang].voice);
-/** The list of voices: the narrator first (where the language has a recording), then the synthesized ones. */
-export function voiceOptions() {
-  /** @type {{ value: string, label: string, hint?: string, group?: string }[]} */
-  const out = [];
-  if (tts.recorded.includes(tts.lang)) out.push({ value: NARRATOR, label: NARRATORS[tts.lang], hint: 'Живой голос диктора' }); // (first, without a label: the synthesized ones follow under theirs)
-  out.push({ value: '', label: 'Системный', hint: native ? 'Движок и голос из настроек Android' : 'Голос по умолчанию на этом устройстве', group: 'Синтез речи' });
-  // (in the Android app the voices of each engine go under its name: Google, Huawei…)
-  for (const x of voicesFor(tts.lang)) {
-    const group = x.engine ? `Синтез речи · ${x.engine}` : 'Синтез речи';
-    out.push({ value: x.id, label: x.name, hint: x.online ? 'онлайн-голос' : x.engine ? 'на устройстве' : undefined, group });
-  }
-  return out;
-}
-/** A voice chosen from the list. @param {string} x */
-export function chooseVoice(x) {
-  if (x === NARRATOR) return setVoice('source', 'audio');
-  if (tts[tts.lang].source === 'audio') setVoice('source', 'tts');
-  setVoice('voice', x);
-}
-/** The speed of what is heard (the narrator and the synthesized voice keep their own). */
-const rateKey = () => (tts[tts.lang].source === 'audio' && tts.recorded.includes(tts.lang) ? 'audioRate' : 'rate');
-export const currentRate = () => tts[tts.lang][rateKey()];
-/** One button: +0.2 each tap, from 0.6 to 2.0, then round again. */
-export function nextRate() {
-  const r = currentRate();
-  let n = (Math.floor(r / 0.2 + 1e-6) + 1) * 0.2;
-  if (n > 2.0 + 1e-6) n = 0.6;
-  setVoice(rateKey(), Math.round(n * 100) / 100);
-}
-/** The synthesized voice's tone: − / + by 0.1, from 0.5 to 2.0. @param {1 | -1} dir */
-export function stepPitch(dir) {
-  const p = Math.min(2, Math.max(0.5, tts[tts.lang].pitch + dir * 0.1));
-  setVoice('pitch', Math.round(p * 10) / 10);
 }

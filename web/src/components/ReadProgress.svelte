@@ -1,7 +1,7 @@
 <script>
   import { tick } from 'svelte';
   import { navigate } from '../lib/router.svelte.js';
-  import { bookMap, loadBook, bookShare, locate } from '../lib/tts.svelte.js';
+  import { bookMap, loadBook, bookShare, locate } from '../lib/bookmap.svelte.js';
   import { firstParagraph } from '../lib/onscreen.js';
 
   /**

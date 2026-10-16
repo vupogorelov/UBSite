@@ -40,7 +40,8 @@
   import { session } from '../lib/session.svelte.js';
   import { tasks, loadTasks } from '../lib/tasks.svelte.js';
   import { trackScroll, showChrome, holdChrome, device } from '../lib/mobile.svelte.js';
-  import { tts, registerReader, paperReady, loadBook, bookShare, setLang, playParagraph, paragraphPlaying, loadRecordings } from '../lib/tts.svelte.js';
+  import { tts, registerReader, paperReady, setLang, playParagraph, paragraphPlaying, loadRecordings } from '../lib/tts.svelte.js';
+  import { loadBook, bookShare } from '../lib/bookmap.svelte.js';
   import { noteRead } from '../lib/places.svelte.js';
   import { firstParagraph } from '../lib/onscreen.js';
   import { book, titleIn } from '../lib/lang.svelte.js';

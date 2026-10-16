@@ -1,5 +1,6 @@
 <script>
-  import { tts, setLang, sayOnce, voicesFor, loadRecordings, voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch, NARRATOR } from '../lib/tts.svelte.js';
+  import { tts, setLang, sayOnce, voicesFor, loadRecordings } from '../lib/tts.svelte.js';
+  import { voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch, NARRATOR } from '../lib/voice-choice.js';
   import { dict, loadDict, addRule, updateRule, deleteRule, applyDict } from '../lib/pronunciations.svelte.js';
   import { withStress, toPlus } from '../lib/pronounce.js';
   /** @type {['ru' | 'en', string][]} */

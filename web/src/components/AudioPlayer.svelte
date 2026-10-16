@@ -1,9 +1,10 @@
 <script>
   import { book } from '../lib/lang.svelte.js';
   import {
-    tts, setLang, setVoice, voicesFor, toggle, sentence, paragraph, pause, playFromSessionStart, seek, seekBack, locate, SKIP, seekTrack,
-    voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch,
+    tts, setLang, setVoice, voicesFor, toggle, sentence, paragraph, pause, playFromSessionStart, seek, seekBack, SKIP, seekTrack,
   } from '../lib/tts.svelte.js';
+  import { voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch } from '../lib/voice-choice.js';
+  import { locate } from '../lib/bookmap.svelte.js';
   import { clock } from '../lib/clock.js';
   import { sectionLabel } from '../lib/format.js';
   import Playlist from './Playlist.svelte';

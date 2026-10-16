@@ -4,7 +4,8 @@
   import { api } from '../lib/api.js';
   import { offline, offlinePossible, megabytes, bytesText } from '../lib/offline.svelte.js';
   import { outbox, describe, retry, discard } from '../lib/outbox.svelte.js';
-  import { recordingList, loadRecordings, NARRATORS } from '../lib/tts.svelte.js';
+  import { recordingList, loadRecordings } from '../lib/tts.svelte.js';
+  import { NARRATORS } from '../lib/voice-choice.js';
   import { rec, download, pause, resume, cancel, removeFiles, keptBytes, allKept, setKeepListened, freeListened, loadKept } from '../lib/recordings.svelte.js';
   import { plural } from '../lib/format.js';
   import Icon from './Icon.svelte';
