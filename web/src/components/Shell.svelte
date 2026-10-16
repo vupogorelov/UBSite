@@ -38,15 +38,11 @@
   import ReadingQuick from './ReadingQuick.svelte';
   import { showToast } from '../lib/toast.svelte.js';
   import Reader from './Reader.svelte';
-  // Opened apart from the reading (a page, a drawer): loaded when first opened, so the start carries
-  // the book only. A few seconds after the start they are fetched ahead (they open without waiting, and
-  // the service worker keeps every part of the build for use without a network anyway).
+  import { PAGES, pageOf } from '../lib/pages.js';
+  // Opened apart from the reading — the pages (lib/pages.js) and the drawers: loaded when first opened,
+  // so the start carries the book only. A few seconds after the start they are fetched ahead (they open
+  // without waiting, and the service worker keeps every part of the build for use without a network anyway).
   const later = {
-    tasks: () => import('./TasksPage.svelte'),
-    chat: () => import('./ChatPage.svelte'),
-    about: () => import('./AboutPage.svelte'),
-    support: () => import('./SupportPage.svelte'),
-    collection: () => import('./CollectionReader.svelte'),
     workspaces: () => import('./WorkspacesPanel.svelte'),
     admin: () => import('./AdminPanel.svelte'),
     account: () => import('./AccountPanel.svelte'),
@@ -65,7 +61,7 @@
   $effect(applySettings);
 
   onMount(() => {
-    const ahead = setTimeout(() => Object.values(later).forEach((load) => load().catch(() => {})), 4000);
+    const ahead = setTimeout(() => [...PAGES.map((p) => p.load), ...Object.values(later)].forEach((load) => load().catch(() => {})), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
     const stopChat = connectChat();
@@ -179,28 +175,22 @@
     drawer = d;
   }
 
-  /** /c/12 — a collection in reading mode instead of the book. */
-  const collectionId = $derived(/^\/c\/\d+\/?$/.test(route.path) ? Number(route.path.split('/')[2]) : null);
-
-  /** /tasks — personal tasks in place of the book; the book's sidebar steps aside. */
-  const tasksPage = $derived(route.path === '/tasks' || route.path.startsWith('/tasks?'));
-  /** /chat — the chat page, also in place of the book. */
-  const chatPage = $derived(route.path === '/chat' || route.path.startsWith('/chat?'));
-  /** /about — the project's about.md. */
-  const aboutPage = $derived(route.path === '/about');
-  /** /support — supporting the project (the fundraising widget). */
-  const supportPage = $derived(route.path === '/support');
-  const fullPage = $derived(tasksPage || chatPage || aboutPage || supportPage);
+  /** The page in place of the book (lib/pages.js); null — the book. */
+  const page = $derived(pageOf(route.path));
+  /** A page of its own: it covers the book and its sidebar. */
+  const fullPage = $derived(page?.kind === 'page');
+  const chatPage = $derived(page?.id === 'chat');
+  const supportPage = $derived(page?.id === 'support');
 
   // ---- Phone layout ----
   /** The book itself is on screen (not chat, tasks or a collection). */
-  const bookRoute = $derived(!fullPage && collectionId === null);
+  const bookRoute = $derived(page === null);
   const reading = $derived(device.mobile && bookRoute);
   const chatOpen = $derived(chatPage && route.path.includes('c='));
   let quick = $state(false);
   /** The audio reader's panel is over the book (phone); a section screen covers it, reading goes on. */
   /** A page of its own covers the book (the reader may stay under it while reading aloud). */
-  const otherPage = $derived(tasksPage || chatPage || aboutPage || supportPage || collectionId !== null);
+  const otherPage = $derived(page !== null);
   const listening = $derived(reading && tts.open && !ui.sidebarOpen);
   // The bars come back whenever a panel is opened.
   $effect(() => {
@@ -213,11 +203,7 @@
   });
   /** "Где я": the paper on screen, as the phone header's title. */
   const here = $derived.by(() => {
-    if (chatPage) return { kicker: '', title: 'Чат' };
-    if (tasksPage) return { kicker: '', title: 'Мои задачи' };
-    if (aboutPage) return { kicker: '', title: 'О приложении' };
-    if (supportPage) return { kicker: '', title: 'Поддержать проект' };
-    if (collectionId !== null) return { kicker: '', title: 'Подборка' };
+    if (page) return { kicker: '', title: page.title };
     const p = toc?.papers.find((x) => x.id === view.paper);
     if (!p) return { kicker: '', title: 'Книга Урантии' };
     // the kicker follows the reading: «Текст 5 · §1» — the section on screen
@@ -243,15 +229,12 @@
    */
   const screen = $derived.by(() => {
     if (!device.mobile) return null;
-    if (chatPage) return chatOpen ? null : { kind: 'page', title: 'Чат' };
-    if (tasksPage) return { kind: 'page', title: 'Задачи' };
-    if (aboutPage) return { kind: 'page', title: 'О приложении' };
-    if (supportPage) return { kind: 'page', title: 'Поддержать проект' };
+    if (page?.kind === 'page') return page.sectionHead?.(route.path) === false ? null : { kind: 'page', title: page.phoneTitle ?? page.title };
     if (ui.sidebarOpen && shownTabs.length > 0) return { kind: 'panel', title: NOTES_TABS.find((x) => x.tab === ui.tab)?.label ?? '' };
     if (ui.sidebarOpen && ui.tab === 'voice') return { kind: 'panel', title: 'Словарь озвучки' };
     if (ui.sidebarOpen && ui.tab === 'translate') return { kind: 'panel', title: 'Перевод' };
     if (ui.sidebarOpen && ui.tab === 'search') return { kind: 'panel', title: 'Поиск' };
-    if (collectionId !== null && !ui.sidebarOpen) return { kind: 'collection', title: 'Подборка' };
+    if (page?.kind === 'collection' && !ui.sidebarOpen) return { kind: 'collection', title: page.title };
     return null;
   });
   const sectionHead = $derived(screen !== null);
@@ -413,11 +396,7 @@
     {/if}
     <button class="toc-scrim" aria-label="Закрыть панель" onclick={() => (ui.sidebarOpen = false)}></button>
     <main class="reader-pane">
-      {#if tasksPage}{#await later.tasks() then m}<m.default />{/await}
-      {:else if chatPage}{#await later.chat() then m}<m.default />{/await}
-      {:else if aboutPage}{#await later.about() then m}<m.default />{/await}
-      {:else if supportPage}{#await later.support() then m}<m.default />{/await}
-      {:else if collectionId !== null}{#await later.collection() then m}<m.default id={collectionId} />{/await}{/if}
+      {#if page}{#key page.id}{#await page.load() then m}<m.default {...page.props?.(route.path)} />{/await}{/key}{/if}
       <!-- the book: while it is read aloud it stays under another page (hidden) — the voice goes on until ■ -->
       {#if !otherPage || tts.open}
         <div class="reader-host" class:behind={otherPage}><Reader background={otherPage} /></div>
@@ -446,7 +425,7 @@
   {/if}
   {#if toast.message}<div class="toast" class:with-action={toast.action} role="status">{toast.message}{#if toast.action}<button class="toast-action" onclick={runToastAction}>{toast.action.label}</button>{/if}</div>{/if}
   <!-- only over the book: in the chat, tasks and other pages it would cover their controls; it waits for the book -->
-  {#if !tasksPage && !chatPage && !aboutPage && !supportPage && collectionId === null}<PlaceOffer />{/if}
+  {#if page === null}<PlaceOffer />{/if}
   {#if exitPrompt.shown}
     <!-- "Back" with nothing to close: the next one leaves the app. Any tap (here "Отмена") keeps it. -->
     <div class="exit-prompt" role="alertdialog" aria-live="assertive" aria-label="Выход из приложения">

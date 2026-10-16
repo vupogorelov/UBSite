@@ -1,5 +1,6 @@
 // @ts-check
 // Paths: /5 (paper), /5:1 (section), /5:1.3 (paragraph).
+import { isSectionPath } from './pages.js';
 import { log } from './log.js';
 
 /** @typedef {{ paper: number | null, section: number | null, ref: string | null }} Target */
@@ -37,7 +38,8 @@ let shownPath = location.pathname + location.search;
 // message) gets it below. Kept for the tab (sessionStorage): it survives the phone unloading the page.
 const STACK_KEY = 'ub.screens';
 const isBook = (/** @type {string} */ p) => /^\/\d+(?::\d+(?:\.\d+)?)?\/?$/.test(p.split('?')[0]);
-const isSection = (/** @type {string} */ p) => p === '/chat' || p === '/tasks' || p === '/about' || p === '/support';
+/** A page's own address (lib/pages.js): a section — "back" from it goes to the book. */
+const isSection = isSectionPath;
 
 /** @returns {string[]} */
 function loadStack() {
