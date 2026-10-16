@@ -109,11 +109,16 @@ async function held(cache) {
 
 let running = false;
 let started = false;
+/** When the copy was last checked against the server. */
+let lastSync = 0;
+/** Coming back to the app after this long checks the copy. */
+const BACK_MS = 15 * 60_000;
 
 /** Brings the copy up to date (quietly; again later if the network is missing). */
 export async function syncOffline() {
   if (!possible || running) return;
   running = true;
+  lastSync = Date.now();
   try {
     const res = await fetch('/api/offline/manifest');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -171,6 +176,11 @@ export function startOffline() {
   setTimeout(syncOffline, 3000);
   setInterval(syncOffline, CHECK_MS);
   addEventListener('online', () => void syncOffline());
+  // back to the app after a while (a phone keeps it in the background for days): the copy is checked —
+  // the book's text is read from it first (public/sw.js)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && Date.now() - lastSync > BACK_MS) void syncOffline();
+  });
 }
 
 /** Signing out: what was seen of the person's own data is forgotten on this device (the book stays). */

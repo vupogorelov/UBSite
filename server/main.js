@@ -71,7 +71,8 @@ chat.setMarkHook(markTasks.sync); // a marked message is the marker's task
 markTasks.backfill(); // (once: the messages marked before)
 const voice = createBookVoice(db, auth, chat);
 chat.onDirect((key, _user, msg) => voice.answerSoon(key, msg)); // "Я и Книга": the Book answers
-const textSync = createTextSync(db);
+// the book changed (the English text from its source): what is made from it is made again
+const textSync = createTextSync(db, { onChange: () => bookChanged() });
 const router = createRouter();
 const ops = createOps(db);
 const mailer = createMailer();
@@ -85,7 +86,7 @@ registerGlossaryRoutes(router, db, glossary);
 registerPronunciationRoutes(router, db);
 registerExportRoutes(router, db, translation, createExport(db, translation));
 registerNotificationRoutes(router, translation, notifications);
-registerBookRoutes(router, db);
+const bookRoutes = registerBookRoutes(router, db);
 registerWorkspaceRoutes(router, db, auth);
 registerSearchRoutes(router, auth);
 registerAnnotationRoutes(router, db, tags, auth, chat);
@@ -95,7 +96,12 @@ registerTagRoutes(router, db, tags, auth);
 registerPlaceRoutes(router, db);
 registerAudioRoutes(router, createAudio());
 registerAliasRoutes(router, db);
-registerOfflineRoutes(router, createOffline(router, db));
+const offline = createOffline(router, db);
+registerOfflineRoutes(router, offline);
+function bookChanged() {
+  bookRoutes.forget();
+  offline.invalidate();
+}
 registerLogRoutes(router, createClientLog(db));
 // Is it alive: the process answers and the database reads (503 — it does not); when the last copy was
 // made. For restart.ps1 and an outside watcher; nothing personal in it.
@@ -130,6 +136,28 @@ const SLOW_MS = 500;
 /** Those not signed in: a request budget per address (server/ratelimit.js). */
 const guestLimit = createRateLimit();
 
+/** The book's text: the same for everyone, changed only with the book (bookChanged). */
+const BOOK_TEXT = /^\/api\/(toc|papers\/\d+)$/;
+
+/**
+ * The book's text from its stored answers (server/offline.js): made and gzipped once, not on every
+ * request; its hash is the ETag, so a device that has it is answered "not modified" (304), no body.
+ * @param {import('node:http').IncomingMessage} req @param {import('node:http').ServerResponse} res @param {string} path
+ * @returns {boolean} answered (false — not stored yet, or the browser takes no gzip: the route answers)
+ */
+function sendStored(req, res, path) {
+  const hit = offline.stored(path);
+  if (!hit || !/\bgzip\b/.test(String(req.headers['accept-encoding']))) return false;
+  const etag = `"b-${hit.hash}"`;
+  const headers = { ETag: etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding' };
+  if (req.headers['if-none-match'] === etag) {
+    res.writeHead(304, headers).end();
+    return true;
+  }
+  res.writeHead(200, { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', 'Content-Length': hit.gz.length }).end(hit.gz);
+  return true;
+}
+
 /** Browsers send Origin on cross-site writes; it must name this very host. @param {import('node:http').IncomingMessage} req */
 function sameOrigin(req) {
   const origin = req.headers.origin;
@@ -161,6 +189,7 @@ const server = createServer(async (req, res) => {
       const user = isPublic ? null : auth.userForToken(readCookie(req, SESSION_COOKIE));
       if (!user && !guestLimit.take(clientIp(req))) throw new HttpError(429, 'Слишком много запросов — подождите минуту');
       if (!isPublic && !user && !(method === 'GET' && GUEST.test(url.pathname))) throw new HttpError(401, 'Требуется вход');
+      if (method === 'GET' && BOOK_TEXT.test(url.pathname) && sendStored(req, res, url.pathname)) return;
       const ctx = { req, res, params: route.params, url, user: /** @type {any} */ (user) };
       const opId = req.headers['x-op-id'];
       if (method !== 'GET' && user && validOpId(opId)) {

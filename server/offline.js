@@ -26,6 +26,8 @@ export function createOffline(router, db) {
   /** @type {{ build: string, files: OfflineFile[] } | null} */
   let manifest = null;
   let builtAt = 0;
+  /** The book changed since the last build: its stored answers are not given out until the next one. */
+  let stale = false;
 
   /** The book's URLs, in the order a device downloads them (the contents first). */
   function urls() {
@@ -59,9 +61,13 @@ export function createOffline(router, db) {
     files = next;
     manifest = { build, files: list };
     builtAt = Date.now();
+    byUrl = new Map(list.map((f) => [f.url, f]));
+    stale = false;
     return manifest;
   }
 
+  /** @type {Map<string, OfflineFile>} */
+  let byUrl = new Map();
   /** @type {Promise<unknown> | null} */
   let building = null;
   /** The current manifest (built again when older than FRESH_MS; one build at a time). */
@@ -80,6 +86,23 @@ export function createOffline(router, db) {
     current,
     /** @param {string} hash */
     file: (hash) => files.get(hash) ?? null,
+    /**
+     * A book URL's stored answer, gzipped, with its hash (an ETag): the same bytes the route would give,
+     * made once instead of on every request. null — not stored, or the book changed and it is being made again.
+     * @param {string} url
+     */
+    stored(url) {
+      if (stale || !manifest) return null;
+      const f = byUrl.get(url);
+      const gz = f && files.get(f.hash);
+      return f && gz ? { hash: f.hash, gz } : null;
+    },
+    /** The book changed (the English text from its source): the answers are made again. */
+    invalidate() {
+      stale = true;
+      builtAt = 0;
+      current().catch((err) => console.error('Offline copy failed:', err));
+    },
   };
 }
 

@@ -23,9 +23,6 @@
   import TagsPanel from './TagsPanel.svelte';
   import TranslationPanel from './TranslationPanel.svelte';
   import CollectionsPanel from './CollectionsPanel.svelte';
-  import CollectionReader from './CollectionReader.svelte';
-  import TasksPage from './TasksPage.svelte';
-  import ChatPage from './ChatPage.svelte';
   import { connectChat, chatUi } from '../lib/chat.svelte.js';
   import { pwa, install } from '../lib/pwa.svelte.js';
   import { device, chrome } from '../lib/mobile.svelte.js';
@@ -36,17 +33,25 @@
   import MiniPlayer from './MiniPlayer.svelte';
   import UiSelect from './UiSelect.svelte';
   import VoicePanel from './VoicePanel.svelte';
-  import AboutPage from './AboutPage.svelte';
-  import SupportPage from './SupportPage.svelte';
   import { tts } from '../lib/tts.svelte.js';
   import { SECTIONS } from '../lib/sections.svelte.js';
   import ReadingQuick from './ReadingQuick.svelte';
   import { showToast } from '../lib/toast.svelte.js';
   import Reader from './Reader.svelte';
+  // Opened apart from the reading (a page, a drawer): loaded when first opened, so the start carries
+  // the book only. A few seconds after the start they are fetched ahead (they open without waiting, and
+  // the service worker keeps every part of the build for use without a network anyway).
+  const later = {
+    tasks: () => import('./TasksPage.svelte'),
+    chat: () => import('./ChatPage.svelte'),
+    about: () => import('./AboutPage.svelte'),
+    support: () => import('./SupportPage.svelte'),
+    collection: () => import('./CollectionReader.svelte'),
+    workspaces: () => import('./WorkspacesPanel.svelte'),
+    admin: () => import('./AdminPanel.svelte'),
+    account: () => import('./AccountPanel.svelte'),
+  };
   import SettingsPanel from './SettingsPanel.svelte';
-  import WorkspacesPanel from './WorkspacesPanel.svelte';
-  import AdminPanel from './AdminPanel.svelte';
-  import AccountPanel from './AccountPanel.svelte';
 
   let toc = $state(/** @type {import('../lib/api.js').Toc | null} */ (null));
   let tocError = $state('');
@@ -60,11 +65,12 @@
   $effect(applySettings);
 
   onMount(() => {
+    const ahead = setTimeout(() => Object.values(later).forEach((load) => load().catch(() => {})), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
     const stopChat = connectChat();
     const stopActivity = startActivity(); // analytics: a minute of activity (lib/activity.js)
-    return () => (stopPolling(), stopChat(), stopActivity());
+    return () => (clearTimeout(ahead), stopPolling(), stopChat(), stopActivity());
   });
   // Counters are refreshed on navigation too.
   let seenPath = route.path;
@@ -407,7 +413,11 @@
     {/if}
     <button class="toc-scrim" aria-label="Закрыть панель" onclick={() => (ui.sidebarOpen = false)}></button>
     <main class="reader-pane">
-      {#if tasksPage}<TasksPage />{:else if chatPage}<ChatPage />{:else if aboutPage}<AboutPage />{:else if supportPage}<SupportPage />{:else if collectionId !== null}<CollectionReader id={collectionId} />{/if}
+      {#if tasksPage}{#await later.tasks() then m}<m.default />{/await}
+      {:else if chatPage}{#await later.chat() then m}<m.default />{/await}
+      {:else if aboutPage}{#await later.about() then m}<m.default />{/await}
+      {:else if supportPage}{#await later.support() then m}<m.default />{/await}
+      {:else if collectionId !== null}{#await later.collection() then m}<m.default id={collectionId} />{/await}{/if}
       <!-- the book: while it is read aloud it stays under another page (hidden) — the voice goes on until ■ -->
       {#if !otherPage || tts.open}
         <div class="reader-host" class:behind={otherPage}><Reader background={otherPage} /></div>
@@ -423,9 +433,9 @@
       if (!bookRoute) navigate(lastPath(), { root: true });
       setTab('translate');
     }} />
-  {#if drawer === 'workspaces'}<WorkspacesPanel onclose={() => (drawer = 'none')} />{/if}
-  {#if drawer === 'admin'}<AdminPanel onclose={() => (drawer = 'none')} />{/if}
-  {#if drawer === 'account'}<AccountPanel onclose={() => (drawer = 'none')} />{/if}
+  {#if drawer === 'workspaces'}{#await later.workspaces() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
+  {#if drawer === 'admin'}{#await later.admin() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
+  {#if drawer === 'account'}{#await later.account() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
   {#if device.mobile}
     <BottomNav {bookRoute} onopen={open} />
     {#if listening}<AudioPlayer />{/if}

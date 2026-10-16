@@ -46,7 +46,7 @@ export function registerBookRoutes(router, db) {
   };
 
   /** @type {unknown} */
-  let tocCache = null; // book text changes only on re-import; restart the server afterwards
+  let tocCache = null; // dropped when the book changes (forget(): the English text from its source); a re-import restarts the server
   router.on('GET', '/api/about', () => {
     try {
       return { markdown: readFileSync(ABOUT, 'utf8') };
@@ -104,4 +104,9 @@ export function registerBookRoutes(router, db) {
     }
     throw new HttpError(404, `Не найдено: «${text}»`);
   });
+
+  return {
+    /** The book changed: the contents are read again. */
+    forget: () => void (tocCache = null),
+  };
 }

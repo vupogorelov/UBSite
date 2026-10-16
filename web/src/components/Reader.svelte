@@ -341,6 +341,25 @@
 
   const hitIndex = $derived((void view.section, void route.nav, void search.refs, currentHit()));
 
+  /**
+   * The papers next to the open one, fetched while it is read: turning to the next (or back) is instant
+   * even where the book is not on the device yet (a guest by a link, the copy still being saved).
+   * @type {Map<number, Promise<import('../lib/api.js').PaperData | null>>}
+   */
+  const ahead = new Map();
+  $effect(() => {
+    const near = data ? [data.next, data.prev] : [];
+    const timer = setTimeout(() => {
+      for (const id of near) {
+        if (id === null || ahead.has(id)) continue;
+        ahead.set(id, api.paper(id).catch(() => (ahead.delete(id), null)));
+      }
+      // only the neighbours of the last papers are kept
+      for (const id of [...ahead.keys()].slice(0, -4)) ahead.delete(id);
+    }, 1200); // (after the open paper has settled)
+    return () => clearTimeout(timer);
+  });
+
   /** @param {Target} t */
   async function show(t) {
     const my = ++token;
@@ -353,7 +372,7 @@
     if (data?.paper.id !== t.paper) {
       loading = true;
       try {
-        const d = await api.paper(t.paper);
+        const d = (await ahead.get(t.paper)) ?? (await api.paper(t.paper));
         if (my !== token) return;
         data = d;
         error = '';

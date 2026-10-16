@@ -32,7 +32,8 @@ function aroundChange(a, b) {
 
 /**
  * @param {import('node:sqlite').DatabaseSync} db
- * @param {{ fetch?: typeof fetch }} [opts] (tests give their own fetch)
+ * @param {{ fetch?: typeof fetch, onChange?: () => void }} [opts] (tests give their own fetch; onChange — the
+ *   book's text changed)
  */
 export function createTextSync(db, opts = {}) {
   const get = opts.fetch ?? fetch;
@@ -146,6 +147,7 @@ export function createTextSync(db, opts = {}) {
       const newTag = res.headers.get('etag');
       if (newTag) setMeta('etag', newTag);
       const changed = summary.textChanged + summary.markupOnly + summary.titles;
+      if (changed || summary.numbering) opts.onChange?.(); // (the answers made from the book are made again)
       const report = { ...summary, made: reply.made ?? null, full: !!reply.full, credit: reply.licence?.credit_line ?? null };
       q.finish.run(changed || summary.numbering ? 'ok' : 'unchanged', reply.version, JSON.stringify(report), id);
       return { status: changed ? 'ok' : 'unchanged', version: reply.version, ...report };

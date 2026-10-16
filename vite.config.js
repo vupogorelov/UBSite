@@ -23,5 +23,7 @@ export default defineConfig({
     port: 5173,
     proxy: { '/api': `http://127.0.0.1:${process.env.UB_PORT ?? 4300}` },
   },
-  build: { outDir: 'dist', emptyOutDir: true },
+  // manifest: every file of the build listed (.vite/manifest.json) — the service worker keeps them all,
+  // the parts loaded later too (public/sw.js)
+  build: { outDir: 'dist', emptyOutDir: true, manifest: true },
 });

@@ -2,9 +2,10 @@
 // - The app shell (index.html and the hashed /assets/ it references) is cached at install, so the
 //   app opens instantly and even offline; pages are still fetched from the network first.
 // - Fonts and icons are cached on first use.
-// - The book (contents, papers, their terms, the glossary, the pronunciation dictionary) is answered
-//   from the copy lib/offline.svelte.js keeps in the "ub-book" cache, gzipped as the server sent it,
-//   when the network fails, is silent for WAIT ms or the server errs (5xx). Online, the network answers.
+// - The book's text (contents, papers) is answered from the copy lib/offline.svelte.js keeps in the
+//   "ub-book" cache (gzipped as the server sent it) first: a paper opens at once. The rest of the book
+//   (terms, the glossary, the pronunciation dictionary — editable) comes from the network, the copy
+//   answering when the network fails, is silent for WAIT ms or the server errs (5xx).
 // - Other API reads are answered by the network too, and their last answer is kept ("ub-last") for
 //   the same cases: the app starts and shows what was seen before. Signing out clears it.
 // - The recorded reading's files the person chose to keep ("ub-audio") are played from the device,
@@ -23,6 +24,12 @@ const LAST = 'ub-last';
 const WAIT = 4000;
 /** The book's URLs (server/offline.js lists the same). */
 const BOOK_PATH = /^\/api\/(toc|glossary|pronunciations|stem-aliases|papers\/\d+(\/terms)?)$/;
+/**
+ * The book's text (the contents, the papers): the device's copy answers first — a paper opens at once,
+ * with or without a network. The copy follows the server by its manifest (lib/offline.svelte.js: at the
+ * start, every hour, on coming back to the app), so it is the server's text; what it lacks, the network gives.
+ */
+const TEXT_PATH = /^\/api\/(toc|papers\/\d+)$/;
 /** API reads never answered from a cache: live streams, files, the copy itself, sign-in. */
 const LIVE_PATH = /^\/api\/(chat\/stream|audio\/|offline\/|export|auth\/(login|logout|register)|search|workspaces\/\d+\/changes|tasks\/changes)/;
 
@@ -34,6 +41,11 @@ self.addEventListener('install', (/** @type {any} */ event) => {
       const html = await res.clone().text();
       await cache.put('/', res);
       const assets = [...html.matchAll(/(?:src|href)="(\/(?:assets|icons)\/[^"]+|\/theme\.js|\/manifest\.webmanifest)"/g)].map((m) => m[1]);
+      // every part of the build, the ones loaded later too (a page opened first without a network works)
+      try {
+        const built = await (await fetch('/.vite/manifest.json', { cache: 'no-store' })).json();
+        for (const c of Object.values(built)) for (const f of [c.file, ...(c.css ?? [])]) if (f) assets.push(`/${f}`);
+      } catch {} // (a development server has none)
       await cache.addAll([...new Set(assets)]);
       await sw.skipWaiting();
     })(),
@@ -143,7 +155,8 @@ self.addEventListener('fetch', (/** @type {any} */ event) => {
       return;
     }
     if (LIVE_PATH.test(url.pathname)) return;
-    if (BOOK_PATH.test(url.pathname)) event.respondWith(networkFirst(req, () => fromBook(url.pathname), false));
+    if (TEXT_PATH.test(url.pathname)) event.respondWith(fromBook(url.pathname).then((r) => r || fetch(req)));
+    else if (BOOK_PATH.test(url.pathname)) event.respondWith(networkFirst(req, () => fromBook(url.pathname), false));
     else event.respondWith(networkFirst(req, () => caches.match(req, { cacheName: LAST }), true));
     return;
   }
