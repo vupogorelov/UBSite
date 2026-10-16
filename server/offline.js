@@ -106,6 +106,32 @@ export function createOffline(router, db) {
   };
 }
 
+/** The book's text: the same for everyone, changed only with the book ("bookChanged"). */
+const BOOK_TEXT = /^\/api\/(toc|papers\/\d+)$/;
+
+/**
+ * The book's text from its stored answers: made and gzipped once, not on every request; its hash is
+ * the ETag, so a device that has it is answered "not modified" (304), no body. For core.intercept: false —
+ * not the book's text, not stored yet, or the browser takes no gzip (the route answers then).
+ * @param {ReturnType<typeof createOffline>} offline
+ * @returns {import('./core.js').Interceptor}
+ */
+export function storedAnswers(offline) {
+  return (req, res, path) => {
+    if (req.method !== 'GET' || !BOOK_TEXT.test(path)) return false;
+    const hit = offline.stored(path);
+    if (!hit || !/\bgzip\b/.test(String(req.headers['accept-encoding']))) return false;
+    const etag = `"b-${hit.hash}"`;
+    const headers = { ETag: etag, 'Cache-Control': 'no-cache', Vary: 'Accept-Encoding' };
+    if (req.headers['if-none-match'] === etag) {
+      res.writeHead(304, headers).end();
+      return true;
+    }
+    res.writeHead(200, { ...headers, 'Content-Type': 'application/json; charset=utf-8', 'Content-Encoding': 'gzip', 'Content-Length': hit.gz.length }).end(hit.gz);
+    return true;
+  };
+}
+
 /**
  * @param {ReturnType<typeof import('./http.js').createRouter>} router
  * @param {ReturnType<typeof createOffline>} offline

@@ -42,6 +42,8 @@ export function createSearchClient() {
       console.error('Search worker failed:', err);
       restart(new HttpError(500, 'Ошибка поиска'));
     });
+    // it does not keep the process alive by itself — the server's port does (after the listeners: adding one refs it again)
+    worker.unref();
   }
 
   /** @param {Error} reason */
