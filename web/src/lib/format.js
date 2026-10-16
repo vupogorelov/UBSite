@@ -1,4 +1,5 @@
 // @ts-check
+import { book } from './lang.svelte.js';
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII'];
 
 /** Foreword sections are numbered with Roman numerals, all other papers with Arabic. */
@@ -19,6 +20,13 @@ export function plural(/** @type {number} */ n, /** @type {string} */ one, /** @
   return many;
 }
 
-export function paperLabel(/** @type {number} */ paperId) {
+/** "Текст 5" / "Paper 5", the Foreword — in the reading language (the book's own words). @param {number} paperId */
+export function paperLabel(paperId) {
+  if (book.main === 'en') return paperId === 0 ? 'Foreword' : `Paper ${paperId}`;
   return paperId === 0 ? 'Предисловие' : `Текст ${paperId}`;
+}
+
+/** "Часть IV" / "Part IV" in the reading language. @param {number} partId */
+export function partName(partId) {
+  return `${book.main === 'en' ? 'Part' : 'Часть'} ${partLabel(partId)}`;
 }

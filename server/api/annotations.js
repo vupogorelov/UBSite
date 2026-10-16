@@ -3,6 +3,8 @@
 // in one language, or to a whole paragraph. A color belongs to a bookmark on a fragment: choosing a
 // color makes the note a bookmark, removing the bookmark removes the color. A bookmark without a
 // name gets the first words of its sentence (shared/bookmark-title.js).
+// The comments are the note's conversation in the common chat model: public_messages with the key
+// "note:<id>" (server/chat.js) — replies, reactions, @mentions, live updates, notifications.
 import { HttpError, readJson } from '../http.js';
 import { transaction } from '../db.js';
 import { normalizeTagName, hashtagsIn } from '../tags.js';
@@ -34,13 +36,14 @@ function tagList(v) {
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {ReturnType<typeof import('../tags.js').createTagStore>} tags
  * @param {ReturnType<typeof import('../auth.js').createAuth>} auth
+ * @param {ReturnType<typeof import('../chat.js').createChat>} chat
  *
  * Rights: viewers read; commenters add comment threads and edit/delete their own comments;
  * editors also bookmark (with a color), tag and resolve; owners may delete anything.
  */
-export function registerAnnotationRoutes(router, db, tags, auth) {
+export function registerAnnotationRoutes(router, db, tags, auth, chat) {
   const SELECT = `
-    SELECT a.id, a.ref, a.lang, a.start_pos AS start, a.end_pos AS "end", a.quote, a.color, a.bookmark, a.title,
+    SELECT a.id, a.uid, a.ref, a.lang, a.start_pos AS start, a.end_pos AS "end", a.quote, a.color, a.bookmark, a.title,
            a.resolved_at AS resolvedAt, a.created_at AS createdAt, a.updated_at AS updatedAt,
            a.author_id AS authorId, coalesce(ua.display_name, ua.username) AS authorName,
            p.paper_id AS paperId, p.section_num AS sectionNum, pa.title_ru AS paperTitle
@@ -49,24 +52,31 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
     LEFT JOIN paragraphs p ON p.ref = a.ref
     LEFT JOIN papers pa ON pa.id = p.paper_id`;
   const ORDER = 'ORDER BY p.seq IS NULL, p.seq, a.lang IS NOT NULL, a.lang DESC, a.start_pos, a.id';
-  const COMMENT = `SELECT c.id, c.annotation_id AS annotationId, c.body, c.created_at AS createdAt, c.updated_at AS updatedAt,
-           c.author_id AS authorId, coalesce(u.display_name, u.username) AS authorName
-    FROM comments c LEFT JOIN users u ON u.id = c.author_id`;
+  // A note's comments: its conversation's messages (the same columns as server/chat.js gives).
+  const COMMENT = `SELECT m.id, a.id AS annotationId, m.ref AS chat, m.kind, m.body, m.created_at AS createdAt, m.updated_at AS updatedAt,
+           m.author_id AS authorId, coalesce(u.display_name, u.username) AS authorName, u.username AS authorUsername,
+           m.hidden_at AS hiddenAt, m.reply_to AS replyTo, m.proposal_id AS proposalId
+    FROM annotations a JOIN public_messages m ON m.ref = 'note:' || a.id LEFT JOIN users u ON u.id = m.author_id`;
   const q = {
     byPaper: db.prepare(`${SELECT} WHERE a.workspace_id = ? AND p.paper_id = ? ${ORDER}`),
     all: db.prepare(`${SELECT} WHERE a.workspace_id = ? ${ORDER}`),
     one: db.prepare(`${SELECT} WHERE a.workspace_id = ? AND a.id = ?`),
-    commentsAll: db.prepare(`${COMMENT} JOIN annotations a ON a.id = c.annotation_id WHERE a.workspace_id = ? ORDER BY c.id`),
-    commentsOne: db.prepare(`${COMMENT} WHERE c.annotation_id = ? ORDER BY c.id`),
+    commentsAll: db.prepare(`${COMMENT} WHERE a.workspace_id = ? ORDER BY m.id`),
+    commentsOne: db.prepare(`${COMMENT} WHERE a.id = ? ORDER BY m.id`),
     commentsByPaper: db.prepare(
-      `${COMMENT} JOIN annotations a ON a.id = c.annotation_id JOIN paragraphs p ON p.ref = a.ref
-       WHERE a.workspace_id = ? AND p.paper_id = ? ORDER BY c.id`,
+      `${COMMENT} JOIN paragraphs p ON p.ref = a.ref WHERE a.workspace_id = ? AND p.paper_id = ? ORDER BY m.id`,
     ),
     paragraph: db.prepare('SELECT plain_ru, plain_en FROM paragraphs WHERE ref = ?'),
     insert: db.prepare(
-      `INSERT INTO annotations (workspace_id, author_id, ref, lang, start_pos, end_pos, quote, color, bookmark, title)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO annotations (workspace_id, author_id, ref, lang, start_pos, end_pos, quote, color, bookmark, title, uid)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     ),
+    byUid: db.prepare('SELECT id FROM annotations WHERE workspace_id = ? AND uid = ?'),
+    // the feed of changes (migration 34)
+    feedTop: db.prepare("SELECT seq FROM sqlite_sequence WHERE name = 'changes'"),
+    feedMin: db.prepare('SELECT min(seq) AS seq FROM changes'),
+    feedNotes: db.prepare("SELECT DISTINCT entity_id AS id FROM changes WHERE workspace_id = ? AND entity = 'note' AND seq > ? AND seq <= ?"),
+    feedPurge: db.prepare("DELETE FROM changes WHERE at < datetime('now', '-60 days')"),
     update: db.prepare(
       `UPDATE annotations SET color = ?, bookmark = ?, title = ?, resolved_at = ?, updated_at = datetime('now')
        WHERE id = ? AND workspace_id = ?`,
@@ -74,14 +84,13 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
     raw: db.prepare('SELECT color, bookmark, title, resolved_at, author_id, ref, lang, start_pos FROM annotations WHERE id = ? AND workspace_id = ?'),
     remove: db.prepare('DELETE FROM annotations WHERE id = ? AND workspace_id = ?'),
     touch: db.prepare("UPDATE annotations SET updated_at = datetime('now') WHERE id = ?"),
-    addComment: db.prepare('INSERT INTO comments (annotation_id, author_id, body) VALUES (?, ?, ?)'),
     comment: db.prepare(
-      `SELECT c.id, c.author_id AS authorId FROM comments c JOIN annotations a ON a.id = c.annotation_id
-       WHERE c.id = ? AND a.id = ? AND a.workspace_id = ?`,
+      `SELECT m.id, m.author_id AS authorId FROM public_messages m JOIN annotations a ON m.ref = 'note:' || a.id
+       WHERE m.id = ? AND a.id = ? AND a.workspace_id = ? AND m.kind = 'message'`,
     ),
-    editComment: db.prepare("UPDATE comments SET body = ?, updated_at = datetime('now') WHERE id = ?"),
-    removeComment: db.prepare('DELETE FROM comments WHERE id = ?'),
-    commentCount: db.prepare('SELECT count(*) AS n FROM comments WHERE annotation_id = ?'),
+    editComment: db.prepare("UPDATE public_messages SET body = ?, updated_at = datetime('now') WHERE id = ?"),
+    removeComment: db.prepare('DELETE FROM public_messages WHERE id = ?'),
+    commentCount: db.prepare("SELECT count(*) AS n FROM public_messages WHERE ref = ? AND kind = 'message'"),
     tagCount: db.prepare('SELECT count(*) AS n FROM annotation_tags WHERE annotation_id = ?'),
   };
 
@@ -93,6 +102,18 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
     const ws = Number(params.id);
     return { ws, role: auth.require(ws, user, min) };
   };
+  /**
+   * The note in the URL: its number, or "u-<uid>" — the id its device gave it (a note made without a
+   * network is addressed so before the device learns its number).
+   * @param {number} ws @param {string} aid
+   */
+  const noteId = (ws, aid) => {
+    const m = String(aid).match(/^u-([\w-]{8,64})$/);
+    if (!m) return Number(aid);
+    const row = /** @type {{ id: number } | undefined} */ (q.byUid.get(ws, m[1]));
+    if (!row) throw new HttpError(404, 'Заметка не найдена');
+    return row.id;
+  };
   /** @param {number} ws @param {number} id */
   const rawNote = (ws, id) => {
     const cur = /** @type {{ color: string | null, bookmark: number, title: string | null, resolved_at: string | null, author_id: number | null, ref: string, lang: 'ru' | 'en' | null, start_pos: number | null } | undefined} */ (
@@ -103,12 +124,13 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
   };
 
   /**
+   * Notes with their comments (as chat messages: replies and reactions included) and tags.
    * @param {any[]} rows @param {any[]} comments
-   * @param {Map<number, { name: string }[]>} tagMap
+   * @param {Map<number, { name: string }[]>} tagMap @param {import('../auth.js').User} user
    * @returns {Annotation[]}
    */
-  const assemble = (rows, comments, tagMap) => {
-    const byId = Map.groupBy(comments, (c) => c.annotationId);
+  const assemble = (rows, comments, tagMap, user) => {
+    const byId = Map.groupBy(chat.present(comments, user), (c) => c.annotationId);
     return rows.map((r) => ({
       ...r,
       bookmark: Boolean(r.bookmark),
@@ -119,18 +141,18 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
     }));
   };
 
-  /** @param {number} ws @param {number} id */
-  const fetchOne = (ws, id) => {
+  /** @param {number} ws @param {number} id @param {import('../auth.js').User} user */
+  const fetchOne = (ws, id, user) => {
     const row = q.one.get(ws, id);
     if (!row) throw new HttpError(404, 'Заметка не найдена');
-    return assemble([row], q.commentsOne.all(id), new Map([[id, tags.namesOf(id).map((name) => ({ name }))]]))[0];
+    return assemble([row], q.commentsOne.all(id), new Map([[id, tags.namesOf(id).map((name) => ({ name }))]]), user)[0];
   };
 
   /** An annotation with nothing left (no color, bookmark, comments or tags) is removed. */
   const pruneIfEmpty = (/** @type {number} */ ws, /** @type {number} */ id) => {
     const raw = /** @type {{ color: string | null, bookmark: number } | undefined} */ (q.raw.get(id, ws));
     const n =
-      /** @type {{ n: number }} */ (q.commentCount.get(id)).n + /** @type {{ n: number }} */ (q.tagCount.get(id)).n;
+      /** @type {{ n: number }} */ (q.commentCount.get(`note:${id}`)).n + /** @type {{ n: number }} */ (q.tagCount.get(id)).n;
     if (raw && !raw.color && !raw.bookmark && n === 0) {
       q.remove.run(id, ws);
       return true;
@@ -181,15 +203,48 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
     const paper = url.searchParams.get('paper');
     const tagMap = tags.namesByAnnotation(ws);
     if (paper !== null) {
-      return assemble(q.byPaper.all(ws, Number(paper)), q.commentsByPaper.all(ws, Number(paper)), tagMap);
+      return assemble(q.byPaper.all(ws, Number(paper)), q.commentsByPaper.all(ws, Number(paper)), tagMap, user);
     }
-    return assemble(q.all.all(ws), q.commentsAll.all(ws), tagMap);
+    return assemble(q.all.all(ws), q.commentsAll.all(ws), tagMap, user);
   });
 
-  // Body: { ref, lang?, start?, end?, color?, bookmark?, title?, comment?, tags? }
+  // The feed: what changed in the workspace's notes after `since` (the last `seq` the device has) —
+  // { seq, reset, notes, deleted }. No `since` (the first time), or so far behind that the feed no longer
+  // reaches it, or ahead of it (another database): every note anew (reset). The device keeps the notes and asks again (web/src/lib/feed.js).
+  let purgedAt = 0;
+  router.on('GET', '/api/workspaces/:id/changes', ({ params, url, user }) => {
+    const { ws } = access(params, user, 'viewer');
+    if (Date.now() - purgedAt > 3600_000) {
+      purgedAt = Date.now();
+      q.feedPurge.run();
+    }
+    const given = url.searchParams.get('since');
+    const since = Math.max(0, Number(given) || 0);
+    const seq = /** @type {{ seq: number } | undefined} */ (q.feedTop.get())?.seq ?? 0;
+    const oldest = /** @type {{ seq: number | null }} */ (q.feedMin.get()).seq ?? seq + 1;
+    if (given === null || since < oldest - 1 || since > seq) {
+      return { seq, reset: true, notes: assemble(q.all.all(ws), q.commentsAll.all(ws), tags.namesByAnnotation(ws), user), deleted: [] };
+    }
+    /** @type {Annotation[]} */
+    const notes = [];
+    /** @type {number[]} */
+    const deleted = [];
+    for (const { id } of /** @type {{ id: number }[]} */ (q.feedNotes.all(ws, since, seq))) {
+      if (q.one.get(ws, id)) notes.push(fetchOne(ws, id, user));
+      else deleted.push(id);
+    }
+    return { seq, reset: false, notes, deleted };
+  });
+
+  // Body: { ref, lang?, start?, end?, color?, bookmark?, title?, comment?, tags?, uid? }
+  // `uid`: the note's id from the device that made it; the same uid again is the same note.
   router.on('POST', '/api/workspaces/:id/annotations', async ({ req, params, user }) => {
     const { ws, role } = access(params, user, 'commenter');
     const b = /** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {});
+    const uid = b.uid === undefined || b.uid === null ? null : String(b.uid);
+    if (uid !== null && !/^[\w-]{8,64}$/.test(uid)) throw new HttpError(400, 'uid: 8–64 букв, цифр, «-», «_»');
+    const known = uid === null ? undefined : /** @type {{ id: number } | undefined} */ (q.byUid.get(ws, uid));
+    if (known) return fetchOne(ws, known.id, user);
     const para = /** @type {{ plain_ru: string, plain_en: string } | undefined} */ (q.paragraph.get(String(b.ref)));
     if (!para) throw new HttpError(400, `Абзац ${b.ref} не найден`);
 
@@ -216,19 +271,19 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
 
     const id = transaction(db, () => {
       const row = /** @type {{ id: number }} */ (
-        q.insert.get(ws, user.id, String(b.ref), ...anchor, c, bookmark ? 1 : 0, bookmark ? title(b.title) ?? titleFor(String(b.ref), anchor[0], anchor[1]) : null)
+        q.insert.get(ws, user.id, String(b.ref), ...anchor, c, bookmark ? 1 : 0, bookmark ? title(b.title) ?? titleFor(String(b.ref), anchor[0], anchor[1]) : null, uid)
       );
-      if (comment) q.addComment.run(row.id, user.id, comment);
+      if (comment) chat.post(`note:${row.id}`, user, { body: comment });
       tags.add(ws, row.id, tagNames);
       return row.id;
     });
-    return fetchOne(ws, id);
+    return fetchOne(ws, id, user);
   });
 
   // Replaces the tag set: { tags: string[] }
   router.on('PUT', '/api/workspaces/:id/annotations/:aid/tags', async ({ req, params, user }) => {
     const { ws } = access(params, user, 'editor');
-    const id = Number(params.aid);
+    const id = noteId(ws, params.aid);
     rawNote(ws, id);
     const names = tagList(/** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {}).tags);
     transaction(db, () => {
@@ -236,13 +291,13 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
       q.touch.run(id);
     });
     if (pruneIfEmpty(ws, id)) return { id, deleted: true };
-    return fetchOne(ws, id);
+    return fetchOne(ws, id, user);
   });
 
   // Body: any of { color, bookmark, title, resolved }
   router.on('PATCH', '/api/workspaces/:id/annotations/:aid', async ({ req, params, user }) => {
     const { ws } = access(params, user, 'editor');
-    const id = Number(params.aid);
+    const id = noteId(ws, params.aid);
     const cur = rawNote(ws, id);
     const b = /** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {});
     const resolvedAt =
@@ -256,30 +311,32 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
     else if (!nextTitle) nextTitle = titleFor(cur.ref, cur.lang, cur.start_pos);
     q.update.run(nextColor, bookmark ? 1 : 0, nextTitle, resolvedAt, id, ws);
     if (pruneIfEmpty(ws, id)) return { id, deleted: true };
-    return fetchOne(ws, id);
+    return fetchOne(ws, id, user);
   });
 
   // Owners delete any note; editors their own.
   router.on('DELETE', '/api/workspaces/:id/annotations/:aid', ({ params, user }) => {
     const { ws, role } = access(params, user, 'editor');
-    const id = Number(params.aid);
+    const id = noteId(ws, params.aid);
     const cur = rawNote(ws, id);
     if (role !== 'owner' && cur.author_id !== user.id) throw new HttpError(403, 'Чужую заметку может удалить только владелец пространства');
     q.remove.run(id, ws);
     return { id, deleted: true };
   });
 
+  // { body, replyTo? } — a message in the note's conversation
   router.on('POST', '/api/workspaces/:id/annotations/:aid/comments', async ({ req, params, user }) => {
     const { ws, role } = access(params, user, 'commenter');
-    const id = Number(params.aid);
+    const id = noteId(ws, params.aid);
     rawNote(ws, id);
-    const body = commentBody(/** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {}).body);
+    const b = /** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {});
+    const body = commentBody(b.body);
     transaction(db, () => {
-      q.addComment.run(id, user.id, body);
+      chat.post(`note:${id}`, user, { body, replyTo: b.replyTo });
       tags.add(ws, id, autoTags(role, body));
       q.touch.run(id);
     });
-    return fetchOne(ws, id);
+    return fetchOne(ws, id, user);
   });
 
   /** A comment that the user may change: own comments; owners may also delete others'. */
@@ -291,7 +348,7 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
 
   router.on('PATCH', '/api/workspaces/:id/annotations/:aid/comments/:cid', async ({ req, params, user }) => {
     const { ws, role } = access(params, user, 'commenter');
-    const id = Number(params.aid);
+    const id = noteId(ws, params.aid);
     const c = ownComment(ws, id, Number(params.cid));
     if (c.authorId !== user.id) throw new HttpError(403, 'Изменять можно только свои комментарии');
     const body = commentBody(/** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {}).body);
@@ -300,18 +357,20 @@ export function registerAnnotationRoutes(router, db, tags, auth) {
       tags.add(ws, id, autoTags(role, body));
       q.touch.run(id);
     });
-    return fetchOne(ws, id);
+    chat.edited(Number(params.cid), user); // mentions and live update
+    return fetchOne(ws, id, user);
   });
 
   router.on('DELETE', '/api/workspaces/:id/annotations/:aid/comments/:cid', ({ params, user }) => {
     const { ws, role } = access(params, user, 'commenter');
-    const id = Number(params.aid);
+    const id = noteId(ws, params.aid);
     const c = ownComment(ws, id, Number(params.cid));
     if (c.authorId !== user.id && role !== 'owner') throw new HttpError(403, 'Чужой комментарий может удалить только владелец');
     q.removeComment.run(Number(params.cid));
+    chat.deleted(`note:${id}`, Number(params.cid));
     if (pruneIfEmpty(ws, id)) return { id, deleted: true };
     q.touch.run(id);
-    return fetchOne(ws, id);
+    return fetchOne(ws, id, user);
   });
 }
 

@@ -8,6 +8,7 @@
   import ChatMessages from './ChatMessages.svelte';
   import ChatComposer from './ChatComposer.svelte';
   import { REACTIONS } from '../../../shared/reactions.js';
+  import Icon from './Icon.svelte';
 
   /**
    * One translation proposal. "compact" is the popover form: the new wording, votes and a link to the thread.
@@ -47,10 +48,10 @@
 
 <article class="proposal" class:compact data-status={p.status}>
   <header class="proposal-head">
-    <span class="status-badge" data-status={p.status}>{STATUS_NAMES[p.status]}</span>
-    {#if p.version > 1}<span class="muted small">версия {p.version}</span>{/if}
+    <span class="status-badge tr-status" data-status={p.status}>{STATUS_NAMES[p.status]}</span>
+    {#if p.version > 1}<span class="pr-meta">версия {p.version}</span>{/if}
     <span class="spacer"></span>
-    <span class="muted small">{p.authorName} · {formatTime(p.updatedAt)}</span>
+    <span class="pr-meta pr-author">{p.authorName} · {formatTime(p.updatedAt)}</span>
   </header>
 
   {#if compact}
@@ -66,7 +67,7 @@
   {#if !editing}
     {#each p.warnings ?? [] as w (w.kind + w.termId + w.message)}<div class="gl-warning">{w.message}</div>{/each}
   {/if}
-  {#if p.decisionNote && (p.status !== 'voting')}<div class="hint">{p.decisionNote}</div>{/if}
+  {#if p.decisionNote && (p.status !== 'voting')}<div class="pr-decision">{p.decisionNote}</div>{/if}
 
   {#if p.status !== 'draft'}
     <div class="proposal-votes">
@@ -75,61 +76,68 @@
     </div>
   {/if}
   {#if p.can.vote}
+    <!-- the vote: three pills, the chosen one filled (again — the vote is taken back) -->
     <div class="vote-row" role="group" aria-label="Голос">
-      <button class="btn vote-for" class:on={p.votes.mine === 1} onclick={() => vote(1)}>За</button>
-      <button class="btn vote-against" class:on={p.votes.mine === -1} onclick={() => vote(-1)}>Против</button>
-      <button class="btn" class:on={p.votes.mine === 0} onclick={() => vote(0)}>Воздерживаюсь</button>
+      <button class="vote-pill vote-for" class:on={p.votes.mine === 1} aria-pressed={p.votes.mine === 1} onclick={() => vote(1)}>За</button>
+      <button class="vote-pill vote-against" class:on={p.votes.mine === -1} aria-pressed={p.votes.mine === -1} onclick={() => vote(-1)}>Против</button>
+      <button class="vote-pill" class:on={p.votes.mine === 0} aria-pressed={p.votes.mine === 0} onclick={() => vote(0)}>Воздерживаюсь</button>
     </div>
   {/if}
 
   {#if compact}
-    <button class="link-btn" onclick={() => openThread(p.ref, { focus: p.id })}>Обсуждение и подробности →</button>
+    <button class="ui-chip pr-chip" onclick={() => openThread(p.ref, { focus: p.id })}><Icon name="discuss" size={14} />Обсуждение и подробности</button>
   {:else}
     {#if editing}
-      <textarea class="text-area" bind:value={editText} rows="3" aria-label="Текст перевода"></textarea>
-      <input class="text-input" bind:value={editNote} placeholder="Обоснование (необязательно)" />
+      <textarea class="ui-input gl-area" bind:value={editText} rows="3" aria-label="Текст перевода"></textarea>
+      <input class="ui-input" bind:value={editNote} placeholder="Обоснование (необязательно)" />
       <TranslationAssist ref={p.ref} start={p.start} end={p.end} text={editText} proposalId={p.id} onpick={(t) => (editText = t)} />
-      {#if p.status === 'voting'}<p class="hint">Изменение текста создаст новую версию: голоса обнулятся, срок начнётся заново.</p>{/if}
-      <div class="row-end">
-        <button class="btn" onclick={() => (editing = false)}>Отмена</button>
-        <button class="btn primary" onclick={saveEdit} disabled={!editText.trim()}>Сохранить</button>
+      {#if p.status === 'voting'}<p class="ui-hint">Изменение текста создаст новую версию: голоса обнулятся, срок начнётся заново.</p>{/if}
+      <div class="pr-actions">
+        <button class="ui-btn" onclick={() => (editing = false)}>Отмена</button>
+        <button class="ui-btn primary" onclick={saveEdit} disabled={!editText.trim()}>Сохранить</button>
       </div>
     {:else}
-      <div class="proposal-actions">
-        {#if p.can.edit}<button class="btn" onclick={startEdit}>Изменить</button>{/if}
-        {#if p.can.publish}<button class="btn primary" onclick={() => change(() => api.publishProposal(p.id))}>На голосование</button>{/if}
-        {#if p.can.withdraw}<button class="btn" onclick={() => change(() => api.withdrawProposal(p.id))}>Снять с голосования</button>{/if}
-        {#if p.can.delete}
-          <button class="btn" class:danger-text={confirm === 'delete'} onblur={() => (confirm = '')}
-            onclick={() => (confirm === 'delete' ? change(() => api.deleteProposal(p.id)) : (confirm = 'delete'))}>
-            {confirm === 'delete' ? 'Точно удалить?' : 'Удалить'}
-          </button>
-        {/if}
-        {#if p.can.moderate}
-          {#if p.status === 'voting'}
-            <button class="btn" onclick={() => change(() => api.moderate(p.id, 'unpublish'))} title="Вернуть автору в черновики">Снять (координатор)</button>
+      {#if p.can.edit || p.can.publish || p.can.withdraw || p.can.delete}
+        <div class="pr-actions">
+          {#if p.can.edit}<button class="ui-btn" onclick={startEdit}>Изменить</button>{/if}
+          {#if p.can.publish}<button class="ui-btn primary" onclick={() => change(() => api.publishProposal(p.id))}>На голосование</button>{/if}
+          {#if p.can.withdraw}<button class="ui-btn" onclick={() => change(() => api.withdrawProposal(p.id))}>Снять с голосования</button>{/if}
+          {#if p.can.delete}
+            <button class="ui-round pr-delete" class:danger={confirm === 'delete'} onblur={() => (confirm = '')}
+              aria-label={confirm === 'delete' ? 'Точно удалить?' : 'Удалить'} title={confirm === 'delete' ? 'Нажмите ещё раз, чтобы удалить' : 'Удалить'}
+              onclick={() => (confirm === 'delete' ? change(() => api.deleteProposal(p.id)) : (confirm = 'delete'))}><Icon name="trash" size={18} /></button>
           {/if}
-          <button class="btn" onclick={() => (confirm = confirm === 'reject' ? '' : 'reject')}>Отклонить (координатор)</button>
-        {/if}
-      </div>
+        </div>
+        {#if confirm === 'delete'}<p class="ui-hint pr-confirm">Нажмите ещё раз, чтобы удалить.</p>{/if}
+      {/if}
+      {#if p.can.moderate}
+        <!-- the coordinator's own actions: quieter, apart from the author's -->
+        <div class="pr-coord">
+          <span>Координатор</span>
+          {#if p.status === 'voting'}
+            <button class="ui-chip" onclick={() => change(() => api.moderate(p.id, 'unpublish'))} title="Вернуть автору в черновики">Снять</button>
+          {/if}
+          <button class="ui-chip" class:on={confirm === 'reject'} onclick={() => (confirm = confirm === 'reject' ? '' : 'reject')}>Отклонить</button>
+        </div>
+      {/if}
       {#if confirm === 'reject'}
-        <div class="notes-filters">
-          <input class="text-input" bind:value={reason} placeholder="Причина (будет видна в ветке)" />
-          <button class="btn primary" onclick={() => change(() => api.moderate(p.id, 'reject', reason)).then(() => (confirm = ''))}>Отклонить</button>
+        <div class="pr-reject">
+          <input class="ui-input" bind:value={reason} placeholder="Причина (будет видна в ветке)" />
+          <button class="ui-btn primary" onclick={() => change(() => api.moderate(p.id, 'reject', reason)).then(() => (confirm = ''))}>Отклонить</button>
         </div>
       {/if}
       {#if p.status === 'draft' && !session.user?.isTranslator}
-        <p class="hint">Черновик видите только вы. Публиковать на голосование могут переводчики — обсудите вариант в ветке абзаца.</p>
+        <p class="ui-hint">Черновик видите только вы. Публиковать на голосование могут переводчики — обсудите вариант в ветке абзаца.</p>
       {/if}
     {/if}
 
     {#if p.status !== 'draft'}
-      <button class="link-btn" onclick={() => (showDiscussion = !showDiscussion)}>
-        {showDiscussion ? 'Скрыть обсуждение' : `Обсуждение предложения${messages.length ? ` (${messages.length})` : ''}`}
+      <button class="ui-chip pr-chip" class:on={showDiscussion} aria-expanded={showDiscussion} onclick={() => (showDiscussion = !showDiscussion)}>
+        <Icon name="discuss" size={14} />{showDiscussion ? 'Скрыть обсуждение' : `Обсуждение предложения${messages.length ? ` · ${messages.length}` : ''}`}
       </button>
       {#if showDiscussion}
         <div class="tg-embed proposal-chat">
-          <ChatMessages {messages} me={session.user?.id ?? null} compact reactions={REACTIONS}
+          <ChatMessages {messages} me={session.user?.id ?? null} compact reactions={REACTIONS} chatKey={p.ref}
             onreply={(m) => (replyTo = { id: m.id, authorName: m.authorName, body: m.body.slice(0, 200) })}
             onreact={(m, emoji) => change(() => api.react(m.id, emoji))}
             onedit={(m, body) => change(() => api.editMessage(m.id, body))}

@@ -1,0 +1,8 @@
+.gradle/
+build/
+app/build/
+local.properties
+# The signing key and its passwords: never in git (kept on Yandex Disk with the project; without it
+# an installed app cannot be updated).
+keystore.jks
+keystore.properties

@@ -47,7 +47,7 @@
 
 <main class="auth-page">
   <form class="auth-card" onsubmit={submit}>
-    <h1>Urantian Docs Explorer</h1>
+    <h1>Urantia Papers Explorer</h1>
     {#if loadError}
       <div class="search-error" role="alert">{loadError}</div>
       <p class="hint">Попросите новую ссылку у того, кто вас пригласил.</p>

@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from './db.js';
 import { createGlossary, findPhrase } from './glossary.js';
-import { tokenize } from './search/text.js';
+import { tokenize } from '../shared/search/text.js';
 
 const stems = (/** @type {string} */ s) => tokenize(s).map((t) => t.stem);
 

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Long press on the app icon: "Адрес сайта" (the site may move to another address). -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="server"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_server"
+        android:shortcutShortLabel="@string/server_short"
+        android:shortcutLongLabel="@string/server_title">
+        <intent
+            android:action="ubsite.app.SERVER"
+            android:targetPackage="ubsite.app"
+            android:targetClass="ubsite.app.MainActivity" />
+    </shortcut>
+</shortcuts>

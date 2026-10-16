@@ -26,6 +26,13 @@ export function registerWorkspaceRoutes(router, db, auth) {
       `INSERT INTO user_settings (user_id, workspace_id, settings) VALUES (?, ?, ?)
        ON CONFLICT (user_id, workspace_id) DO UPDATE SET settings = excluded.settings`,
     ),
+    // whom the owner can add: active people of the platform not in the workspace yet (not the Book's voice)
+    candidates: db.prepare(
+      `SELECT u.username, coalesce(u.display_name, u.username) AS name FROM users u
+       WHERE u.disabled = 0 AND u.is_agent = 0
+         AND NOT EXISTS (SELECT 1 FROM workspace_members m WHERE m.workspace_id = ? AND m.user_id = u.id)
+       ORDER BY coalesce(u.display_name, u.username) COLLATE NOCASE`,
+    ),
     members: db.prepare(
       `SELECT u.id AS userId, u.username, u.display_name AS displayName, m.role, m.joined_at AS joinedAt
        FROM workspace_members m JOIN users u ON u.id = m.user_id WHERE m.workspace_id = ? ORDER BY u.username_key`,
@@ -126,6 +133,14 @@ export function registerWorkspaceRoutes(router, db, auth) {
   const requireGroup = (ws) => {
     if (workspace(ws).kind !== 'group') throw new HttpError(400, 'В личное пространство нельзя добавлять участников');
   };
+
+  // People of the platform the owner may add (they are chosen from a list, not typed)
+  router.on('GET', '/api/workspaces/:id/candidates', ({ params, user }) => {
+    const ws = Number(params.id);
+    auth.require(ws, user, 'owner');
+    requireGroup(ws);
+    return q.candidates.all(ws);
+  });
 
   // Adds an existing user: { username, role }
   router.on('POST', '/api/workspaces/:id/members', async ({ req, params, user }) => {

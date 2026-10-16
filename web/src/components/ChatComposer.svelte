@@ -1,24 +1,42 @@
 <script>
   import { api } from '../lib/api.js';
+  import { blurOnRemove } from '../lib/focus.js';
   import Icon from './Icon.svelte';
 
   /**
    * Telegram's input bar: a rounded field that grows with the text, the reply bar above it, @name
-   * suggestions, Enter to send (Shift+Enter — a new line), the round send button.
+   * suggestions, Enter to send (Shift+Enter — a new line; on a touch screen Enter is a new line), the round send button.
    * @type {{
    *   onsend: (body: string) => Promise<unknown>, placeholder?: string,
    *   reply?: { id: number, authorName: string | null, body: string } | null, oncancelreply?: () => void,
-   *   ontyping?: () => void, mentions?: boolean, disabled?: boolean
+   *   ontyping?: () => void, mentions?: boolean, disabled?: boolean, chatKey?: string | null, onescape?: () => void
    * }}
+   * `chatKey`: the conversation — in a members-only one (a workspace's, a note's) only members are suggested.
+   * `onescape`: Esc with nothing to cancel (a note's card closes).
    */
-  let { onsend, placeholder = 'Сообщение', reply = null, oncancelreply, ontyping, mentions = true, disabled = false } = $props();
+  let {
+    onsend, placeholder = 'Сообщение', reply = null, oncancelreply, ontyping, mentions = true, disabled = false, chatKey = null,
+    onescape,
+  } = $props();
 
+  const touch = matchMedia('(pointer: coarse)').matches;
   let text = $state('');
   let sending = $state(false);
   /** @type {HTMLTextAreaElement | undefined} */ let field = $state();
 
-  export function focus() {
-    field?.focus();
+  /** @param {FocusOptions} [opts] */
+  export function focus(opts) {
+    field?.focus(opts);
+  }
+  /** Puts text into the field (a quote to comment on), the cursor at its end. @param {string} value */
+  export function fill(value) {
+    text = value;
+    queueMicrotask(() => {
+      grow();
+      field?.focus();
+      field?.setSelectionRange(value.length, value.length);
+      if (field) field.scrollTop = field.scrollHeight;
+    });
   }
   $effect(() => {
     if (reply) field?.focus();
@@ -28,6 +46,7 @@
     if (!field) return;
     field.style.height = 'auto';
     field.style.height = `${Math.min(field.scrollHeight, 180)}px`;
+    field.style.overflowY = field.scrollHeight > 180 ? 'auto' : 'hidden'; // no scrollbar in a short field
   }
 
   async function send() {
@@ -64,7 +83,7 @@
       return;
     }
     const my = ++seq;
-    const list = await api.chatUsers(at.prefix).catch(() => []);
+    const list = await api.chatUsers(at.prefix, chatKey).catch(() => []);
     if (my === seq) {
       suggestions = list;
       picked = 0;
@@ -99,8 +118,12 @@
         return;
       }
     }
-    if (e.key === 'Escape' && reply) oncancelreply?.();
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+    if (e.key === 'Escape') {
+      if (reply) oncancelreply?.();
+      else onescape?.();
+    }
+    // A computer: Enter sends (Shift+Enter — a new line); a touch screen: Enter is a new line, the button sends (as Telegram)
+    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) {
       e.preventDefault();
       void send();
     }
@@ -125,7 +148,7 @@
     </div>
   {/if}
   <div class="tg-input-row">
-    <textarea bind:this={field} bind:value={text} rows="1" {placeholder} {disabled} aria-label={placeholder}
+    <textarea bind:this={field} bind:value={text} rows="1" {placeholder} {disabled} aria-label={placeholder} use:blurOnRemove
       oninput={() => (grow(), suggest(), text.trim() && ontyping?.())} onkeydown={onKeydown} onclick={suggest}></textarea>
     <button class="tg-send" class:ready={text.trim().length > 0} onclick={send} disabled={!text.trim() || sending || disabled}
       aria-label="Отправить" title="Отправить (Enter)">

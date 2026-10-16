@@ -1,7 +1,10 @@
 <script>
+  import { book } from '../lib/lang.svelte.js';
   import { tick } from 'svelte';
   import { NOTE_COLORS } from '../../../shared/settings.js';
-  import { notes, createNote, patchNote, deleteNote, colorName, citation, copyText, setNoteTags } from '../lib/notes.svelte.js';
+  import { notes, createNote, patchNote, deleteNote, colorName, citation, setNoteTags } from '../lib/notes.svelte.js';
+  import { placeLink, shareLink } from '../lib/share.js';
+  import { openQuoteCard } from '../lib/quotecard.svelte.js';
   import Icon from './Icon.svelte';
   import TagInput from './TagInput.svelte';
   import AddToCollection from './AddToCollection.svelte';
@@ -9,6 +12,7 @@
   import { device } from '../lib/mobile.svelte.js';
   import { settings } from '../lib/settings.svelte.js';
   import { blurOnRemove } from '../lib/focus.js';
+  import { showToast } from '../lib/toast.svelte.js';
   import { can, session } from '../lib/session.svelte.js';
 
   /**
@@ -86,13 +90,15 @@
     if (note && value !== (note.title ?? '')) patchNote(note.id, { title: value || null });
   }
 
-  /** What "В подборку" adds: the paragraph, the note, or the paragraph with the selected words as the comment. */
+  /** What "В подборку" adds: the paragraph, the note, or the paragraph pointing at the selected fragment. */
   function collectionItem() {
+    const { ref, lang, start, end } = tb.anchor;
     /** @type {import('../lib/api.js').NewCollectionItem} */
     const item =
-      tb.mode === 'para' ? { kind: 'para', ref: tb.anchor.ref }
+      tb.mode === 'para' ? { kind: 'para', ref }
       : note ? { kind: 'note', annotationId: note.id }
-      : { kind: 'para', ref: tb.anchor.ref, body: `«${tb.text}»` };
+      : lang !== null && start !== null && end !== null ? { kind: 'para', ref, fragment: { lang, start, end } }
+      : { kind: 'para', ref };
     return item;
   }
 
@@ -102,19 +108,44 @@
     tb.mode === 'para' ? `Абзац ${tb.anchor.ref}: ` : `«${tb.text.length > 80 ? tb.text.slice(0, 80) + '…' : tb.text}» — `,
   );
 
-  function copy() {
-    copyText(citation(tb.text, tb.anchor.ref, tb.anchor.lang));
+  /** «Ссылка»: the public link to the quote (or the paragraph) — anyone opens it, signed in or not (lib/share.js). */
+  function share() {
+    const { ref, lang, start, end } = tb.anchor;
+    const quote = tb.mode !== 'para' && lang !== null && start !== null && end !== null ? { lang, start, end } : null;
+    void shareLink(placeLink(ref, quote), quote ? citation(tb.text, ref, lang) : undefined, quote ? 'Цитата со ссылкой скопирована' : `Ссылка на ${ref} скопирована`);
     onclose();
   }
 
+  /** «Картинка»: the quote (or the paragraph) drawn as a picture to send (QuoteImage.svelte). */
+  function picture() {
+    const { ref, lang, start, end } = tb.anchor;
+    const quote = tb.mode !== 'para' && lang !== null && start !== null && end !== null ? { lang, start, end } : null;
+    openQuoteCard({ text: tb.text, lang: lang ?? book.main, ref, link: placeLink(ref, quote) });
+    getSelection()?.removeAllRanges();
+    onclose();
+  }
+
+  // The bin: a note without a conversation goes at once, with «Вернуть» for a few seconds (its place,
+  // bookmark, color, name and tags come back); one with comments asks first — a conversation (others'
+  // words too) cannot be brought back.
   async function remove() {
     if (!note) return;
-    if (!confirmDelete) {
+    if (note.comments.length && !confirmDelete) {
       confirmDelete = true;
       return;
     }
-    await deleteNote(note.id);
+    const n = note;
+    await deleteNote(n.id);
     onclose();
+    if (!n.comments.length) {
+      /** @type {any} */
+      // (plain values: the queue keeps the change in IndexedDB, which takes no reactive proxies)
+      const props = { bookmark: n.bookmark, color: n.color ?? undefined, title: n.title, tags: [...n.tags] };
+      showToast(n.bookmark ? 'Закладка удалена' : 'Заметка удалена', {
+        label: 'Вернуть',
+        run: () => void createNote({ ref: n.ref, lang: n.lang, start: n.start, end: n.end, quote: n.quote }, props),
+      });
+    }
   }
 </script>
 
@@ -153,20 +184,26 @@
     {#if can.edit}
       <AddToCollection item={collectionItem} ondone={onclose} label={tb.mode === 'para' || docked} />
     {/if}
-    <AddTask link={taskLink} suggest={taskSuggestion} ondone={onclose} label={tb.mode === 'para' || docked} />
-    <button class="tb-btn tb-copy" onclick={copy} title="Копировать цитату со ссылкой"><Icon name="copy" size={16} />{#if !can.comment}<span>Цитата</span>{:else}<span class="tb-m">Ссылка</span>{/if}</button>
-    {#if tb.mode === 'para' || tb.anchor.lang === 'ru'}
+    {#if session.user}
+      <AddTask link={taskLink} suggest={taskSuggestion} ondone={onclose} label={tb.mode === 'para' || docked} />
+    {/if}
+    <button class="tb-btn tb-copy" onclick={share} title={tb.mode === 'para' ? 'Ссылка на абзац — откроется у любого' : 'Цитата со ссылкой — откроется у любого'}>
+      <Icon name="link" size={16} /><span class:tb-m={can.comment}>Ссылка</span></button>
+    <button class="tb-btn tb-picture" onclick={picture} title={tb.mode === 'para' ? 'Абзац картинкой — отправить в мессенджер' : 'Цитата картинкой — отправить в мессенджер'}>
+      <Icon name="image" size={16} /><span class="tb-m">Картинка</span></button>
+    {#if session.user && ((tb.mode === 'para' && book.main === 'ru') || tb.anchor.lang === 'ru')}
       <span class="sep"></span>
       <button class="tb-btn tb-translate" onclick={ontranslate} title="Предложить свой вариант перевода — публичный слой">
         <Icon name="translate" size={16} /><span>{tb.mode === 'para' ? 'Перевести абзац' : 'Перевести'}</span>
       </button>
     {/if}
-    {#if tb.mode === 'para' || docked}
-      <button class="tb-btn tb-discuss" onclick={onthread} title="Публичное обсуждение абзаца"><Icon name="discuss" size={16} /><span>Обсудить</span></button>
-    {/if}
+    <!-- The paragraph's thread in the chat; a selected fragment goes into the input as a quote -->
+    <button class="tb-btn tb-discuss" onclick={onthread} title={tb.mode === 'para' ? 'Обсудить абзац в чате' : 'Обсудить фрагмент в чате абзаца'}>
+      <Icon name="discuss" size={16} /><span class:tb-m={tb.mode !== 'para' && !docked}>Обсудить</span>
+    </button>
     {#if note && (can.own || (can.edit && note.authorId === session.user?.id))}
       <button class="icon-btn small-btn tb-delete" class:danger={confirmDelete} onclick={remove}
-        title={confirmDelete ? 'Нажмите ещё раз, чтобы удалить' : 'Удалить заметку'} aria-label="Удалить заметку"><Icon name="trash" /></button>
+        title={confirmDelete ? 'Нажмите ещё раз — заметка удалится вместе с обсуждением' : 'Удалить заметку'} aria-label="Удалить заметку"><Icon name="trash" /></button>
     {/if}
   </div>
   {#if tagging && can.edit}

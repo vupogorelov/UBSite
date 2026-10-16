@@ -8,7 +8,9 @@ import { HttpError } from './http.js';
 /**
  * Platform roles (isTranslator, isCoordinator) govern the public translation layer;
  * workspace roles (Role) govern notes inside a workspace.
- * @typedef {{ id: number, username: string, displayName: string | null, isAdmin: boolean, isTranslator: boolean, isCoordinator: boolean }} User
+ * `email`: for restoring a forgotten password; it counts once `emailVerified`.
+ * @typedef {{ id: number, username: string, displayName: string | null, isAdmin: boolean, isTranslator: boolean, isCoordinator: boolean,
+ *   email: string | null, emailVerified: boolean }} User
  */
 /** @typedef {'owner' | 'editor' | 'commenter' | 'viewer'} Role */
 
@@ -43,6 +45,15 @@ export function checkNewPassword(p) {
   if (typeof p !== 'string' || p.length < 8) throw new HttpError(400, 'Пароль: не короче 8 символов');
   if (p.length > 200) throw new HttpError(400, 'Слишком длинный пароль');
   return p;
+}
+
+/** An e-mail address, or null for "none". @param {unknown} e @returns {string | null} */
+export function checkEmail(e) {
+  if (e === null || e === undefined || (typeof e === 'string' && !e.trim())) return null;
+  if (typeof e !== 'string' || e.length > 254 || !/^[^\s@<>"]+@[^\s@<>"]+\.[^\s@<>"]+$/.test(e.trim())) {
+    throw new HttpError(400, 'Почта: адрес вида имя@пример.ру');
+  }
+  return e.trim();
 }
 
 /** @param {unknown} u */
@@ -123,16 +134,38 @@ export function createLoginLimiter() {
   };
 }
 
+/**
+ * At most `max` actions per key per hour (only those recorded count): sign-ups per address, letters sent…
+ * @param {number} [max] @param {string} [message]
+ */
+export function createSignupLimiter(max = 3, message = 'Слишком много регистраций с этого адреса, попробуйте через час') {
+  /** @type {Map<string, number[]>} */
+  const done = new Map();
+  const WINDOW = 60 * 60_000;
+  return {
+    /** @param {string} key */
+    check(key) {
+      const recent = (done.get(key) ?? []).filter((t) => Date.now() - t < WINDOW);
+      done.set(key, recent);
+      if (recent.length >= max) throw new HttpError(429, message);
+    },
+    /** @param {string} key */
+    record(key) {
+      done.set(key, [...(done.get(key) ?? []), Date.now()]);
+    },
+  };
+}
+
 /** @param {DatabaseSync} db */
 export function createAuth(db) {
   const q = {
     userByKey: db.prepare(
-      `SELECT id, username, display_name AS displayName, password_hash, is_admin AS isAdmin, is_translator AS isTranslator,
-              is_coordinator AS isCoordinator, disabled FROM users WHERE username_key = ?`,
+      `SELECT id, username, display_name AS displayName, password_hash, is_agent, is_admin AS isAdmin, is_translator AS isTranslator,
+              is_coordinator AS isCoordinator, email, email_verified AS emailVerified, disabled FROM users WHERE username_key = ?`,
     ),
     userById: db.prepare(
       `SELECT id, username, display_name AS displayName, is_admin AS isAdmin, is_translator AS isTranslator,
-              is_coordinator AS isCoordinator, disabled FROM users WHERE id = ?`,
+              is_coordinator AS isCoordinator, email, email_verified AS emailVerified, disabled FROM users WHERE id = ?`,
     ),
     insertUser: db.prepare(
       'INSERT INTO users (username, username_key, display_name, password_hash, is_admin) VALUES (?, ?, ?, ?, ?) RETURNING id',
@@ -140,7 +173,7 @@ export function createAuth(db) {
     setPassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
     session: db.prepare(
       `SELECT u.id, u.username, u.display_name AS displayName, u.is_admin AS isAdmin, u.is_translator AS isTranslator,
-              u.is_coordinator AS isCoordinator, s.expires_at AS expiresAt
+              u.is_coordinator AS isCoordinator, u.email, u.email_verified AS emailVerified, s.expires_at AS expiresAt
        FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND u.disabled = 0 AND s.expires_at > datetime('now')`,
     ),
     insertSession: db.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)'),
@@ -165,6 +198,22 @@ export function createAuth(db) {
        ON CONFLICT (workspace_id, user_id) DO UPDATE SET role = excluded.role`,
     ),
     role: db.prepare('SELECT role FROM workspace_members WHERE workspace_id = ? AND user_id = ?'),
+    getRegistration: db.prepare("SELECT value FROM meta WHERE key = 'registration'"),
+    setRegistration: db.prepare(
+      "INSERT INTO meta (key, value) VALUES ('registration', ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+    ),
+    setEmail: db.prepare('UPDATE users SET email = ?, email_key = ?, email_verified = 0 WHERE id = ?'),
+    setName: db.prepare('UPDATE users SET display_name = ? WHERE id = ?'),
+    agentNames: db.prepare('SELECT lower(display_name) AS name, username_key AS key FROM users WHERE is_agent = 1'),
+    // Accounts with this confirmed address (several accounts may share one).
+    byEmail: db.prepare(`SELECT id FROM users WHERE email_key = ? AND email_verified = 1 AND disabled = 0`),
+    insertEmailToken: db.prepare('INSERT INTO email_tokens (token_hash, user_id, email, expires_at) VALUES (?, ?, ?, ?)'),
+    emailToken: db.prepare(
+      `SELECT t.user_id AS userId, t.email FROM email_tokens t JOIN users u ON u.id = t.user_id
+       WHERE t.token_hash = ? AND t.used_at IS NULL AND t.expires_at > datetime('now') AND u.email_key = lower(t.email)`,
+    ),
+    useEmailToken: db.prepare("UPDATE email_tokens SET used_at = datetime('now') WHERE token_hash = ?"),
+    verifyEmail: db.prepare('UPDATE users SET email_verified = 1 WHERE id = ?'),
   };
 
   /** @param {any} row @returns {User} */
@@ -175,6 +224,8 @@ export function createAuth(db) {
     isAdmin: Boolean(row.isAdmin),
     isTranslator: Boolean(row.isTranslator),
     isCoordinator: Boolean(row.isCoordinator),
+    email: row.email ?? null,
+    emailVerified: Boolean(row.emailVerified),
   });
 
   return {
@@ -207,7 +258,7 @@ export function createAuth(db) {
     login(username, password) {
       const row = /** @type {any} */ (q.userByKey.get(username.trim().toLowerCase()));
       const ok = verifyPassword(password, row?.password_hash ?? null);
-      if (!row || !ok || row.disabled) return null;
+      if (!row || !ok || row.disabled || row.is_agent) return null; // the Book never signs in
       return toUser(row);
     },
 
@@ -245,15 +296,78 @@ export function createAuth(db) {
 
     /**
      * One-time link token. kind "account": a new user (optionally joining a workspace); "reset": new password.
-     * @param {{ kind: 'account' | 'reset', userId?: number | null, workspaceId?: number | null, role?: Role | null, isAdmin?: boolean, createdBy?: number | null }} inv
+     * `hours`: a shorter life than the default 7 days (a reset sent by e-mail lives an hour).
+     * @param {{ kind: 'account' | 'reset', userId?: number | null, workspaceId?: number | null, role?: Role | null, isAdmin?: boolean, createdBy?: number | null, hours?: number }} inv
      */
     createInvite(inv) {
       const token = newToken();
       q.insertInvite.run(
         tokenHash(token), inv.kind, inv.userId ?? null, inv.workspaceId ?? null, inv.role ?? null,
-        inv.isAdmin ? 1 : 0, inv.createdBy ?? null, daysFromNow(INVITE_DAYS),
+        inv.isAdmin ? 1 : 0, inv.createdBy ?? null, inv.hours ? daysFromNow(inv.hours / 24) : daysFromNow(INVITE_DAYS),
       );
       return token;
+    },
+
+    /**
+     * The name others see (in chats, discussions, notes); null — the login is shown. Not the Book's: a
+     * person cannot pass for it. @param {number} userId @param {unknown} raw
+     */
+    setDisplayName(userId, raw) {
+      const name = this.checkDisplayName(raw);
+      q.setName.run(name, userId);
+      return name;
+    },
+
+    /** A display name as typed → as kept (null — none). @param {unknown} raw @returns {string | null} */
+    checkDisplayName(raw) {
+      if (raw !== null && raw !== undefined && typeof raw !== 'string') throw new HttpError(400, 'Имя: строка');
+      const name = (raw ?? '').replace(/\s+/g, ' ').trim();
+      if (!name) return null;
+      if (name.length > 80) throw new HttpError(400, 'Имя: не длиннее 80 символов');
+      const low = name.toLowerCase();
+      const agents = /** @type {{ name: string | null, key: string }[]} */ (q.agentNames.all());
+      if (['книга', 'книга урантии', 'the urantia book'].includes(low) || agents.some((a) => a.name === low || a.key === low)) {
+        throw new HttpError(400, 'Это имя принадлежит Книге — выберите другое');
+      }
+      return name;
+    },
+
+    /** Sets (or removes, with null) the account's e-mail; a new address is unconfirmed. @param {number} userId @param {string | null} email */
+    setEmail(userId, email) {
+      q.setEmail.run(email, email ? email.toLowerCase() : null, userId);
+    },
+
+    /** A link confirming `email` for the account, valid for a day. @param {number} userId @param {string} email */
+    createEmailToken(userId, email) {
+      const token = newToken();
+      q.insertEmailToken.run(tokenHash(token), userId, email, daysFromNow(1));
+      return token;
+    },
+
+    /**
+     * Confirms the address the link was sent to — if it is still the account's address.
+     * @param {string} token @returns {{ userId: number, email: string } | null}
+     */
+    verifyEmail(token) {
+      const t = /** @type {{ userId: number, email: string } | undefined} */ (q.emailToken.get(tokenHash(token)));
+      if (!t) return null;
+      q.useEmailToken.run(tokenHash(token));
+      q.verifyEmail.run(t.userId);
+      return t;
+    },
+
+    /**
+     * The accounts "Забыли пароль" is about: by username, or every account with this confirmed e-mail.
+     * Only those with a confirmed address (the letter has somewhere to go) and not disabled.
+     * @param {string} login @returns {User[]}
+     */
+    accountsFor(login) {
+      const key = login.trim().toLowerCase();
+      if (!key) return [];
+      const ids = key.includes('@')
+        ? /** @type {{ id: number }[]} */ (q.byEmail.all(key)).map((r) => r.id)
+        : [/** @type {any} */ (q.userByKey.get(key))?.id].filter(Boolean);
+      return ids.map((id) => this.userById(id)).filter((u) => u && !u.disabled && u.email && u.emailVerified).map((u) => /** @type {User} */ (u));
     },
 
     /** @param {string} token */
@@ -269,6 +383,18 @@ export function createAuth(db) {
     /** @param {number} workspaceId @param {number} userId @param {Role} role */
     addMember(workspaceId, userId, role) {
       q.addMember.run(workspaceId, userId, role);
+    },
+
+    /** Anyone may create an account (as a plain participant); on by default, the admin can close it. */
+    registrationOpen() {
+      const row = /** @type {{ value: string } | undefined} */ (q.getRegistration.get());
+      return row ? JSON.parse(row.value).open !== false : true;
+    },
+
+    /** @param {boolean} open */
+    setRegistrationOpen(open) {
+      q.setRegistration.run(JSON.stringify({ open }));
+      return open;
     },
 
     /** Role of the user in the workspace, or null. @param {number} workspaceId @param {number} userId @returns {Role | null} */

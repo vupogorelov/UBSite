@@ -161,44 +161,50 @@
 <div class="tags-panel">
   <!-- The view switch and its controls stay on top; the cloud or the tree scrolls. -->
   <div class="panel-head">
-    <div class="segmented small-seg" role="radiogroup" aria-label="Вид">
-      <button role="radio" aria-checked={view === 'cloud'} class:active={view === 'cloud'} onclick={() => (view = 'cloud')}>Облако</button>
-      <button role="radio" aria-checked={view === 'tree'} class:active={view === 'tree'} onclick={() => (view = 'tree')}>Дерево и управление</button>
-    </div>
-    {#if view === 'cloud'}
-      {#if tags.list.length}
-        <label class="toggle small panel-head-last"><input type="checkbox" bind:checked={topOnly} /> только верхний уровень</label>
+    <!-- the view: two chips; the cloud's own filter — a chip after them -->
+    <div class="ui-chips" role="radiogroup" aria-label="Вид">
+      <button class="ui-chip" role="radio" aria-checked={view === 'cloud'} class:on={view === 'cloud'} onclick={() => (view = 'cloud')}>Облако</button>
+      <button class="ui-chip" role="radio" aria-checked={view === 'tree'} class:on={view === 'tree'} onclick={() => (view = 'tree')} title="Дерево тегов: переименование, цвет, удаление">Дерево</button>
+      {#if view === 'cloud' && tags.list.length}
+        <span class="ui-chips-sep" aria-hidden="true"></span>
+        <button class="ui-chip" class:on={topOnly} aria-pressed={topOnly} onclick={() => (topOnly = !topOnly)} title="Только теги верхнего уровня">Верхний уровень</button>
       {/if}
-    {:else}
+    </div>
+    {#if view === 'tree'}
       {#if can.edit}
-        <form class="notes-filters" onsubmit={(e) => (e.preventDefault(), create())}>
-          <input class="text-input" placeholder="Новый тег: тема/подтема" bind:value={newTag} aria-label="Новый тег" />
-          <button class="btn" type="submit" disabled={!newTag.trim()}>Добавить</button>
+        <form class="ui-search ui-add" onsubmit={(e) => (e.preventDefault(), create())}>
+          <Icon name="tag" size={18} />
+          <input placeholder="Новый тег: тема/подтема" bind:value={newTag} aria-label="Новый тег" />
+          <button class="ui-round primary" type="submit" disabled={!newTag.trim()} aria-label="Добавить тег" title="Добавить"><Icon name="plus" size={18} /></button>
         </form>
       {/if}
       {#if can.own}
-        <p class="hint panel-head-last">Переименование меняет тег во всех заметках. Путь с «/» переносит ветку
+        <p class="ui-hint">Переименование меняет тег во всех заметках. Путь с «/» переносит ветку
           (<code>космология</code> → <code>наука/космология</code>), имя существующего тега объединяет их.</p>
       {:else}
-        <p class="hint panel-head-last">Переименовывать, объединять и удалять теги может владелец пространства.</p>
+        <p class="ui-hint">Переименовывать, объединять и удалять теги может владелец пространства.</p>
       {/if}
     {/if}
   </div>
 
   {#if !tags.list.length}
-    <p class="muted small">Тегов пока нет. Добавьте тег к выделению кнопкой <b>#</b> на панели над текстом
-      или напишите <code>#тег</code> в комментарии. Уровни разделяются косой чертой: <code>#космология/Хавона</code>.</p>
+    <div class="ui-empty">
+      <span class="ui-tile big"><Icon name="tag" size={22} /></span>
+      <b>Тегов пока нет</b>
+      <p class="muted small">Добавьте тег к выделению кнопкой <b>#</b> на панели над текстом или напишите <code>#тег</code> в комментарии.
+        Уровни — через косую черту: <code>#космология/Хавона</code>.</p>
+    </div>
   {/if}
 
-  {#if view === 'cloud'}
-    <div class="cloud">
+  {#if view === 'cloud' && tags.list.length}
+    <div class="cloud ui-tree">
       {#each cloud as t (t.name)}
         <button class="cloud-tag" data-color={tagColor(t.name)} style:font-size="{t.size}px"
           title="{t.count} {plural(t.count, 'заметка', 'заметки', 'заметок')}" onclick={() => showNotesForTag(t.name)}>#{t.name}</button>
       {/each}
     </div>
-  {:else}
-    <ul class="folder-tree">
+  {:else if view === 'tree' && tags.list.length}
+    <ul class="folder-tree ui-tree">
       {#each tree as n (n.key)}{@render row(n, 0)}{/each}
     </ul>
   {/if}

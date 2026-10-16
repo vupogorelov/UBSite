@@ -5,7 +5,7 @@
 $ErrorActionPreference = 'Stop'
 $deploy = $PSScriptRoot
 $root = Split-Path $deploy -Parent
-$publicUrl = 'https://95-31-142-59.broadband.corbina.ru'
+$publicUrl = 'https://upexplorer.ddns.net'
 
 # The Node server, with the public address for invitation links.
 $nodeCmd = "`$env:UB_PUBLIC_URL = '$publicUrl'; Set-Location '$root'; npm start"

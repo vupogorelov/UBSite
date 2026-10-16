@@ -30,9 +30,9 @@
   /** @param {import('../lib/sections.svelte.js').Section} s */
   function go(s) {
     if (s.path) {
-      navigate(isActive(s) ? lastPath() : s.path);
+      (isActive(s) ? navigate(lastPath(), { root: true }) : navigate(s.path));
     } else if (s.tab) {
-      if (!bookRoute) navigate(lastPath());
+      if (!bookRoute) navigate(lastPath(), { root: true });
       if (bookRoute && ui.sidebarOpen && ui.tab === s.tab) ui.sidebarOpen = false;
       else setTab(s.tab);
     }

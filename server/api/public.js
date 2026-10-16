@@ -45,6 +45,10 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
       `SELECT m.ref, count(*) AS n FROM public_messages m JOIN paragraphs pa ON pa.ref = m.ref
        WHERE pa.paper_id = ? AND m.kind = 'message' AND m.hidden_at IS NULL GROUP BY m.ref`,
     ),
+    proposalCounts: db.prepare(
+      `SELECT p.ref, count(*) AS n FROM proposals p JOIN paragraphs pa ON pa.ref = p.ref
+       WHERE pa.paper_id = ? AND p.status IN ('voting', 'approved') GROUP BY p.ref`,
+    ),
     messages: db.prepare(`${MESSAGE} WHERE m.ref = ? ORDER BY m.id`),
     message: db.prepare('SELECT id, ref, author_id AS authorId, kind FROM public_messages WHERE id = ?'),
     editMessage: db.prepare("UPDATE public_messages SET body = ?, updated_at = datetime('now') WHERE id = ?"),
@@ -124,6 +128,15 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
     };
   });
 
+  // A guest's marks (a shared link, not signed in): how many discussion messages and published
+  // translation variants each paragraph has — the numbers only; reading them takes signing in.
+  router.on('GET', '/api/guest/paper/:id', ({ params }) => {
+    const paper = Number(params.id);
+    /** @param {import('node:sqlite').StatementSync} st */
+    const counts = (st) => Object.fromEntries(/** @type {{ ref: string, n: number }[]} */ (st.all(paper)).map((r) => [r.ref, r.n]));
+    return { messages: counts(q.messageCounts), proposals: counts(q.proposalCounts) };
+  });
+
   // Everything about one paragraph: proposals and the thread.
   router.on('GET', '/api/public/thread/:ref', ({ params, user }) => {
     tr.sweep();
@@ -161,7 +174,7 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
       if (p.ref !== params.ref || (p.status === 'draft' && p.author_id !== user.id)) throw new HttpError(400, 'Предложение не из этого абзаца');
       proposalId = p.id;
     }
-    return chat.post(params.ref, user, { body: text(b.body, 'Сообщение'), replyTo: b.replyTo, proposalId });
+    return chat.post(params.ref, user, { body: text(b.body, 'Сообщение'), replyTo: b.replyTo, proposalId, writtenAt: b.writtenAt });
   });
 
   router.on('PATCH', '/api/public/messages/:mid', async ({ req, params, user }) => {
@@ -175,7 +188,7 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
   router.on('DELETE', '/api/public/messages/:mid', ({ params, user }) => {
     const m = /** @type {any} */ (q.message.get(Number(params.mid)));
     if (!m || m.kind !== 'message') throw new HttpError(404, 'Сообщение не найдено');
-    if (m.authorId !== user.id) throw new HttpError(403, 'Удалять можно только свои сообщения; координатор может скрыть');
+    if (m.authorId !== user.id && !chat.ownsChat(m.ref, user)) throw new HttpError(403, 'Удалять можно только свои сообщения; координатор может скрыть');
     q.deleteMessage.run(m.id);
     chat.deleted(m.ref, m.id);
     return { ok: true };
@@ -184,7 +197,7 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
   router.on('POST', '/api/public/messages/:mid/hide', async ({ req, params, user }) => {
     if (!isCoordinator(user)) throw new HttpError(403, 'Скрывать сообщения могут координаторы');
     const m = /** @type {any} */ (q.message.get(Number(params.mid)));
-    if (!m || m.ref.startsWith('ws:')) throw new HttpError(404, 'Сообщение не найдено');
+    if (!m || chat.workspaceOf(m.ref) !== null) throw new HttpError(404, 'Сообщение не найдено'); // members-only chats: their owners
     const hide = (await body(req)).hidden !== false;
     q.hideMessage.run(hide ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null, hide ? user.id : null, m.id);
     chat.changed(m.id);

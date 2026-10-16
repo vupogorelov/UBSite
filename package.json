@@ -11,7 +11,9 @@
     "start": "node --disable-warning=ExperimentalWarning server/main.js",
     "import": "node --disable-warning=ExperimentalWarning scripts/import-book.js",
     "admin": "node --disable-warning=ExperimentalWarning scripts/admin.js",
-    "test": "node --test"
+    "test": "node --test",
+    "check:offline": "node --disable-warning=ExperimentalWarning scripts/check-offline.js",
+    "e2e": "node --disable-warning=ExperimentalWarning scripts/e2e/run.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",

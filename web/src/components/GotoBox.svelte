@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import { api } from '../lib/api.js';
   import { navigate } from '../lib/router.svelte.js';
 
@@ -42,6 +43,7 @@
 </script>
 
 <form class="goto" role="search" onsubmit={submit}>
+  <span class="goto-icon" aria-hidden="true"><Icon name="search" size={18} /></span>
   <input
     bind:this={input}
     bind:value={q}

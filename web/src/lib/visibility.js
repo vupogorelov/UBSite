@@ -18,6 +18,7 @@ export function visibility(c) {
       full: `Видят только участники пространства «${c.title}»${n ? ` (${n})` : ''}`,
     };
   }
+  if (c.kind === 'dm') return { icon: 'lock', short: 'Видите только вы', full: 'Ваш разговор с Книгой — его видите только вы' };
   if (c.kind === 'private') return { icon: 'lock', short: 'Видите только вы', full: 'Видите только вы' };
   return { icon: 'globe', short: 'Видят все', full: 'Видят все пользователи платформы' };
 }

@@ -3,7 +3,7 @@
 // entry "Настройщик Мысли" also finds "Настройщика Мысли", "Настройщиком Мысли".
 // Checks only warn: a machine can misjudge context (quotations, wordplay); people decide.
 import { HttpError } from './http.js';
-import { tokenize } from './search/text.js';
+import { tokenize } from '../shared/search/text.js';
 
 /** @typedef {import('node:sqlite').DatabaseSync} DatabaseSync */
 /**
@@ -19,7 +19,7 @@ const stems = (text) => tokenize(text).map((t) => t.stem);
 
 /**
  * Occurrences of a phrase (as stems) in a text (as tokens), as character ranges.
- * @param {import('./search/text.js').Token[]} tokens @param {string[]} phrase
+ * @param {import('../shared/search/text.js').Token[]} tokens @param {string[]} phrase
  */
 export function findPhrase(tokens, phrase) {
   /** @type {{ start: number, end: number }[]} */
@@ -63,6 +63,8 @@ export function createGlossary(db) {
 
   /** Terms with their stems, rebuilt after every change. @type {(Term & { enStems: string[], ruStems: string[], avoidStems: string[][] })[] | null} */
   let cache = null;
+  /** Bumped on every change (the reader's term index is rebuilt then). */
+  let changes = 0;
   function terms() {
     cache ??= /** @type {any[]} */ (q.all.all()).map((r) => {
       const avoid = r.avoid ? r.avoid.split('\n') : [];
@@ -82,6 +84,8 @@ export function createGlossary(db) {
   }
 
   return {
+    version: () => changes,
+
     /** @returns {Term[]} */
     list: () => terms().map(({ enStems, ruStems, avoidStems, ...t }) => t),
 
@@ -91,6 +95,7 @@ export function createGlossary(db) {
       unique(t.en, null);
       const { id } = /** @type {{ id: number }} */ (q.insert.get(t.en, t.ru, t.avoid.join('\n'), t.note, userId, userId));
       cache = null;
+      changes++;
       return id;
     },
 
@@ -101,12 +106,14 @@ export function createGlossary(db) {
       unique(t.en, id);
       q.update.run(t.en, t.ru, t.avoid.join('\n'), t.note, userId, id);
       cache = null;
+      changes++;
     },
 
     /** @param {number} id */
     remove(id) {
       q.remove.run(id);
       cache = null;
+      changes++;
     },
 
     /**

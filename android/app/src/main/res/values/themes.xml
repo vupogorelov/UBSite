@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Light on Android 8–9; from Android 10 it follows the system (values-v29). The page's own
+         "prefers-color-scheme" follows this theme. -->
+    <style name="AppTheme" parent="@android:style/Theme.DeviceDefault.Light.NoActionBar">
+        <item name="android:windowBackground">@color/paper</item>
+    </style>
+    <color name="paper">#F0EEE6</color>
+</resources>

@@ -1,3 +1,18 @@
 node_modules/
 data/
 web/dist/
+# the recordings of the book (gigabytes; served from these folders, kept out of git)
+book/UB_audio_voiner/
+book/UB_audio_horn/
+book/Urantia-MH-Audio-DVD/
+
+# deploy/: secrets and machine state — never in git
+# (the mailbox password; Caddy's certificates and ACME account keys; access logs with people's addresses)
+deploy/mail.env
+deploy/caddy-data/
+deploy/logs/
+# Caddy itself: a 50 MB program, downloaded once (DEPLOY.md), not versioned with the code
+deploy/caddy.exe
+
+# personal settings of the coding assistant on this computer
+.claude/settings.local.json

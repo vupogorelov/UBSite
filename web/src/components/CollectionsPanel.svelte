@@ -176,16 +176,16 @@
 
 {#snippet card(/** @type {import('../lib/api.js').Collection} */ c)}
   <li>
-    <button class="result coll-row" onclick={() => show(c.id)}>
-      <div class="result-head">
-        <b class="ellipsis">{c.title}</b>
-        <span class="spacer"></span>
-        {#if c.shared}<span class="status-badge" title="Видна всем участникам платформы">общая</span>{/if}
-      </div>
-      <div class="note-date">
-        {c.items} {plural(c.items, 'элемент', 'элемента', 'элементов')} · {formatTime(c.updatedAt)}
-        {#if c.workspaceId !== session.workspace?.id} · {c.authorName ?? c.workspaceName}{/if}
-      </div>
+    <button class="ui-card ui-card-btn" onclick={() => show(c.id)}>
+      <span class="ui-tile"><Icon name="layers" size={18} /></span>
+      <span class="ui-card-body">
+        <span class="ui-card-title">{c.title}</span>
+        <span class="ui-card-meta">{c.items} {plural(c.items, 'элемент', 'элемента', 'элементов')}{#if c.workspaceId !== session.workspace?.id} · {c.authorName ?? c.workspaceName}{/if}</span>
+        <span class="ui-card-foot">
+          <span>{formatTime(c.updatedAt)}</span>
+          {#if c.shared}<span class="ui-chip small ui-card-end" title="Видна всем участникам платформы"><Icon name="globe" size={12} />общая</span>{/if}
+        </span>
+      </span>
     </button>
   </li>
 {/snippet}
@@ -194,36 +194,42 @@
   {#if collections.openId === null}
     <div class="panel-head">
       {#if can.edit}
-        <form class="notes-filters" onsubmit={(e) => (e.preventDefault(), create())}>
-          <input class="text-input" bind:value={newTitle} placeholder="Название новой подборки" aria-label="Название новой подборки" />
-          <button class="btn" disabled={!newTitle.trim()}>Создать</button>
+        <!-- a new collection: a pill field with its round button -->
+        <form class="ui-search ui-add" onsubmit={(e) => (e.preventDefault(), create())}>
+          <Icon name="layers" size={18} />
+          <input bind:value={newTitle} placeholder="Новая подборка" aria-label="Название новой подборки" />
+          <button class="ui-round primary" disabled={!newTitle.trim()} aria-label="Создать подборку" title="Создать"><Icon name="plus" size={18} /></button>
         </form>
       {/if}
-      <p class="hint">Подборка — абзацы, заметки и ваши заголовки в нужном порядке: план доклада, тема, маршрут чтения. Добавляйте через «⋮» у абзаца или панель выделения.</p>
+      <p class="ui-hint">Абзацы, заметки и ваши заголовки в нужном порядке: план доклада, тема, маршрут чтения. Добавляйте через «⋮» у абзаца или панель выделения.</p>
     </div>
     {#if collections.own.length}
-      <div class="box-title">В этом пространстве</div>
-      <ol class="results">{#each collections.own as c (c.id)}{@render card(c)}{/each}</ol>
+      <div class="ui-label">В этом пространстве</div>
+      <ol class="ui-cards">{#each collections.own as c (c.id)}{@render card(c)}{/each}</ol>
     {:else}
-      <p class="muted small">В этом пространстве подборок пока нет.</p>
+      <div class="ui-empty">
+        <span class="ui-tile big"><Icon name="layers" size={22} /></span>
+        <b>Подборок пока нет</b>
+        <p class="muted small">Соберите абзацы и заметки в свою последовательность — для доклада, темы или чтения.</p>
+      </div>
     {/if}
     {#if collections.subscribed.length}
-      <div class="box-title">Подписки</div>
-      <ol class="results">{#each collections.subscribed as c (c.id)}{@render card(c)}{/each}</ol>
+      <div class="ui-label">Подписки</div>
+      <ol class="ui-cards">{#each collections.subscribed as c (c.id)}{@render card(c)}{/each}</ol>
     {/if}
     {#if shared === null}
-      <button class="link-btn" onclick={() => api.sharedCollections().then((l) => (shared = l), (err) => showToast(err.message))}>
-        Общие подборки других участников
+      <button class="ui-btn ui-btn-more" onclick={() => api.sharedCollections().then((l) => (shared = l), (err) => showToast(err.message))}>
+        <Icon name="globe" size={18} />Общие подборки участников
       </button>
     {:else}
       {@const others = shared.filter((c) => c.workspaceId !== session.workspace?.id && !collections.subscribed.some((s) => s.id === c.id))}
-      <div class="box-title">Общие подборки участников</div>
-      {#if others.length}<ol class="results">{#each others as c (c.id)}{@render card(c)}{/each}</ol>{:else}<p class="muted small">Других общих подборок нет.</p>{/if}
+      <div class="ui-label">Общие подборки участников</div>
+      {#if others.length}<ol class="ui-cards">{#each others as c (c.id)}{@render card(c)}{/each}</ol>{:else}<p class="ui-hint">Других общих подборок нет.</p>{/if}
     {/if}
   {:else}
     <div class="panel-head coll-head">
       <div class="coll-title-row">
-        <button class="icon-btn small-btn" onclick={back} aria-label="Все подборки" title="Все подборки"><Icon name="back" /></button>
+        <button class="ui-round plain" onclick={back} aria-label="Все подборки" title="Все подборки"><Icon name="back" /></button>
         {#if open && editingTitle}
           <!-- svelte-ignore a11y_autofocus -->
           <input class="text-input" bind:value={titleDraft} autofocus onblur={saveTitle}
@@ -237,46 +243,62 @@
         {/if}
       </div>
       {#if open}
-        <div class="note-date">
+        <div class="coll-meta">
           {open.list.length} {plural(open.list.length, 'элемент', 'элемента', 'элементов')}
           {#if !open.member} · {open.authorName ?? ''}, «{open.workspaceName}» · только чтение{/if}
+          {#if open.shared} · <Icon name="globe" size={12} /> общая{/if}
         </div>
+        <!-- the main action, then the round ones -->
         <div class="coll-actions">
-          <button class="btn primary" onclick={read}><Icon name="book-open" size={16} />Читать</button>
+          <button class="ui-btn primary coll-read" onclick={read}><Icon name="book-open" size={18} />Читать</button>
           {#if open.shared || open.member}
-            <button class="icon-btn small-btn" onclick={shareLink} title="Скопировать ссылку" aria-label="Скопировать ссылку"><Icon name="link" /></button>
-          {/if}
-          {#if !open.member && open.shared}
-            <button class="btn" class:on={open.subscribed} onclick={() => open && change(() => api.subscribeCollection(open.id, !open.subscribed))}>
-              {open.subscribed ? 'Вы подписаны' : 'Подписаться'}
-            </button>
-          {/if}
-          {#if can.edit && (!open.member || open.workspaceId !== session.workspace?.id)}
-            <button class="btn" onclick={copyToMine} title="Редактируемая копия в текущем пространстве">Копия к себе</button>
+            <button class="ui-round" onclick={shareLink} title="Скопировать ссылку" aria-label="Скопировать ссылку"><Icon name="link" size={18} /></button>
           {/if}
           {#if open.canEdit}
-            <span class="spacer"></span>
-            <button class="icon-btn small-btn" class:danger={confirmDelete} onblur={() => (confirmDelete = false)} onclick={remove}
-              title={confirmDelete ? 'Нажмите ещё раз, чтобы удалить подборку' : 'Удалить подборку'} aria-label="Удалить подборку"><Icon name="trash" /></button>
+            <button class="ui-round" class:danger={confirmDelete} onblur={() => (confirmDelete = false)} onclick={remove}
+              title={confirmDelete ? 'Нажмите ещё раз, чтобы удалить подборку' : 'Удалить подборку'} aria-label="Удалить подборку"><Icon name="trash" size={18} /></button>
           {/if}
         </div>
+        {#if (!open.member && open.shared) || (can.edit && (!open.member || open.workspaceId !== session.workspace?.id))}
+          <div class="ui-chips">
+            {#if !open.member && open.shared}
+              <button class="ui-chip" class:on={open.subscribed} onclick={() => open && change(() => api.subscribeCollection(open.id, !open.subscribed))}>
+                {open.subscribed ? 'Вы подписаны' : 'Подписаться'}
+              </button>
+            {/if}
+            {#if can.edit && (!open.member || open.workspaceId !== session.workspace?.id)}
+              <button class="ui-chip" onclick={copyToMine} title="Редактируемая копия в текущем пространстве">Копия к себе</button>
+            {/if}
+          </div>
+        {/if}
+        {#if confirmDelete}<p class="ui-hint coll-danger">Нажмите корзину ещё раз — подборка будет удалена.</p>{/if}
         {#if open.canEdit}
-          <label class="toggle small">
-            <input type="checkbox" checked={open.shared} onchange={(e) => open && change(() => api.updateCollection(open.id, { shared: e.currentTarget.checked }))} />
-            <span>Видна всем участникам платформы (по ссылке, с подпиской и копированием)</span>
-          </label>
+          <div class="ui-options">
+            <label class="ui-option ui-switch-row">
+              <span><b>Общая</b><span class="muted small">Видна всем участникам: по ссылке, с подпиской и копированием</span></span>
+              <input type="checkbox" class="ui-switch" checked={open.shared} onchange={(e) => open && change(() => api.updateCollection(open.id, { shared: e.currentTarget.checked }))} />
+            </label>
+            <label class="ui-option ui-switch-row">
+              <span><b>Только фрагменты</b><span class="muted small">Скрыть исходные абзацы; абзацы без выделения видны целиком</span></span>
+              <input type="checkbox" class="ui-switch" checked={open.fragmentsOnly} onchange={(e) => open && change(() => api.updateCollection(open.id, { fragmentsOnly: e.currentTarget.checked }))} />
+            </label>
+          </div>
         {/if}
       {/if}
     </div>
     {#if error}<div class="search-error">{error}</div>{/if}
     {#if open}
       {#if open.canEdit}
-        <textarea class="text-area coll-desc" rows="2" placeholder="Описание подборки (необязательно)" value={open.description ?? ''} onchange={saveDescription}></textarea>
+        <textarea class="text-area coll-desc ui-field" rows="2" placeholder="Описание подборки (необязательно)" value={open.description ?? ''} onchange={saveDescription}></textarea>
       {:else if open.description}
         <p class="coll-desc-text">{open.description}</p>
       {/if}
       {#if !open.list.length}
-        <p class="muted small">Пусто. Откройте нужный абзац и выберите «В подборку» в меню «⋮» или на панели выделения.</p>
+        <div class="ui-empty">
+          <span class="ui-tile big"><Icon name="layers" size={22} /></span>
+          <b>Подборка пуста</b>
+          <p class="muted small">Откройте нужный абзац и выберите «В подборку» в меню «⋮» или на панели выделения.</p>
+        </div>
       {/if}
       <ol class="coll-items">
         {#each open.list as it (it.id)}
@@ -288,6 +310,9 @@
             onkeydown={(e) => open?.canEdit && moveByKey(e, it.id)}
             aria-label={open.canEdit ? 'Элемент подборки; Alt+↑/↓ — переместить' : undefined}>
             {#if open.canEdit}<span class="coll-grip" aria-hidden="true"><Icon name="grip" size={14} /></span>{/if}
+            {#if !(it.kind === 'text' && it.heading)}
+              <span class="ui-tile coll-tile" data-color={it.note?.color ?? null}><Icon name={it.kind === 'text' ? 'edit' : it.kind === 'message' ? 'discuss' : it.kind === 'para' ? 'book-open' : it.note?.bookmark ? 'bookmark' : 'comment'} size={16} /></span>
+            {/if}
             <div class="coll-item-body">
               {#if it.kind === 'text'}
                 {#if editingItem !== it.id}
@@ -296,7 +321,11 @@
               {:else if it.kind === 'para'}
                 <button class="link-btn coll-ref" onclick={() => it.ref && go(it.ref)}>{refLabel(it)}</button>
                 <span class="muted small ellipsis">{it.paragraphs?.[0]?.paperTitle ?? ''}</span>
-                <div class="coll-snippet">{plain(it.paragraphs?.[0]?.ru ?? '')}</div>
+                <div class="coll-snippet">{it.fragment ? `«${it.fragment.quote}»` : plain(it.paragraphs?.[0]?.ru ?? '')}</div>
+              {:else if it.kind === 'message' && it.message}
+                <span class="coll-msg-head"><Icon name="discuss" size={13} /><b>{it.message.authorName ?? 'Участник'}</b></span>
+                {#if it.ref}<button class="link-btn coll-ref" onclick={() => it.ref && go(it.ref)}>{it.ref}</button>{/if}
+                <div class="coll-snippet">«{it.message.text}»</div>
               {:else if it.note}
                 <button class="link-btn coll-ref" onclick={() => it.ref && go(it.ref)}>{it.ref}</button>
                 {#if it.note.color}<span class="dot" data-color={it.note.color}></span>{/if}
@@ -306,10 +335,11 @@
               {:else}
                 <div class="muted small">Заметка удалена</div>
               {/if}
+              {#if it.fragment && (open.fragmentsOnly || it.collapsed)}<div class="muted small">абзац свёрнут — видна только цитата</div>{/if}
               {#if editingItem === it.id}
                 <!-- svelte-ignore a11y_autofocus -->
                 <textarea class="text-area" rows="3" bind:value={itemDraft} autofocus
-                  placeholder={it.kind === 'text' ? 'Текст' : 'Ваш комментарий к элементу'}
+                  placeholder={it.kind === 'text' ? 'Текст' : it.fragment ? 'Пояснение к фрагменту' : 'Ваш комментарий к элементу'}
                   onkeydown={(e) => (e.key === 'Enter' && (e.ctrlKey || e.metaKey) ? saveItem(it) : e.key === 'Escape' && (editingItem = null))}></textarea>
                 <div class="row-end">
                   <button class="btn" onclick={() => (editingItem = null)}>Отмена</button>
@@ -321,9 +351,16 @@
             </div>
             {#if open.canEdit && editingItem !== it.id}
               <span class="coll-item-actions">
-                <button class="icon-btn small-btn" onclick={() => editItem(it)} aria-label={it.kind === 'text' ? 'Изменить' : 'Комментарий'}
-                  title={it.kind === 'text' ? 'Изменить' : 'Комментарий к элементу'}><Icon name={it.kind === 'text' ? 'edit' : 'comment'} /></button>
-                <button class="icon-btn small-btn" onclick={() => open && change(() => api.deleteCollectionItem(open.id, it.id))}
+                {#if it.fragment}
+                  {@const fold = open.fragmentsOnly ? 'Все абзацы скрыты настройкой «Только фрагменты»'
+                    : it.collapsed ? 'Показывать абзац целиком' : 'Свернуть абзац: оставить только цитату'}
+                  <button class="ui-round small" class:on={it.collapsed || open.fragmentsOnly} disabled={open.fragmentsOnly}
+                    onclick={() => open && change(() => api.editCollectionItem(open.id, it.id, { collapsed: !it.collapsed }))}
+                    aria-label={fold} title={fold} aria-pressed={it.collapsed}><Icon name={it.collapsed || open.fragmentsOnly ? 'eye-off' : 'eye'} /></button>
+                {/if}
+                <button class="ui-round small" onclick={() => editItem(it)} aria-label={it.kind === 'text' ? 'Изменить' : it.fragment ? 'Пояснение' : 'Комментарий'}
+                  title={it.kind === 'text' ? 'Изменить' : it.fragment ? 'Пояснение к фрагменту' : 'Комментарий к элементу'}><Icon name={it.kind === 'text' ? 'edit' : 'comment'} /></button>
+                <button class="ui-round small" onclick={() => open && change(() => api.deleteCollectionItem(open.id, it.id))}
                   aria-label="Убрать из подборки" title="Убрать из подборки"><Icon name="close" /></button>
               </span>
             {/if}
@@ -332,9 +369,9 @@
       </ol>
       {#if open.canEdit}
         {#if adding}
-          <div class="group coll-add">
+          <div class="coll-add">
             <!-- svelte-ignore a11y_autofocus -->
-            <textarea class="text-area" rows={adding === 'heading' ? 1 : 3} bind:value={addDraft} autofocus
+            <textarea class="text-area ui-field" rows={adding === 'heading' ? 1 : 3} bind:value={addDraft} autofocus
               placeholder={adding === 'heading' ? 'Заголовок раздела' : 'Пояснение, переход, вопрос для обсуждения…'}
               onkeydown={(e) => (e.key === 'Enter' && (adding === 'heading' || e.ctrlKey || e.metaKey) ? (e.preventDefault(), addText()) : e.key === 'Escape' && (adding = null))}></textarea>
             <div class="row-end">
@@ -344,8 +381,8 @@
           </div>
         {:else}
           <div class="coll-add-row">
-            <button class="btn" onclick={() => ((adding = 'heading'), (addDraft = ''))}><Icon name="plus" size={14} />Заголовок</button>
-            <button class="btn" onclick={() => ((adding = 'text'), (addDraft = ''))}><Icon name="plus" size={14} />Текст</button>
+            <button class="ui-btn" onclick={() => ((adding = 'heading'), (addDraft = ''))}><Icon name="plus" size={16} />Заголовок</button>
+            <button class="ui-btn" onclick={() => ((adding = 'text'), (addDraft = ''))}><Icon name="plus" size={16} />Текст</button>
           </div>
         {/if}
       {/if}

@@ -1,4 +1,4 @@
-# Urantian Docs Explorer — развёртывание на хостинге (для DevOps)
+# Urantia Papers Explorer — развёртывание на хостинге (для DevOps)
 
 Документ описывает, что представляет собой приложение с точки зрения эксплуатации и что нужно,
 чтобы перенести его с домашнего Windows-компьютера (см. `DEPLOY.md`) на VPS/выделенный сервер.
@@ -173,7 +173,7 @@ sudo chown -R ubsite:ubsite /var/lib/ubsite
 
 ```ini
 [Unit]
-Description=Urantian Docs Explorer
+Description=Urantia Papers Explorer
 After=network.target
 
 [Service]

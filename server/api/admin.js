@@ -13,7 +13,8 @@ export function registerAdminRoutes(router, db, auth, tr) {
   const q = {
     users: db.prepare(
       `SELECT id, username, display_name AS displayName, is_admin AS isAdmin, is_translator AS isTranslator,
-              is_coordinator AS isCoordinator, disabled, created_at AS createdAt, password_hash IS NOT NULL AS hasPassword
+              is_coordinator AS isCoordinator, disabled, created_at AS createdAt, password_hash IS NOT NULL AS hasPassword,
+              email, email_verified AS emailVerified
        FROM users ORDER BY username_key`,
     ),
     setDisabled: db.prepare('UPDATE users SET disabled = ? WHERE id = ?'),
@@ -37,6 +38,7 @@ export function registerAdminRoutes(router, db, auth, tr) {
       isCoordinator: Boolean(u.isCoordinator),
       disabled: Boolean(u.disabled),
       hasPassword: Boolean(u.hasPassword),
+      emailVerified: Boolean(u.emailVerified),
     }));
   });
 
@@ -48,6 +50,14 @@ export function registerAdminRoutes(router, db, auth, tr) {
   router.on('PUT', '/api/admin/voting', async ({ req, user }) => {
     requireAdmin(user);
     return tr.setConfig(await readJson(req));
+  });
+
+  // Open sign-up on the login page: { open }
+  router.on('PUT', '/api/admin/registration', async ({ req, user }) => {
+    requireAdmin(user);
+    const b = /** @type {Record<string, unknown>} */ ((await readJson(req)) ?? {});
+    if (typeof b.open !== 'boolean') throw new HttpError(400, 'Нужно open: true или false');
+    return { open: auth.setRegistrationOpen(b.open) };
   });
 
   // Link for a new account: { isAdmin? }

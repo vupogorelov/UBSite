@@ -5,6 +5,12 @@ import { loadSettings } from './settings.svelte.js';
 import { notes, loadPaperNotes } from './notes.svelte.js';
 import { loadTags, tags } from './tags.svelte.js';
 import { search, runSearch, loadLibrary } from './search.svelte.js';
+import { syncPlaces, forgetPlaces } from './places.svelte.js';
+import { startOffline, forgetPersonal } from './offline.svelte.js';
+import { setOutboxUser } from './outbox.svelte.js';
+import { openFeed, forgetFeed } from './feed.js';
+import { keepCollections, forgetKeptCollections } from './collections.svelte.js';
+import { guest } from './guest.svelte.js';
 
 /** @typedef {import('./api.js').Role} Role */
 
@@ -33,6 +39,7 @@ export const can = {
 };
 
 hooks.unauthorized = () => {
+  if (session.user) guest.login = true; // the session ended: the sign-in, not a guest's reading
   session.user = null;
 };
 
@@ -48,12 +55,21 @@ function savedWorkspaceId() {
 export async function startSession() {
   try {
     session.user = (await api.me()).user;
-    if (session.user) await refreshWorkspaces();
+    // (without a network some of it may be missing: the person stays signed in all the same)
+    if (session.user) await signedIn().catch((err) => console.warn('Not everything loaded:', err));
   } catch {
     session.user = null;
   } finally {
     session.checked = true;
   }
+}
+
+/** The reading place first (the app may move to the one left on another device), then the workspaces. */
+async function signedIn() {
+  if (session.user) setOutboxUser(session.user.id); // (their changes waiting on this device are sent)
+  startOffline(); // (the book for reading without a network, quietly)
+  await syncPlaces();
+  await refreshWorkspaces();
 }
 
 export async function refreshWorkspaces() {
@@ -79,6 +95,9 @@ export async function switchWorkspace(id, opts = {}) {
   notes.draft = null;
   notes.version++;
   tags.filter = null;
+  // the workspace's notes kept on this device at once, then what changed (lib/feed.js)
+  if (session.user) void openFeed(session.user.id, id);
+  setTimeout(() => void keepCollections(id), 8000); // (every collection readable offline, after the page settled)
   await Promise.all([
     loadSettings().catch((err) => console.error('Settings not loaded:', err)),
     notes.paperId !== null ? loadPaperNotes(notes.paperId).catch(() => {}) : null,
@@ -91,11 +110,30 @@ export async function switchWorkspace(id, opts = {}) {
 /** @param {string} username @param {string} password */
 export async function login(username, password) {
   session.user = (await api.login(username, password)).user;
-  await refreshWorkspaces();
+  guest.login = guest.fromReading = false;
+  await signedIn();
+}
+
+/**
+ * Open sign-up: creates the account and signs in.
+ * @param {Parameters<typeof api.register>[0]} body @returns {Promise<boolean>} a confirmation letter went to the e-mail given
+ */
+export async function register(body) {
+  const r = await api.register(body);
+  session.user = r.user;
+  guest.login = guest.fromReading = false;
+  await signedIn();
+  return !!r.emailSent;
 }
 
 export async function logout() {
   await api.logout().catch(() => {});
+  forgetPlaces();
+  await forgetPersonal();
+  await forgetFeed();
+  forgetKeptCollections();
+  setOutboxUser(0);
+  guest.login = true; // (signed out: the sign-in page, not a guest's reading of the same place)
   session.user = null;
   session.workspace = null;
   session.workspaces = [];

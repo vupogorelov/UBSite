@@ -21,11 +21,11 @@ export const SECTIONS = [
   { id: 'toc', label: 'Оглавление', icon: 'toc', group: 'book', phone: 'nav', tab: 'toc' },
   { id: 'search', label: 'Поиск', icon: 'search', group: 'book', phone: 'nav', tab: 'search', badge: () => (search.query ? search.total : 0) },
   { id: 'notes', label: 'Заметки', icon: 'notes', group: 'book', phone: 'nav', tab: 'notes' },
-  { id: 'tags', label: 'Теги', icon: 'tag', group: 'book', phone: 'notes', tab: 'tags' },
   { id: 'collections', label: 'Подборки', icon: 'layers', group: 'book', phone: 'notes', tab: 'collections' },
+  { id: 'tags', label: 'Теги', icon: 'tag', group: 'book', phone: 'notes', tab: 'tags' },
   { id: 'translate', label: 'Перевод', icon: 'translate', group: 'book', phone: 'more', tab: 'translate', badge: () => notify.queue },
   { id: 'chat', label: 'Чат', icon: 'discuss', group: 'apps', phone: 'nav', path: '/chat', badge: () => notify.chatUnread },
-  { id: 'tasks', label: 'Мои задачи', icon: 'check-square', group: 'apps', phone: 'more', path: '/tasks', badge: () => notify.tasksDue },
+  { id: 'tasks', label: 'Мои задачи', icon: 'check-square', group: 'apps', phone: 'more', path: '/tasks' },
   { id: 'about', label: 'О приложении', icon: 'info', group: 'meta', phone: 'more', path: '/about' },
 ];
 

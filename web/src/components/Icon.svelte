@@ -1,6 +1,6 @@
 <script>
   // Line icons in the style of the UI reference (Lucide-like, 24px grid, 1.8 stroke).
-  /** @type {{ name: 'menu' | 'settings' | 'theme' | 'close' | 'chevron' | 'search' | 'star' | 'history' | 'help' | 'trash' | 'edit' | 'up' | 'down' | 'toc' | 'notes' | 'tag' | 'translate' | 'bookmark' | 'comment' | 'discuss' | 'copy' | 'more' | 'dots' | 'headphones' | 'play' | 'pause' | 'stop' | 'skip-back' | 'skip-forward' | 'rewind' | 'fast-forward' | 'reset' | 'minus' | 'info' | 'globe' | 'users' | 'lock' | 'bell' | 'eye' | 'eye-off' | 'layers' | 'grip' | 'plus' | 'book-open' | 'link' | 'back' | 'check-square' | 'calendar' | 'list' | 'kanban' | 'inbox' | 'check', size?: number }} */
+  /** @type {{ name: 'menu' | 'settings' | 'theme' | 'close' | 'chevron' | 'search' | 'star' | 'history' | 'help' | 'trash' | 'edit' | 'up' | 'down' | 'toc' | 'notes' | 'tag' | 'translate' | 'bookmark' | 'comment' | 'discuss' | 'copy' | 'more' | 'dots' | 'headphones' | 'play' | 'pause' | 'stop' | 'play-line' | 'stop-line' | 'skip-back' | 'skip-forward' | 'rewind' | 'fast-forward' | 'reset' | 'minus' | 'ruble' | 'info' | 'globe' | 'users' | 'lock' | 'bell' | 'megaphone' | 'eye' | 'eye-off' | 'layers' | 'grip' | 'plus' | 'book-open' | 'link' | 'back' | 'check-square' | 'calendar' | 'list' | 'kanban' | 'inbox' | 'check' | 'pin' | 'cloud-download' | 'clock' | 'alert' | 'image' | 'share' | 'download', size?: number }} */
   let { name, size = 20 } = $props();
 </script>
 
@@ -8,11 +8,25 @@
   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   {#if name === 'menu'}
     <path d="M4 6h16M4 12h16M4 18h16" />
+  {:else if name === 'clock'}
+    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+  {:else if name === 'alert'}
+    <circle cx="12" cy="12" r="9" /><path d="M12 7.5v5.5M12 16.5h.01" />
+  {:else if name === 'image'}
+    <rect x="3" y="3" width="18" height="18" rx="3" /><circle cx="9" cy="9" r="2" /><path d="m21 15-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+  {:else if name === 'share'}
+    <path d="M12 3v12M8 7l4-4 4 4" /><path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7" />
+  {:else if name === 'download'}
+    <path d="M12 3v12M8 11l4 4 4-4" /><path d="M5 21h14" />
+  {:else if name === 'cloud-download'}
+    <path d="M12 13v8M8 17l4 4 4-4M4.39 15.27A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.44 8.28" />
   {:else if name === 'settings'}
     <path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1" />
     <circle cx="15" cy="7" r="2" /><circle cx="9" cy="12" r="2" /><circle cx="17" cy="17" r="2" />
   {:else if name === 'theme'}
     <circle cx="12" cy="12" r="8" /><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor" />
+  {:else if name === 'pin'}
+    <path d='M12 17v5M9 3h6M10 3v7l-3 4v3h10v-3l-3-4V3' />
   {:else if name === 'close'}
     <path d="M6 6l12 12M18 6 6 18" />
   {:else if name === 'chevron'}
@@ -50,6 +64,10 @@
     <path d="M14 9a2 2 0 0 1-2 2H6l-4 4V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2z" /><path d="M18 9h2a2 2 0 0 1 2 2v11l-4-4h-6a2 2 0 0 1-2-2v-1" />
   {:else if name === 'bell'}
     <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" /><path d="M3.3 15.3A1 1 0 0 0 4 17h16a1 1 0 0 0 .7-1.7C19.4 14 18 12.5 18 8a6 6 0 0 0-12 0c0 4.5-1.4 6-2.7 7.3" />
+  {:else if name === 'megaphone'}
+    <path d="m3 11 12-5v12L3 13z" />
+    <path d="M15 9.5h2a3 3 0 0 1 0 6h-2" />
+    <path d="m7 14 1.5 5h3L10 15" />
   {:else if name === 'copy'}
     <rect x="8" y="8" width="14" height="14" rx="2" /><path d="M4 16a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2" />
   {:else if name === 'eye'}
@@ -93,6 +111,10 @@
     <rect x="6" y="4" width="4" height="16" rx="1" fill="currentColor" /><rect x="14" y="4" width="4" height="16" rx="1" fill="currentColor" />
   {:else if name === 'stop'}
     <rect x="6" y="6" width="12" height="12" rx="1.5" fill="currentColor" />
+  {:else if name === 'play-line'}
+    <path d="M7 4.5v15L19.5 12z" stroke-linejoin="miter" />
+  {:else if name === 'stop-line'}
+    <path d="M6.5 6.5h11v11h-11z" stroke-linejoin="miter" />
   {:else if name === 'skip-back'}
     <path d="M18 19 9 12l9-7z" fill="currentColor" /><path d="M6 5v14" />
   {:else if name === 'skip-forward'}
@@ -111,6 +133,8 @@
     <rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" />
   {:else if name === 'info'}
     <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />
+  {:else if name === 'ruble'}
+    <path d="M7 11h7a4 4 0 0 0 0-8H9v18M6 15h8" />
   {:else if name === 'minus'}
     <path d="M5 12h14" />
   {/if}

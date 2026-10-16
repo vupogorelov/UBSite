@@ -3,6 +3,7 @@
   import { tr } from '../lib/translation.svelte.js';
   import { view } from '../lib/router.svelte.js';
   import { plural } from '../lib/format.js';
+  import UiSelect from './UiSelect.svelte';
 
   /** @type {{ visible: boolean }} */
   let { visible } = $props();
@@ -33,49 +34,53 @@
 
   const pct = (/** @type {number} */ a, /** @type {number} */ b) => (b ? Math.max(a ? 1 : 0, Math.round((a / b) * 100)) : 0);
   const changedTotal = $derived(stats ? stats.byPaper.reduce((s, p) => s + p.changedParagraphs, 0) : 0);
+  /** What the export takes: the whole book, a part, a paper. */
+  const scopes = $derived([
+    { value: 'all', label: 'Вся книга' },
+    ...(/** @type {any} */ (toc)?.parts ?? []).map((/** @type {any} */ p) => ({ value: `part:${p.id}`, label: `Часть ${ROMAN[p.id] ?? p.id}. ${p.titleRu}` })),
+    ...(/** @type {any} */ (toc)?.papers ?? []).map((/** @type {any} */ p) => ({ value: `paper:${p.id}`, label: p.id === 0 ? 'Предисловие' : `Текст ${p.id}. ${p.titleRu}` })),
+  ]);
 </script>
 
-<section class="group export-box">
-  <div class="box-title">Экспорт новой редакции</div>
-  <label class="setting-label" for="exp-scope">Объём</label>
-  <select id="exp-scope" class="text-input" bind:value={scope}>
-    <option value="all">Вся книга</option>
-    {#if toc}
-      {#each toc.parts as p (p.id)}<option value="part:{p.id}">Часть {ROMAN[p.id] ?? p.id}. {p.titleRu}</option>{/each}
-      {#each toc.papers as p (p.id)}<option value="paper:{p.id}">{p.id === 0 ? 'Предисловие' : `Текст ${p.id}. ${p.titleRu}`}</option>{/each}
-    {/if}
-  </select>
-  <div class="setting-label">Язык</div>
-  <div class="segmented small-seg" role="radiogroup" aria-label="Язык">
-    <button role="radio" aria-checked={lang === 'ru'} class:active={lang === 'ru'} onclick={() => (lang = 'ru')}>Русский</button>
-    <button role="radio" aria-checked={lang === 'ruen'} class:active={lang === 'ruen'} onclick={() => (lang = 'ruen')}>Русский + английский</button>
+<div class="ui-label">Экспорт новой редакции</div>
+<section class="ui-card export-card">
+  <UiSelect class="export-row" label="Объём" title="Что выгрузить" value={scope} onchange={(x) => (scope = x)} options={scopes} />
+  <div class="export-lang">
+    <span>Язык</span>
+    <div class="ui-chips" role="radiogroup" aria-label="Язык">
+      <button class="ui-chip" class:on={lang === 'ru'} role="radio" aria-checked={lang === 'ru'} onclick={() => (lang = 'ru')}>Русский</button>
+      <button class="ui-chip" class:on={lang === 'ruen'} role="radio" aria-checked={lang === 'ruen'} onclick={() => (lang = 'ruen')}>Русский + английский</button>
+    </div>
   </div>
-  <p class="hint">Markdown: принятые варианты стоят на месте исходных, курсив сохраняется.</p>
-  <label class="toggle"><input type="checkbox" bind:checked={withChanges} /><span>Приложить список изменений</span></label>
-  <div class="row-end">
-    <a class="btn" href={csvHref} download title="Таблица для Excel: абзац, было, стало, автор, дата, голоса">Изменения (CSV)</a>
-    <a class="btn primary" href={href} download>Скачать Markdown</a>
+  <label class="ui-option ui-switch-row export-switch">
+    <span><b>Приложить список изменений</b><span class="muted small">В конце файла: абзац, было, стало</span></span>
+    <input type="checkbox" class="ui-switch" bind:checked={withChanges} />
+  </label>
+  <p class="ui-hint">Markdown: принятые варианты стоят на месте исходных, курсив сохраняется.</p>
+  <div class="export-actions">
+    <a class="ui-btn" href={csvHref} download title="Таблица для Excel: абзац, было, стало, автор, дата, голоса">Изменения (CSV)</a>
+    <a class="ui-btn primary" href={href} download>Скачать Markdown</a>
   </div>
 </section>
 
 {#if error}<div class="search-error">{error}</div>{/if}
 {#if stats}
   <section class="stats">
-    <div class="box-title">Ход работы</div>
+    <div class="ui-label">Ход работы</div>
     <div class="stat-cards">
       <div class="stat-card"><b>{stats.totals.approved}</b><span>принято</span></div>
       <div class="stat-card"><b>{stats.totals.voting}</b><span>на голосовании</span></div>
       <div class="stat-card"><b>{stats.totals.draft}</b><span>в черновиках</span></div>
       <div class="stat-card"><b>{stats.totals.rejected}</b><span>отклонено</span></div>
     </div>
-    <p class="hint">
+    <p class="ui-hint">
       Изменено {changedTotal} {plural(changedTotal, 'абзац', 'абзаца', 'абзацев')} из {stats.paragraphs.toLocaleString('ru')}
       ({pct(changedTotal, stats.paragraphs)}%).
     </p>
 
     {#if stats.byPaper.length}
-      <div class="box-title">По Текстам</div>
-      <ol class="stat-papers">
+      <div class="ui-label">По Текстам</div>
+      <ol class="stat-papers ui-card">
         {#each stats.byPaper as p (p.id)}
           <li>
             <div class="stat-paper-head">
@@ -91,15 +96,15 @@
     {/if}
 
     {#if stats.people.length}
-      <div class="box-title">Участники</div>
-      <table class="stat-people">
+      <div class="ui-label">Участники</div>
+      <div class="ui-card stat-people-card"><table class="stat-people">
         <thead><tr><th></th><th title="Опубликовано на голосование">Предл.</th><th>Принято</th><th>Голоса</th><th title="Сообщения в обсуждениях">Сообщ.</th></tr></thead>
         <tbody>
           {#each stats.people as u (u.id)}
             <tr><td class="ellipsis">{u.name}</td><td>{u.proposed}</td><td>{u.approved}</td><td>{u.votes}</td><td>{u.messages}</td></tr>
           {/each}
         </tbody>
-      </table>
+      </table></div>
     {/if}
   </section>
 {/if}

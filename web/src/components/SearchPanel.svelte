@@ -1,4 +1,6 @@
 <script>
+  import { book } from '../lib/lang.svelte.js';
+  import { offline } from '../lib/offline.svelte.js';
   import { onMount } from 'svelte';
   import {
     search, library, runSearch, loadMore, clearSearch, withFilter, filterValue,
@@ -9,12 +11,16 @@
   import Icon from './Icon.svelte';
   import { can } from '../lib/session.svelte.js';
 
-  /** @type {{ onnavigate?: () => void }} */
-  let { onnavigate } = $props();
+  /** `history`: the recent queries are open from the start (while no search is shown). @type {{ onnavigate?: () => void, history?: boolean }} */
+  let { onnavigate, history = false } = $props();
 
   /** ☆ — saved queries (and the form to save the current one), history — recent queries only. */
   /** @type {'none' | 'help' | 'saved' | 'history' | 'save'} */
-  let panel = $state('none');
+  let panel = $state(history && !search.query ? 'history' : 'none');
+  /** The field has the focus: a line of the syntax under it. */
+  let focused = $state(false);
+  /** (it goes a moment after the focus: a tap below must not see the list move under the finger) @type {ReturnType<typeof setTimeout> | undefined} */
+  let blurTimer;
   const currentSaved = $derived(library.saved.some((s) => s.query === search.input.trim()));
   let saveTitle = $state('');
   /** @type {number | null} */
@@ -88,32 +94,43 @@
   <!-- Query, tools, count and part filters stay on top; only the results scroll. -->
   <div class="panel-head">
   <form class="search-form" onsubmit={submit} role="search">
-    <div class="search-input">
-      <Icon name="search" />
+    <div class="ui-search search-input">
+      <Icon name="search" size={18} />
       <input
         bind:this={input}
         bind:value={search.input}
         placeholder="Слова, &quot;фраза&quot;, /regex/…"
         aria-label="Поисковый запрос"
         spellcheck="false"
+        autocomplete="off"
+        onfocus={() => (clearTimeout(blurTimer), (focused = true))}
+        onblur={() => (blurTimer = setTimeout(() => (focused = false), 250))}
       />
       {#if search.input}
-        <button type="button" class="icon-btn small-btn" aria-label="Очистить" onclick={() => { clearSearch(); input.focus(); }}>
-          <Icon name="close" />
+        <button type="button" class="ui-search-clear" aria-label="Очистить" onclick={() => { clearSearch(); input.focus(); }}>
+          <Icon name="close" size={16} />
         </button>
       {/if}
     </div>
     <div class="search-tools">
-      <button type="submit" class="btn primary">Найти</button>
+      <button type="submit" class="ui-btn primary search-go">Найти</button>
       <span class="spacer"></span>
-      <button type="button" class="icon-btn" class:on={panel === 'saved' || panel === 'save'} title="Сохранённые запросы пространства"
+      <button type="button" class="ui-round plain" class:on={panel === 'saved' || panel === 'save'} title="Сохранённые запросы пространства"
         aria-label="Сохранённые запросы" aria-expanded={panel === 'saved' || panel === 'save'}
         onclick={() => (panel = panel === 'saved' || panel === 'save' ? 'none' : 'saved')}><Icon name="star" /></button>
-      <button type="button" class="icon-btn" class:on={panel === 'history'} title="История запросов" aria-label="История запросов"
+      <button type="button" class="ui-round plain" class:on={panel === 'history'} title="История запросов" aria-label="История запросов"
         aria-expanded={panel === 'history'} onclick={() => (panel = panel === 'history' ? 'none' : 'history')}><Icon name="history" /></button>
-      <button type="button" class="icon-btn" class:on={panel === 'help'} title="Синтаксис запросов" aria-label="Синтаксис запросов"
+      <button type="button" class="ui-round plain" class:on={panel === 'help'} title="Синтаксис запросов" aria-label="Синтаксис запросов"
         onclick={() => (panel = panel === 'help' ? 'none' : 'help')}><Icon name="help" /></button>
     </div>
+    {#if focused && panel !== 'help'}
+      <!-- the syntax in a line while typing; the whole of it under «?» -->
+      <p class="search-tip">
+        <code>"фраза"</code> <code>настрой*</code> <code>-слово</code> <code>сын | дух</code> <code>часть:1</code>
+        <!-- (mousedown: the field keeps its focus, the tip stays until the panel opens) -->
+        <button type="button" class="link-btn small" onmousedown={(e) => e.preventDefault()} onclick={() => (panel = 'help')}>все правила</button>
+      </p>
+    {/if}
   </form>
 
   {#if panel === 'save'}
@@ -206,9 +223,9 @@
     <div class="search-summary">
       <span>{search.total.toLocaleString('ru')} {plural(search.total, 'абзац', 'абзаца', 'абзацев')}</span>
     </div>
-    <div class="facets">
+    <div class="ui-chips facets">
       {#each Object.entries(search.facets) as [part, count] (part)}
-        <button class="facet" class:active={activePart === part} onclick={() => togglePart(part)}
+        <button class="ui-chip facet" class:on={activePart === part} onclick={() => togglePart(part)}
           title={activePart === part ? 'Снять фильтр' : `Только часть ${partLabel(Number(part))}`}>
           Ч.{partLabel(Number(part))} <b>{count}</b>
         </button>
@@ -217,23 +234,30 @@
   {/if}
   </div>
 
-  <ol class="results">
+  <ol class="results ui-cards search-results">
     {#each search.results as r (r.ref)}
       <li>
-        <a href="/{r.ref}" onclick={openResult} class="result" class:active={currentRef === r.ref}>
+        <a href="/{r.ref}" onclick={openResult} class="ui-card result" class:active={currentRef === r.ref}>
           <div class="result-head">
             <b>{r.ref}</b>
             <span class="ellipsis">{r.paperTitle}{r.sectionTitle ? ` › ${r.sectionTitle}` : ''}</span>
           </div>
-          <div class="result-ru">{#each r.ru as [t, m]}{#if m}<mark>{t}</mark>{:else}{t}{/if}{/each}</div>
-          {#if r.en.some(([, m]) => m)}
-            <div class="result-en" lang="en">{#each r.en as [t, m]}{#if m}<mark>{t}</mark>{:else}{t}{/if}{/each}</div>
+          {#if book.main === 'en'}
+            <div class="result-ru" lang="en">{#each r.en as [t, m]}{#if m}<mark>{t}</mark>{:else}{t}{/if}{/each}</div>
+            {#if r.ru.some(([, m]) => m)}
+              <div class="result-en">{#each r.ru as [t, m]}{#if m}<mark>{t}</mark>{:else}{t}{/if}{/each}</div>
+            {/if}
+          {:else}
+            <div class="result-ru">{#each r.ru as [t, m]}{#if m}<mark>{t}</mark>{:else}{t}{/if}{/each}</div>
+            {#if r.en.some(([, m]) => m)}
+              <div class="result-en" lang="en">{#each r.en as [t, m]}{#if m}<mark>{t}</mark>{:else}{t}{/if}{/each}</div>
+            {/if}
           {/if}
         </a>
       </li>
     {/each}
   </ol>
   <div bind:this={sentinel} class="sentinel">
-    {#if search.loading}<span class="muted small">Поиск…</span>{/if}
+    {#if search.loading}<span class="muted small">{#if offline.state === 'ready' && !offline.searchReady && navigator.onLine === false}Готовлю поиск без сети — это один раз, несколько секунд…{:else}Поиск…{/if}</span>{/if}
   </div>
 </div>

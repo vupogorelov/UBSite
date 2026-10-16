@@ -1,7 +1,7 @@
 // @ts-check
 // Workspace tags, the tag tree and the tag selected as a "folder" in the notes tab.
 import { api } from './api.js';
-import { notes } from './notes.svelte.js';
+import { notes, loadPaperNotes } from './notes.svelte.js';
 import { showToast } from './toast.svelte.js';
 
 /** @typedef {import('./api.js').Tag} Tag */
@@ -99,7 +99,7 @@ export async function renameTag(from, to) {
     const r = await api.renameTag(from, to);
     showToast(r.merged ? `Объединено с #${to}` : `Переименовано в #${to}`);
     notes.version++; // notes of the open paper and lists must reload their tag names
-    if (notes.paperId !== null) notes.items = await api.notes(notes.paperId);
+    if (notes.paperId !== null) await loadPaperNotes(notes.paperId);
     await loadTags(true);
     return true;
   } catch (err) {
@@ -114,7 +114,7 @@ export async function deleteTag(name, subtree) {
     const r = await api.deleteTag(name, subtree);
     showToast(`Удалено тегов: ${r.deleted}`);
     notes.version++;
-    if (notes.paperId !== null) notes.items = await api.notes(notes.paperId);
+    if (notes.paperId !== null) await loadPaperNotes(notes.paperId);
     if (tags.filter && inSubtree(tags.filter, tagKey(name))) tags.filter = null;
     await loadTags(true);
   } catch (err) {

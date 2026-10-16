@@ -5,9 +5,16 @@
 
   /**
    * Chips for the current tags plus an input with autocompletion from the workspace tags.
-   * @type {{ value: string[], onchange: (names: string[]) => void, autofocus?: boolean }}
+   * `source`: other tags to suggest (a task's: the user's task tags) — then they are kept in lower case
+   * and drawn without the workspace's colors; `fromTitle`: chips that come from a #word in the title
+   * (marked; removing one takes it out of the title too — the caller does that).
+   * @type {{
+   *   value: string[], onchange: (names: string[]) => void, autofocus?: boolean,
+   *   source?: { name: string, count: number }[], fromTitle?: string[], placeholder?: string
+   * }}
    */
-  let { value, onchange, autofocus = false } = $props();
+  let { value, onchange, autofocus = false, source, fromTitle = [], placeholder = '#тег или тема/подтема' } = $props();
+  const known = $derived(source ?? tags.list);
 
   let text = $state('');
   let highlighted = $state(0);
@@ -16,14 +23,14 @@
   let input;
 
   $effect(() => {
-    loadTags();
+    if (!source) loadTags();
     if (autofocus) input.focus({ preventScroll: true });
   });
 
   const suggestions = $derived.by(() => {
     const t = tagKey(text.trim().replace(/^#/, ''));
     const taken = new Set(value.map(tagKey));
-    const list = tags.list.filter((x) => !taken.has(tagKey(x.name)));
+    const list = known.filter((x) => !taken.has(tagKey(x.name)));
     if (!t) return list.toSorted((a, b) => b.count - a.count).slice(0, 8);
     const starts = list.filter((x) => tagKey(x.name).startsWith(t) || tagKey(x.name).includes('/' + t));
     const contains = list.filter((x) => !starts.includes(x) && tagKey(x.name).includes(t));
@@ -38,8 +45,8 @@
       return;
     }
     // Reuse the existing spelling of a tag that differs only in case.
-    const existing = tags.list.find((x) => tagKey(x.name) === tagKey(name));
-    const final = existing?.name ?? name;
+    const existing = known.find((x) => tagKey(x.name) === tagKey(name));
+    const final = source ? name.toLowerCase() : existing?.name ?? name;
     if (!value.some((v) => tagKey(v) === tagKey(final))) onchange([...value, final]);
     text = '';
     highlighted = 0;
@@ -79,7 +86,8 @@
 <div class="tag-input">
   <div class="tag-chips">
     {#each value as name (name)}
-      <span class="tag-chip" data-color={tagColor(name)}>
+      <span class="tag-chip" class:from-title={fromTitle.includes(name)} data-color={source ? null : tagColor(name)}
+        title={fromTitle.includes(name) ? 'Из названия задачи — если убрать, уйдёт и из названия' : null}>
         #{name}
         <button type="button" aria-label={`Убрать тег ${name}`} onclick={() => remove(name)}>×</button>
       </span>
@@ -90,7 +98,7 @@
       bind:value={text}
       oninput={() => ((highlighted = 0), (navigated = false))}
       onkeydown={onKey}
-      placeholder={value.length ? '' : '#тег или тема/подтема'}
+      placeholder={value.length && !source ? '' : placeholder}
       aria-label="Добавить тег"
       spellcheck="false"
     />

@@ -1,11 +1,17 @@
 <script>
+  /**
+   * `background`: another page (chat, tasks…) covers the book while it is read aloud — the reader stays,
+   * hidden, so the voice goes on (and on to the next paper); it does not follow the address then.
+   * @type {{ background?: boolean }}
+   */
+  let { background = false } = $props();
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { api } from '../lib/api.js';
-  import { route, view, replaceUrl, parsePath, linkClick, navigate } from '../lib/router.svelte.js';
-  import { settings } from '../lib/settings.svelte.js';
+  import { route, view, replaceUrl, parsePath, linkClick, navigate, rememberBookPath } from '../lib/router.svelte.js';
+  import { settings, setSetting } from '../lib/settings.svelte.js';
   import { showToast } from '../lib/toast.svelte.js';
-  import { partLabel, paperLabel, sectionLabel, plural } from '../lib/format.js';
+  import { partName, paperLabel, sectionLabel, plural } from '../lib/format.js';
   import { search, stepHit, currentHit, clearSearch } from '../lib/search.svelte.js';
   import { notes, loadPaperNotes, hasThread } from '../lib/notes.svelte.js';
   import { NOTE_COLORS } from '../../../shared/settings.js';
@@ -16,12 +22,35 @@
   import SelectionToolbar from './SelectionToolbar.svelte';
   import ThreadDrawer from './ThreadDrawer.svelte';
   import TranslationPopover from './TranslationPopover.svelte';
+  import ReadProgress from './ReadProgress.svelte';
+  import BookNotesPanel from './BookNotesPanel.svelte';
+  import BookSearchPanel from './BookSearchPanel.svelte';
+  import { portal, phonePortal } from '../lib/portal.js';
+  import { swipeOpen } from '../lib/swipe.js';
+  import { edgePull } from '../lib/edgepull.js';
+  import { quoteOf, placeLink, shareLink } from '../lib/share.js';
+  import { askLogin } from '../lib/guest.svelte.js';
+  import { aliases, loadAliases } from '../lib/aliases.svelte.js';
+  import { findAliases } from '../../../shared/aliases.js';
+  import { pinchFont } from '../lib/pinch.js';
+  import { ui } from '../lib/ui.svelte.js';
   import { tr, thread, loadPublicPaper, openThread as openPublicThread } from '../lib/translation.svelte.js';
+  import { discussInChat } from '../lib/chat.svelte.js';
   import { substituteHtml, pickNonOverlapping, layer } from '../lib/substitute.js';
   import { session } from '../lib/session.svelte.js';
   import { tasks, loadTasks } from '../lib/tasks.svelte.js';
   import { trackScroll, showChrome, holdChrome, device } from '../lib/mobile.svelte.js';
-  import { tts, registerReader, paperReady } from '../lib/tts.svelte.js';
+  import { tts, registerReader, paperReady, loadBook, bookShare, setLang, playParagraph, paragraphPlaying, loadRecordings } from '../lib/tts.svelte.js';
+  import { noteRead } from '../lib/places.svelte.js';
+  import { firstParagraph } from '../lib/onscreen.js';
+  import { book, titleIn } from '../lib/lang.svelte.js';
+
+  /** The language the book is read in ("Язык чтения") and the comparison under it, if any (lib/lang.svelte.js). */
+  const main = $derived(book.main);
+  /** Not signed in: came by a shared link (lib/guest.svelte.js) — reads; the rest asks to sign in. */
+  const isGuest = $derived(!session.user);
+  loadBook(); // the paragraph map: the reading place carries its share of the book
+  if (session.user) loadRecordings(); // (a paragraph's ▶ plays the recording where the language is set to it)
 
   /** @typedef {import('../lib/router.svelte.js').Target} Target */
   /** @typedef {import('./SelectionToolbar.svelte').ToolbarState} ToolbarState */
@@ -34,10 +63,14 @@
   let flashRef = $state(null);
   /** English paragraphs the reader expanded while in "collapsed" mode. */
   const expanded = new SvelteSet();
-  /** While English is read aloud, the English text is shown in full so it can be followed. */
-  const enMode = $derived(tts.open && tts.lang === 'en' ? 'full' : settings.enMode);
+  /** The comparison (the English under the Russian): while English is read aloud it is shown in full, to be followed; reading in English there is none. */
+  const enMode = $derived(main !== 'ru' ? 'hidden' : tts.open && tts.lang === 'en' ? 'full' : settings.enMode);
+  // Reading in English, the voice reads English (the Russian is not on the page)
+  $effect(() => {
+    if (main === 'en' && tts.lang !== 'en') setLang('en');
+  });
   /** @type {HTMLElement} */
-  let scroller;
+  let scroller = $state(/** @type {any} */ (undefined));
   /** @type {HTMLElement | undefined} */
   let article = $state();
   let token = 0;
@@ -58,7 +91,7 @@
   const railItems = $derived(paperNotes.filter(hasThread));
   /** ref → markers for the gutter */
   // Open personal tasks per paragraph of this paper (a range marks each of its paragraphs).
-  void loadTasks();
+  if (session.user) void loadTasks();
   const taskCounts = $derived.by(() => {
     /** @type {Map<string, number>} */
     const m = new Map();
@@ -89,7 +122,30 @@
   const railFits = $derived(scrollerWidth >= settings.columnWidth + 360);
   const showRail = $derived(settings.showRail && railFits && (railItems.length > 0 || notes.draft !== null));
   const activeNote = $derived(paperNotes.find((n) => n.id === notes.activeId) ?? null);
-  const sheetOpen = $derived(!showRail && (notes.draft !== null || (activeNote !== null && activeNote.comments.length > 0)));
+  /**
+   * One tap — one window: a note with comments opens its sheet alone; "⋯" there gives the panel of text
+   * actions the sheet's place (`noteActions`) until the panel closes, then the sheet comes back.
+   */
+  let noteActions = $state(false);
+  const sheetOpen = $derived(!showRail && !noteActions && (notes.draft !== null || (activeNote !== null && activeNote.comments.length > 0)));
+  /** @param {import('../lib/api.js').Note} n */
+  function noteActionsFor(n) {
+    noteActions = true;
+    openNoteToolbar(n);
+    if (!tb) noteActions = false; // its words are not on screen
+  }
+  $effect(() => {
+    if (!tb && noteActions) noteActions = false;
+  });
+
+  /**
+   * Swipes over the text (touch screens, reading or listening, while no side panel is open): to the left —
+   * the book's notes from the right, to the right — search from the left.
+   */
+  let bookNotes = $state(false);
+  let bookSearch = $state(false);
+  const touchScreen = matchMedia('(pointer: coarse)').matches;
+  const canSwipe = () => touchScreen && !isGuest && !bookNotes && !bookSearch && !ui.sidebarOpen && !tb && !pop && !sheetOpen && !thread.ref;
 
   // ---- Public layer: translation proposals and paragraph threads ----
   const paperProposals = $derived(data && tr.paperId === data.paper.id ? tr.proposals : []);
@@ -123,19 +179,33 @@
     /** @type {Map<string, string>} */
     const out = new Map();
     if (!data) return out;
-    for (const [ref, list] of Map.groupBy(subs, (s) => s.p.ref)) {
+    const byRef = Map.groupBy(subs, (s) => s.p.ref);
+    // "Названия по смыслу": the dictionary's names in the paragraphs that have them (not where a variant stands)
+    const names = settings.altNames ? aliases.list : [];
+    const refs = new Set(byRef.keys());
+    if (names.length) for (const p of data.paragraphs) if (names.some((a) => p.ru.includes(a.written))) refs.add(p.ref);
+    for (const ref of refs) {
       const para = data.paragraphs.find((x) => x.ref === ref);
-      if (para) {
-        out.set(ref, substituteHtml(para.ru, list.map(({ p, kind }) => ({
-          id: p.id, start: p.start, end: p.end, text: p.text, kind,
-          original: kind === 'review' ? undefined : p.original, // in "Правка" the original is in plain view
-        }))));
-      }
+      if (!para) continue;
+      const variants = (byRef.get(ref) ?? []).map(({ p, kind }) => ({
+        id: p.id, start: p.start, end: p.end, text: p.text, kind,
+        original: kind === 'review' ? undefined : p.original, // in "Правка" the original is in plain view
+      }));
+      /** @type {import('../lib/substitute.js').Substitution[]} */
+      const named = names.length
+        ? findAliases(plainOf(para.ru), names)
+          .filter((n) => !variants.some((v) => n.start < v.end && v.start < n.end))
+          .map((n) => ({ id: 0, start: n.start, end: n.end, text: n.text, original: n.original, kind: 'alias' }))
+        : [];
+      out.set(ref, substituteHtml(para.ru, [...variants, ...named]));
     }
     return out;
   });
+  $effect(() => {
+    if (settings.altNames && session.user) void loadAliases();
+  });
   /** Any translation display is on: Ctrl+click on a fragment opens its variants. */
-  const trShown = $derived(settings.trMarks || settings.trMine || settings.trText !== 'original');
+  const trShown = $derived(main === 'ru' && (settings.trMarks || settings.trMine || settings.trText !== 'original')); // the layer is about the Russian
   /** @type {{ x: number, y: number, below: boolean, items: import('../lib/api.js').Proposal[], original: boolean, fragment: import('../lib/translation.svelte.js').Fragment } | null} */
   let pop = $state(null);
   const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
@@ -155,7 +225,7 @@
   $effect(() => {
     // Variants shown in place of the text need no underline: their text already stands out.
     const items = liveProposals.filter((p) => !subIds.has(p.id)).map((p) => ({ ref: p.ref, start: p.start, end: p.end, status: p.status }));
-    const on = settings.trMarks;
+    const on = settings.trMarks && main === 'ru';
     void enMode, substituted; // re-rendered paragraphs invalidate earlier ranges
     tick().then(() => {
       /** @type {Record<string, Range[]>} */
@@ -175,6 +245,7 @@
   $effect(() => {
     const target = { paper: route.paper, section: route.section, ref: route.ref };
     void route.nav;
+    if (background) return; // (another page is open: the book stays where the voice is)
     untrack(() => show(target));
   });
 
@@ -184,7 +255,7 @@
     untrack(() => {
       tb = null;
       notes.draft = null;
-      loadPaperNotes(id).catch((err) => console.error('Notes not loaded:', err));
+      if (session.user) loadPaperNotes(id).catch((err) => console.error('Notes not loaded:', err));
       loadPublicPaper(id).catch((err) => console.error('Translations not loaded:', err));
       pop = null;
     });
@@ -196,7 +267,16 @@
       article: () => article ?? null,
       scroller: () => scroller,
       paper: () => data?.paper.id ?? null,
-      next: () => (data?.next != null ? (navigate(`/${data.next}`, { replace: true }), true) : false), // no history entry: "back" must not jump
+      next: () => {
+        if (data?.next == null) return false;
+        const n = data.next;
+        if (background) {
+          // another page is open: the next paper is opened here, unseen; the way back to the book leads to it
+          void show({ paper: n, section: null, ref: null });
+          rememberBookPath(`/${n}`);
+        } else navigate(`/${n}`, { replace: true }); // no history entry: "back" must not jump
+        return true;
+      },
     }),
   );
   $effect(() => {
@@ -306,13 +386,29 @@
     // A paragraph goes to the middle of a big screen; on a phone to the top (below the header),
     // so that its beginning is never above the screen.
     if (el) el.scrollIntoView({ block: t.ref && !device.mobile ? 'center' : 'start' });
+    else if (landAtEnd === t.paper) scroller.scrollTop = scroller.scrollHeight; // pulled back from the next paper
     else scroller.scrollTop = 0;
+    landAtEnd = null;
     if (t.ref) {
       const ref = t.ref;
       flashRef = ref;
       setTimeout(() => flashRef === ref && (flashRef = null), 2000);
     }
+    showQuote(t);
     syncView();
+  }
+
+  /** A shared link's quote ("?sel=", lib/share.js): lit in its paragraph (the English unfolded for it). @param {Target} t */
+  async function showQuote(t) {
+    const q = t.ref ? quoteOf(location.search) : null;
+    if (!q || !t.ref || !article) return clearHighlights('shared-quote');
+    if (q.lang === 'en' && enMode === 'collapsed') {
+      expanded.add(t.ref);
+      await tick();
+    }
+    const r = article && anchorRange(article, t.ref, q.lang, q.start, q.end);
+    if (r) setRanges('shared-quote', [r], 2);
+    else clearHighlights('shared-quote');
   }
 
   /** Works out which section is at the top and mirrors it into the TOC and the address bar. */
@@ -338,9 +434,31 @@
     }
     view.paper = id;
     view.section = current;
+    // Where the reader is: kept for this user's other devices (lib/places).
+    const first = article && firstParagraph(article, scroller, device.mobile ? 64 : 8);
+    if (first && session.user) noteRead({ paper: id, key: first.ref, lang: main, progress: bookShare(id, first.inside) });
     const keep = inUrl.paper === id && (inUrl.section ?? 0) === current;
-    replaceUrl(keep ? location.pathname : current ? `/${id}:${current}` : `/${id}`);
+    // (a shared quote's "?sel=" stays while its paragraph's address does: signing in keeps the place)
+    replaceUrl(keep ? location.pathname + location.search : current ? `/${id}:${current}` : `/${id}`);
   }
+
+  // ---- Pulling on past the paper's end (or beginning): the next paper from its start, the previous at its end ----
+  /** The paper to open at its end (pulled back into it). @type {number | null} */
+  let landAtEnd = null;
+  /** @type {{ dir: import('../lib/edgepull.js').PullDir, p: number } | null} */
+  let pull = $state(null);
+  /** @type {import('../lib/edgepull.js').PullOptions} */
+  const pullOpts = {
+    can: (dir) => !background && !!data && (dir === 'next' ? data.next !== null : data.prev !== null)
+      && !tb && !sheetOpen && !bookNotes && !bookSearch,
+    onprogress: (dir, p) => (pull = dir ? { dir, p } : null),
+    ongo: (dir) => {
+      const id = dir === 'next' ? data?.next : data?.prev;
+      if (id == null) return;
+      if (dir === 'prev') landAtEnd = id;
+      navigate(`/${id}`);
+    },
+  };
 
   let ticking = false;
   function onScroll() {
@@ -361,14 +479,8 @@
   /** @param {MouseEvent} e @param {string} ref */
   async function copyRef(e, ref) {
     e.preventDefault();
-    const url = `${location.origin}/${ref}`;
     replaceUrl(`/${ref}`);
-    try {
-      await navigator.clipboard.writeText(url);
-      showToast(`Ссылка на ${ref} скопирована`);
-    } catch {
-      showToast(url);
-    }
+    await shareLink(placeLink(ref), undefined, `Ссылка на ${ref} скопирована`);
   }
 
   /** @param {string} ref */
@@ -447,20 +559,12 @@
   });
 
   // ---- The docked action panel (phone, tablet) must not cover the selected words ----
+  // Top / bottom: the text scrolls clear of the panel. Side: the column lies over the text at the edge
+  // away from the selection — the text itself never moves or reflows.
   const docked = $derived(device.mobile || device.touch);
-  /**
-   * While the side column would cover the selection, the selected paragraph (only it: reflowing the
-   * whole column would move everything above) makes room on that side.
-   * @type {{ ref: string, side: 'left' | 'right' } | null}
-   */
-  let dockPad = $state(null);
   $effect(() => {
     const t = tb;
-    if (!t || !docked) {
-      dockPad = null;
-      return;
-    }
-    if (dockPad && dockPad.ref !== t.anchor.ref) dockPad = null;
+    if (!t || !docked) return;
     holdChrome(); // the panel sits next to the header / navigation: they stay while it is open
     tick().then(() => requestAnimationFrame(() => {
       const panel = document.querySelector('.sel-toolbar')?.getBoundingClientRect();
@@ -469,10 +573,8 @@
       const sel = pr ? new DOMRect(pr.left, pr.top, pr.width, Math.min(pr.height, 64)) : tbRect?.() ?? null;
       if (!panel || !sel || !scroller) return;
       const place = settings.textActions;
-      if (place === 'side') {
-        if (sel.right > panel.left && sel.left < panel.right) dockPad = { ref: t.anchor.ref, side: panel.left < innerWidth / 2 ? 'left' : 'right' };
-        return;
-      }
+      // Side: the column lies over the text at the edge away from the selection; the text never moves.
+      if (place === 'side') return;
       // Top / bottom: scroll the text so that the selection is clear of the panel.
       const gap = 8;
       let dy = 0;
@@ -484,6 +586,89 @@
       }
     }));
   });
+
+  // ---- Pairs of terms (a computer): the mouse over a glossary term lights it and its counterpart in the
+  // other language (orange), its other places in the paragraph (blue); a counterpart not in view — in a tip ----
+  /** @type {{ names: Map<number, [string, string]>, paras: Record<string, { ru: number[], en: number[] }> } | null} */
+  let terms = $state.raw(null);
+  $effect(() => {
+    const id = data?.paper.id;
+    terms = null;
+    if (id === undefined || !settings.termPairs || device.touch || !session.user) return;
+    let live = true;
+    api.paperTerms(id).then((r) => {
+      if (live) terms = { names: new Map(r.terms.map(([i, en, ru]) => [i, [en, ru]])), paras: r.paras };
+    }).catch(() => {});
+    return () => {
+      live = false;
+      clearTerm();
+    };
+  });
+  /** The place under the mouse ("ref:lang:start"), so a move within it changes nothing. @type {string | null} */
+  let termAt = null;
+  /** @type {{ x: number, y: number, text: string, lang: string } | null} */
+  let termTip = $state(null);
+  /** Shown words of a variant or a dictionary name (.tr-sub): their text is drawn by CSS, so the element is marked. @type {HTMLElement[]} */
+  let termSubs = [];
+  let termFrame = 0;
+  /** @param {MouseEvent} e */
+  function onTermMove(e) {
+    if (!terms || e.buttons) return;
+    const { clientX: x, clientY: y } = e;
+    cancelAnimationFrame(termFrame);
+    termFrame = requestAnimationFrame(() => showTerm(x, y));
+  }
+  function clearTerm() {
+    cancelAnimationFrame(termFrame);
+    termAt = null;
+    termTip = null;
+    clearHighlights('term-cur');
+    clearHighlights('term-other');
+    for (const el of termSubs) el.classList.remove('term-cur', 'term-other');
+    termSubs = [];
+  }
+  /** @param {number} x @param {number} y */
+  function showTerm(x, y) {
+    const root = article;
+    if (!terms || !root) return;
+    const c = caretAt(x, y);
+    const lang = c?.lang === 'en' ? 'en' : 'ru';
+    const list = c?.ref ? terms.paras[c.ref]?.[lang] : undefined;
+    let hit = -1;
+    if (c && list) for (let i = 0; i < list.length; i += 3) if (list[i] <= c.off && c.off < list[i + 1]) hit = i;
+    if (!c || !list || hit < 0) return void (termAt && clearTerm());
+    const key = `${c.ref}:${lang}:${list[hit]}`;
+    if (key === termAt) return;
+    clearTerm();
+    termAt = key;
+    const id = list[hit + 2];
+    const other = lang === 'ru' ? 'en' : 'ru';
+    const theirs = terms.paras[c.ref]?.[other] ?? [];
+    const places = (/** @type {number[]} */ l) => l.flatMap((_, i) => (i % 3 === 0 && l[i + 2] === id ? [i] : []));
+    const mine = places(list), their = places(theirs);
+    // the counterpart: the same place in order, when both languages name the term as many times
+    const pair = their.length === mine.length ? their[mine.indexOf(hit)] : undefined;
+    const range = (/** @type {'ru' | 'en'} */ l, /** @type {number[]} */ arr, /** @type {number} */ i) => anchorRange(root, /** @type {string} */ (c.ref), l, arr[i], arr[i + 1]);
+    const cur = [range(lang, list, hit), pair === undefined ? null : range(other, theirs, pair)];
+    const others = [...mine.filter((i) => i !== hit).map((i) => range(lang, list, i)), ...their.filter((i) => i !== pair).map((i) => range(other, theirs, i))];
+    /** @param {(Range | null)[]} rs @param {string} cls */
+    const mark = (rs, cls) => {
+      for (const r of rs) {
+        const sub = r && /** @type {HTMLElement | null} */ ((r.startContainer.parentElement)?.closest('.tr-sub'));
+        if (sub) (sub.classList.add(cls), termSubs.push(sub));
+      }
+      return /** @type {Range[]} */ (rs.filter(Boolean));
+    };
+    setRanges('term-cur', mark(cur, 'term-cur'), 3);
+    setRanges('term-other', mark(others, 'term-other'), 3);
+    // the counterpart out of view (no English under the text, or folded to a line): its name in a tip
+    const pr = cur[1], el = textElement(root, c.ref, other);
+    const pRect = pr?.getBoundingClientRect(), eRect = el?.getBoundingClientRect();
+    const seen = !!(pRect && eRect && pRect.width && pRect.top >= eRect.top - 1 && pRect.bottom <= eRect.bottom + 1);
+    const name = terms.names.get(id);
+    const r = cur[0]?.getBoundingClientRect();
+    termTip = !seen && name && r ? { x: r.left + r.width / 2, y: r.top, text: name[other === 'en' ? 0 : 1], lang: other } : null;
+  }
 
   /** Text element and character offset under the pointer. @param {number} x @param {number} y */
   function caretAt(x, y) {
@@ -582,7 +767,9 @@
     const n = settings.showNotes ? noteAt(e.clientX, e.clientY) : null;
     if (n) {
       notes.activeId = n.id;
-      openNoteToolbar(n);
+      // with comments, the sheet alone opens (no rail); its "⋯" brings the actions
+      if (showRail || n.comments.length === 0) openNoteToolbar(n);
+      else tb = null;
     } else {
       tb = null;
       if (!notes.draft) notes.activeId = null;
@@ -594,7 +781,7 @@
     const btn = /** @type {HTMLElement} */ (e.currentTarget);
     tbRect = () => btn.getBoundingClientRect();
     const existing = paperNotes.find((n) => n.ref === ref && n.lang === null);
-    const text = article ? textElement(article, ref, 'ru')?.textContent ?? '' : '';
+    const text = article ? textElement(article, ref, main)?.textContent ?? '' : '';
     tb = {
       mode: 'para', ...place(btn.getBoundingClientRect()),
       anchor: { ref, lang: null, start: null, end: null, quote: null }, noteId: existing?.id ?? null, text,
@@ -610,6 +797,7 @@
 
   /** @param {KeyboardEvent} e */
   function onKeydown(e) {
+    if (background) return;
     if (e.key === 'Escape' && (tb || pop)) {
       tb = null;
       pop = null;
@@ -618,10 +806,21 @@
   }
 </script>
 
+{#snippet paraPlay(/** @type {string} */ ref, /** @type {'ru' | 'en'} */ lang)}
+  <!-- ▶: this paragraph in this language, with the player's voice; ■ while it is read -->
+  {@const on = paragraphPlaying(ref, lang)}
+  <button class="para-play" class:on data-lang={lang} onclick={(e) => (e.stopPropagation(), playParagraph(ref, lang))}
+    aria-label={on ? 'Остановить' : lang === 'en' ? `Прослушать оригинал ${ref}` : `Прослушать абзац ${ref}`}
+    title={on ? 'Остановить' : lang === 'en' ? 'Прослушать оригинал' : 'Прослушать абзац'}><Icon name={on ? 'stop-line' : 'play-line'} size={12} /></button>
+{/snippet}
+
 <svelte:window onkeydown={onKeydown} />
 
 <div class="reader">
-  <div class="reader-scroll" bind:this={scroller} onscroll={onScroll}>
+  <div class="reader-scroll" bind:this={scroller} onscroll={onScroll}
+    use:swipeOpen={{ onleft: () => (bookNotes = true), onright: () => (bookSearch = true), enabled: canSwipe }}
+    use:pinchFont={{ get: () => settings.fontSize, set: (px) => setSetting('fontSize', px), min: 14, max: 26, anchor: '.pair, h2, h3' }}
+    use:edgePull={pullOpts}>
     {#if search.query}
       <div class="hitbar" role="toolbar" aria-label="Навигация по результатам поиска">
         <Icon name="search" />
@@ -649,16 +848,29 @@
           class:tr-tint={settings.trTint}
           bind:this={article}
           onmouseup={onPointerUp}
+          onmousemove={onTermMove}
+          onmouseleave={clearTerm}
           onkeyup={(e) => e.shiftKey && onPointerUp(e)}
           onclick={onArticleClick}
         >
           {#each groups as s (s.num)}
             {#if s.num === 0}
+              {#if paper.partStart}
+                <!-- the part's title page, as in the printed book: before its first paper — its name and who sponsored it -->
+                {@const intro = main === 'en' ? paper.partIntroEn || paper.partIntroRu : paper.partIntroRu}
+                <section class="part-title" aria-label={partName(paper.partId)}>
+                  <div class="part-title-label">{partName(paper.partId)}</div>
+                  <div class="part-title-name" lang={main}>{main === 'en' ? paper.partTitleEn || paper.partTitleRu : paper.partTitleRu}</div>
+                  {#if intro}<p class="part-title-intro" lang={main}>{intro}</p>{/if}
+                  {#if enMode !== 'hidden' && main === 'ru' && paper.partIntroEn}<p class="part-title-intro en-intro" lang="en">{paper.partIntroEn}</p>{/if}
+                </section>
+              {/if}
               <header class="paper-head" id="s-{paper.id}:0" data-section="0">
-                <div class="kicker">Часть {partLabel(paper.partId)} · {paper.partTitleRu}</div>
+                <!-- the Foreword stands before Part I and is not of it -->
+                {#if !paper.partStart && paper.id !== 0}<div class="kicker">{partName(paper.partId)} · {main === 'en' ? paper.partTitleEn || paper.partTitleRu : paper.partTitleRu}</div>{/if}
                 <h1>
                   {#if paper.id}<span class="paper-num">{paperLabel(paper.id)}</span>{/if}
-                  <span data-tts="ru" data-tts-key="h0">{paper.titleRu}</span>
+                  <span data-tts={main} data-tts-key="h0" lang={main}>{titleIn(paper, main)}</span>
                 </h1>
                 {#if enMode !== 'hidden'}
                   <div class="en-title" lang="en">{paper.id ? `Paper ${paper.id} · ` : ''}<span data-tts="en" data-tts-key="h0">{paper.titleEn}</span></div>
@@ -666,7 +878,7 @@
               </header>
             {:else}
               <h2 class="section-head" id="s-{paper.id}:{s.num}" data-section={s.num}>
-                <span><span class="sec-num">{sectionLabel(paper.id, s.num)}.</span> <span data-tts="ru" data-tts-key="h{s.num}">{s.titleRu}</span></span>
+                <span><span class="sec-num">{sectionLabel(paper.id, s.num)}.</span> <span data-tts={main} data-tts-key="h{s.num}" lang={main}>{main === 'en' ? s.titleEn || s.titleRu : s.titleRu}</span></span>
                 {#if enMode !== 'hidden'}<span class="en-title" lang="en" data-tts="en" data-tts-key="h{s.num}">{s.titleEn}</span>{/if}
               </h2>
             {/if}
@@ -674,12 +886,10 @@
             {#each s.paragraphs as p (p.ref)}
               {@const mk = markers.get(p.ref)}
               {@const paraNote = paperNotes.find((n) => n.ref === p.ref && n.lang === null)}
-              {@const proposalsN = proposalCounts.get(p.ref)?.length ?? 0}
+              {@const proposalsN = isGuest ? tr.guestProposals[p.ref] ?? 0 : proposalCounts.get(p.ref)?.length ?? 0}
               {@const messagesN = tr.messages[p.ref] ?? 0}
               {@const tasksN = taskCounts.get(p.ref) ?? 0}
               <div class="pair" class:flash={flashRef === p.ref} class:para-active={paraNote && paraNote.id === notes.activeId}
-                class:dock-pad-left={dockPad?.ref === p.ref && dockPad.side === 'left'}
-                class:dock-pad-right={dockPad?.ref === p.ref && dockPad.side === 'right'}
                 class:para-draft={notes.draft?.ref === p.ref && notes.draft.lang === null} id="p-{p.ref}">
                 <div class="gutter">
                   <div class="gutter-head">
@@ -692,6 +902,7 @@
                   {#if settings.showPageRefs}
                     <span class="page" title="Страница.абзац печатного издания">{p.pageRef}</span>
                   {/if}
+                  {#if !isGuest}{@render paraPlay(p.ref, main)}{/if}
                   {#if (settings.showNotes && (mk?.bookmark || mk?.tags.size)) || mk?.comments || proposalsN || messagesN || tasksN}
                     <div class="gutter-marks">
                       {#if mk?.bookmark && settings.showNotes}
@@ -703,12 +914,12 @@
                         </button>
                       {/if}
                       {#if proposalsN}
-                        <button class="gmark" title="Варианты перевода: {proposalsN}" onclick={() => openPublicThread(p.ref)}>
+                        <button class="gmark" title="Варианты перевода: {proposalsN}" onclick={() => (isGuest ? askLogin('варианты перевода') : openPublicThread(p.ref))}>
                           <Icon name="translate" size={13} /><span class="n">{proposalsN}</span>
                         </button>
                       {/if}
                       {#if messagesN}
-                        <button class="gmark" title="Публичное обсуждение: {messagesN}" onclick={() => openPublicThread(p.ref)}>
+                        <button class="gmark" title="Публичное обсуждение: {messagesN}" onclick={() => (isGuest ? askLogin('обсуждение') : discussInChat(p.ref))}>
                           <Icon name="discuss" size={13} /><span class="n">{messagesN}</span>
                         </button>
                       {/if}
@@ -726,7 +937,9 @@
                   {/if}
                 </div>
                 <div class="texts">
-                  <p class="ru" data-ref={p.ref} data-lang="ru" data-tts="ru" data-tts-key={p.ref}>{@html substituted.get(p.ref) ?? p.ru}</p>
+                  <!-- the main text in the reading language; under it the comparison (the English under the Russian) -->
+                  <p class="main-text" lang={main} data-ref={p.ref} data-lang={main} data-tts={main} data-tts-key={p.ref}>{@html main === 'ru' ? substituted.get(p.ref) ?? p.ru : p.en}</p>
+                  {#if enMode !== 'hidden'}<div class="en-wrap">{#if !isGuest}{@render paraPlay(p.ref, 'en')}{/if}
                   {#if enMode === 'full'}
                     <p class="en" lang="en" data-ref={p.ref} data-lang="en" data-tts="en" data-tts-key={p.ref}>{@html p.en}</p>
                   {:else if enMode === 'collapsed'}
@@ -738,6 +951,7 @@
                       onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), toggleEn(p.ref))}
                     >{@html p.en}</div>
                   {/if}
+                  </div>{/if}
                 </div>
               </div>
             {/each}
@@ -748,6 +962,7 @@
             {#if data.next !== null}<a href="/{data.next}" onclick={linkClick}>{paperLabel(data.next)} →</a>{/if}
           </nav>
         </article>
+        {#if termTip}<div class="term-tip" lang={termTip.lang} style:left="{termTip.x}px" style:top="{termTip.y}px">{termTip.text}</div>{/if}
         {#if showRail && article}
           <MarginRail {article} items={railItems} />
         {/if}
@@ -756,24 +971,43 @@
       <div class="state">Загрузка…</div>
     {/if}
   </div>
+  {#if pull && data}
+    <!-- the pull past the edge: where it leads, filling up until it is enough -->
+    {@const id = pull.dir === 'next' ? data.next : data.prev}
+    {#if id !== null}
+      <!-- (phone: at the page's top level — above the bars and a notice over the text) -->
+      <div class="edge-pull {pull.dir}" class:ready={pull.p >= 1} style:--p={pull.p} aria-hidden="true" use:phonePortal>
+        <Icon name={pull.dir === 'next' ? 'down' : 'up'} size={16} /><span>{paperLabel(id)}</span>
+      </div>
+    {/if}
+  {/if}
 
   {#if sheetOpen}
-    <div class="note-sheet">
+    <!-- (phone: at the page's top level — the book's layer is not lifted or cut under it) -->
+    <div class="note-sheet" use:phonePortal>
       {#if notes.draft}
         <NoteCard showQuote onclose={() => (notes.draft = null)} />
       {:else if activeNote}
-        <NoteCard note={activeNote} showQuote onclose={() => (notes.activeId = null)} />
+        <NoteCard note={activeNote} showQuote onclose={() => (notes.activeId = null)}
+          onactions={activeNote.lang !== null ? () => activeNote && noteActionsFor(activeNote) : undefined} />
       {/if}
     </div>
   {/if}
 
   {#if tb}
     <SelectionToolbar {tb} onclose={() => (tb = null)} ontranslate={translateSelection}
-      onthread={() => tb && (openPublicThread(tb.anchor.ref), (tb = null))} />
+      onthread={() => tb && (isGuest ? askLogin('обсуждение') : discussInChat(tb.anchor.ref, tb.anchor.quote), (tb = null))} />
   {/if}
   {#if pop}
     <TranslationPopover {...pop} onclose={() => (pop = null)} />
   {/if}
+  <!-- the phone: where in the book (the audio player has its own line while it is open) -->
+  {#if device.mobile && !tts.open && !ui.sidebarOpen}
+    <ReadProgress paper={data?.paper.id ?? null} {scroller} {article} />
+  {/if}
+  <!-- the side panels: at the page's top level (over the bars), the book's layer untouched under them -->
+  {#if bookNotes}<div class="over-book" use:portal><BookNotesPanel onclose={() => (bookNotes = false)} /></div>{/if}
+  {#if bookSearch}<div class="over-book" use:portal><BookSearchPanel onclose={() => (bookSearch = false)} /></div>{/if}
 </div>
 
 {#if thread.ref}

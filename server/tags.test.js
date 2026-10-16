@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openDb } from './db.js';
 import { normalizeTagName, hashtagsIn, createTagStore } from './tags.js';
-import { parseQuery } from './search/query.js';
+import { parseQuery } from '../shared/search/query.js';
 
 test('tag names', () => {
   assert.equal(normalizeTagName('#Мыслящий_Настройщик'), 'Мыслящий_Настройщик');

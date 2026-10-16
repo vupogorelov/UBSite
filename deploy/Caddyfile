@@ -1,4 +1,4 @@
-# Urantian Docs Explorer — HTTPS in front of the Node server (which listens on 127.0.0.1:4300 only).
+# Urantia Papers Explorer — HTTPS in front of the Node server (which listens on 127.0.0.1:4300 only).
 # Caddy obtains and renews the certificate by itself (Let's Encrypt, falling back to ZeroSSL);
 # ports 80 and 443 must reach this computer from the internet.
 {
@@ -6,7 +6,9 @@
 	storage file_system ./caddy-data
 }
 
-95-31-142-59.broadband.corbina.ru {
+# The main name first; the provider's name still works for those who use it (installed apps,
+# signed-in browsers: cookies belong to the name they were set on). Each name gets its own certificate.
+upexplorer.ddns.net, 95-31-142-59.broadband.corbina.ru {
 	header {
 		Strict-Transport-Security "max-age=31536000"
 		-Server

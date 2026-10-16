@@ -409,6 +409,376 @@ const MIGRATIONS = [
   );
   CREATE UNIQUE INDEX pronunciations_written ON pronunciations (lang, lower(written));
   `,
+  // 13: a paragraph in a collection may point at a fragment of itself (shown highlighted and quoted,
+  // `body` is then the compiler's explanation of it); an item can be folded to its fragment alone,
+  // and a whole collection can show fragments only.
+  `
+  ALTER TABLE collection_items ADD COLUMN frag_lang TEXT CHECK (frag_lang IN ('ru', 'en'));
+  ALTER TABLE collection_items ADD COLUMN frag_start INTEGER;
+  ALTER TABLE collection_items ADD COLUMN frag_end INTEGER;
+  ALTER TABLE collection_items ADD COLUMN quote TEXT;
+  ALTER TABLE collection_items ADD COLUMN collapsed INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE collections ADD COLUMN fragments_only INTEGER NOT NULL DEFAULT 0;
+  `,
+  // 14: where each reader stopped — reading (the first paragraph on screen) and listening (the sentence
+  // the voice was at) — so it carries over between devices (later: context for the Book as a companion).
+  // `key`: a paragraph ref ("5:1.3") or a title ("h0", "h3") of `paper`; `s`: the sentence (listening);
+  // `at`: the device's time in ms (the latest wins); `device`: a random id of the browser, `device_kind`
+  // 'phone' | 'computer' for the "on your phone you stopped at…" hint.
+  `
+  CREATE TABLE reading_places (
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL CHECK (kind IN ('read', 'listen')),
+    paper       INTEGER NOT NULL,
+    key         TEXT NOT NULL,
+    s           INTEGER NOT NULL DEFAULT 0,
+    lang        TEXT NOT NULL,
+    progress    REAL,
+    device      TEXT NOT NULL,
+    device_kind TEXT NOT NULL,
+    at          INTEGER NOT NULL,
+    PRIMARY KEY (user_id, kind)
+  ) WITHOUT ROWID;
+  `,
+  // 15: one conversation model (VISION.md, principle 2). Comments on notes move into public_messages
+  // as the conversation "note:<annotation id>" — with replies, reactions, @mentions, live updates and
+  // notifications like every other chat; access stays with the note's workspace. A deleted note takes
+  // its conversation along. The moved comments are not news: everybody's "seen" mark goes past them.
+  `
+  INSERT INTO public_messages (ref, author_id, body, created_at, updated_at)
+    SELECT 'note:' || c.annotation_id, CASE WHEN c.author_id IN (SELECT id FROM users) THEN c.author_id END,
+           c.body, c.created_at, c.updated_at
+    FROM comments c ORDER BY c.id;
+  DROP TABLE comments;
+  UPDATE users SET notif_seen_id = max(notif_seen_id, (SELECT coalesce(max(id), 0) FROM public_messages));
+  CREATE TRIGGER annotation_conversation AFTER DELETE ON annotations BEGIN
+    DELETE FROM public_messages WHERE ref = 'note:' || old.id;
+  END;
+  `,
+  // 16: a message in a collection — a thought from a conversation kept as it was said (VISION.md,
+  // principle 4): a snapshot of its text (`quote`), author and time, the conversation it came from
+  // (`msg_chat`) and its place in the book (`ref`), if any. The kind list is a CHECK, so the table is rebuilt.
+  `
+  CREATE TABLE collection_items_new (
+    id            INTEGER PRIMARY KEY,
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    pos           INTEGER NOT NULL,
+    kind          TEXT NOT NULL CHECK (kind IN ('para', 'note', 'text', 'message')),
+    ref           TEXT,
+    ref_end       TEXT,
+    annotation_id INTEGER REFERENCES annotations(id) ON DELETE CASCADE,
+    body          TEXT,
+    heading       INTEGER NOT NULL DEFAULT 0,
+    created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    frag_lang     TEXT CHECK (frag_lang IN ('ru', 'en')),
+    frag_start    INTEGER,
+    frag_end      INTEGER,
+    quote         TEXT,
+    collapsed     INTEGER NOT NULL DEFAULT 0,
+    msg_id        INTEGER,
+    msg_author    TEXT,
+    msg_at        TEXT,
+    msg_chat      TEXT
+  );
+  INSERT INTO collection_items_new (id, collection_id, pos, kind, ref, ref_end, annotation_id, body, heading, created_at,
+                                    frag_lang, frag_start, frag_end, quote, collapsed)
+    SELECT id, collection_id, pos, kind, ref, ref_end, annotation_id, body, heading, created_at,
+           frag_lang, frag_start, frag_end, quote, collapsed FROM collection_items;
+  DROP TABLE collection_items;
+  ALTER TABLE collection_items_new RENAME TO collection_items;
+  CREATE INDEX collection_items_order ON collection_items (collection_id, pos);
+  `,
+  // 17: a task made from a message ("В задачи") keeps the way back to it: the message and its conversation.
+  `
+  ALTER TABLE tasks ADD COLUMN message_id INTEGER;
+  ALTER TABLE tasks ADD COLUMN message_chat TEXT;
+  `,
+  // 18: e-mail for restoring a forgotten password. Optional; it counts only once confirmed by a link
+  // sent to it (email_tokens: one-time, for the address it was sent to). Several accounts may share an
+  // address (a family): "Забыли пароль" by e-mail writes to each of them.
+  `
+  ALTER TABLE users ADD COLUMN email TEXT;
+  ALTER TABLE users ADD COLUMN email_key TEXT;
+  ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0;
+  CREATE INDEX users_email ON users (email_key);
+  CREATE TABLE email_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    email      TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    expires_at TEXT NOT NULL,
+    used_at    TEXT
+  ) WITHOUT ROWID;
+  `,
+  // 19: one pinned message per conversation, shown under its header. Pins it whoever made the chat
+  // (a channel's creator, a workspace's owner, a note's author) or an administrator.
+  `
+  CREATE TABLE chat_pins (
+    chat       TEXT PRIMARY KEY,
+    message_id INTEGER NOT NULL REFERENCES public_messages(id) ON DELETE CASCADE,
+    pinned_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    pinned_at  TEXT NOT NULL DEFAULT (datetime('now'))
+  ) WITHOUT ROWID;
+  `,
+  // 20: chats each user pins at the top of their chat list (up to 10), in their own order.
+  `
+  CREATE TABLE pinned_chats (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    chat    TEXT NOT NULL,
+    pos     INTEGER NOT NULL,
+    PRIMARY KEY (user_id, chat)
+  ) WITHOUT ROWID;
+  `,
+  // 21: tasks are sorted by tags (#words in the title and the tags of the details), not by lists:
+  // the lists go. (Tags are kept in lower case from now on; older ones are read so — shared/tasktags.js.)
+  `
+  ALTER TABLE tasks DROP COLUMN list_id;
+  DROP TABLE task_lists;
+  `,
+  // 22: an administrator's mark on a message — take / work / done (a bug or an idea from users and
+  // where it stands); found by a filter of the chat list. Its author is told by a row of the hidden
+  // conversation "mark:<chat>" (kind 'event', reply_to = the message) with a mention of them — the way
+  // every notification goes.
+  `
+  ALTER TABLE public_messages ADD COLUMN mark TEXT CHECK (mark IN ('take', 'work', 'done'));
+  ALTER TABLE public_messages ADD COLUMN mark_by INTEGER REFERENCES users(id) ON DELETE SET NULL;
+  ALTER TABLE public_messages ADD COLUMN mark_at TEXT;
+  CREATE INDEX public_messages_mark ON public_messages (mark, mark_at) WHERE mark IS NOT NULL;
+  `,
+  // 23: the Book's voice (VISION.md, principle 1: the Book is a participant). The Book is a user of its
+  // own kind (`is_agent`: it never signs in; created by server/bookvoice.js) who writes in the "Голос Книги" channel (`voice`: only it
+  // writes there); each post is also put into the channel's discussion (`discussion`, the general chat),
+  // where people talk about it — the post keeps the way to it (`linked_id`). A message may be anchored to
+  // a place in the book (`anchor_*`, the one anchor of the platform: ref, lang, start, end) — the Book's
+  // posts are, and later its answers. `chat_mutes`: a chat whose news a user does not want counted.
+  `
+  ALTER TABLE users ADD COLUMN is_agent INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE channels ADD COLUMN voice INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE channels ADD COLUMN discussion TEXT;
+  INSERT INTO channels (title, description, voice, discussion)
+    VALUES ('Голос Книги', 'Каждый день Книга говорит сама — абзацем со своих страниц. Обсуждение — в «Общем».', 1,
+            'chan:' || (SELECT min(id) FROM channels));
+  ALTER TABLE public_messages ADD COLUMN anchor_ref TEXT;
+  ALTER TABLE public_messages ADD COLUMN anchor_lang TEXT CHECK (anchor_lang IN ('ru', 'en'));
+  ALTER TABLE public_messages ADD COLUMN anchor_start INTEGER;
+  ALTER TABLE public_messages ADD COLUMN anchor_end INTEGER;
+  ALTER TABLE public_messages ADD COLUMN linked_id INTEGER REFERENCES public_messages(id) ON DELETE SET NULL;
+  CREATE TABLE chat_mutes (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    chat    TEXT NOT NULL,
+    PRIMARY KEY (user_id, chat)
+  ) WITHOUT ROWID;
+  `,
+  // 24: integrations. The English text is kept in step with its source (the Uversa Press edition through
+  // the ubsite API, server/textsync.js); `uf_ref` — the paragraph's number as the Urantia Foundation counts
+  // it, which every translation follows (107 paragraphs differ). `sync_runs`: the report of each run.
+  `
+  ALTER TABLE paragraphs ADD COLUMN uf_ref TEXT;
+  CREATE INDEX paragraphs_uf_ref ON paragraphs (uf_ref);
+  CREATE TABLE sync_runs (
+    id          INTEGER PRIMARY KEY,
+    source      TEXT NOT NULL,
+    trigger     TEXT NOT NULL,
+    status      TEXT NOT NULL CHECK (status IN ('ok', 'unchanged', 'error')),
+    version_from INTEGER,
+    version_to  INTEGER,
+    summary     TEXT NOT NULL DEFAULT '{}',
+    started_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    finished_at TEXT
+  );
+  `,
+  // 25: analytics. A row per person per minute they were active in the app (a tab in view with a tap,
+  // scroll or key in the last 2 minutes, or the voice reading): the section they were in, whether they
+  // were reading the book, whether the voice was reading to them. Tabs and devices of one minute make one
+  // row, so time is not counted twice. Sessions are runs of minutes with gaps under 30 minutes.
+  // `minute`: Unix time in minutes (UTC).
+  `
+  CREATE TABLE activity_minutes (
+    user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    minute    INTEGER NOT NULL,
+    section   TEXT NOT NULL,
+    reading   INTEGER NOT NULL DEFAULT 0,
+    listening INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, minute)
+  ) WITHOUT ROWID;
+  CREATE INDEX activity_minutes_minute ON activity_minutes (minute);
+  `,
+  // 26: a part's introduction (who sponsored it) in English too — the Uversa Press text's `sponsor`;
+  // shown as the part's title page before its first paper. The Russian one is `subtitle_ru`.
+  `
+  ALTER TABLE parts ADD COLUMN subtitle_en TEXT;
+  `,
+  // 27: titles are plain text. Some Russian section titles came from the source with its line breaks
+  // ("…наводнений<br />Период кораллов…"): a break becomes ". " (after a dash — a space).
+  `
+  UPDATE sections SET title_ru = replace(replace(replace(title_ru, ' – <br />', ' – '), '<br /> ', '. '), '<br />', '. ')
+    WHERE title_ru LIKE '%<br%';
+  UPDATE papers SET title_ru = replace(replace(replace(title_ru, ' – <br />', ' – '), '<br /> ', '. '), '<br />', '. ')
+    WHERE title_ru LIKE '%<br%';
+  `,
+  // 28: analytics — what the app was opened on in that minute: a phone (or tablet) or a computer, the
+  // installed app or a browser ('' — minutes from before this was recorded).
+  `
+  ALTER TABLE activity_minutes ADD COLUMN device TEXT NOT NULL DEFAULT '';
+  `,
+  // 29: a listening place in a recording: its file and the second in it (the recording goes on from
+  // there, not from the paragraph's estimated start). Null — heard by speech synthesis.
+  `
+  ALTER TABLE reading_places ADD COLUMN file TEXT;
+  ALTER TABLE reading_places ADD COLUMN t REAL;
+  `,
+  // 30: the dictionary of names (server/api/aliases.js): a name as the translation writes it and its
+  // rendering by meaning, shown in its place to those who turn it on. Seeded with the names the
+  // USGNY translation renders by meaning.
+  `
+  CREATE TABLE name_aliases (
+    id         INTEGER PRIMARY KEY,
+    written    TEXT NOT NULL UNIQUE,
+    alias      TEXT NOT NULL,
+    forms      TEXT,
+    note       TEXT,
+    source     TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  INSERT INTO name_aliases (written, alias, forms, note, source) VALUES
+    ('Салвингтон', 'Спасоград', NULL, 'Salvington — от salvation, «спасение»: столица локальной вселенной Небадон.', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Дивинингтон', 'Божеград', NULL, 'Divinington — от divine, «божественный»: райская сфера Отца.', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Сонарингтон', 'Сыноград', NULL, 'Sonarington — от Son, «Сын»: райская сфера Вечного Сына.', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Спиритингтон', 'Духоград', NULL, 'Spiritington — от Spirit, «Дух»: райская сфера Бесконечного Духа.', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Вайсджерингтон', 'Наместникоград', NULL, 'Vicegerington — от vicegerent, «наместник».', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Солитарингтон', 'Град Одиночности', NULL, 'Solitarington — от solitary, «одинокий».', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Серафингтон', 'Серафимоград', NULL, 'Seraphington — сфера серафимов.', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Асендингтон', 'Восходоград', NULL, 'Ascendington — от ascend, «восходить».', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017'),
+    ('Декаполис', 'Десятиградие', '{"Декаполис":"Десятиградие","Декаполиса":"Десятиградия","Декаполису":"Десятиградию","Декаполисом":"Десятиградием","Декаполисе":"Десятиградии"}', 'Decapolis — «Десять городов»; так и в Синодальном переводе Библии.', 'Перевод Общества Урантии Большого Нью-Йорка (USGNY), 2017');
+  `,
+  // 31: one exchange with the server (the device's outgoing queue, web/src/lib/outbox.svelte.js).
+  // `ops`: each change comes with its own id; the answer is kept, so a change sent again (the network
+  // broke before the answer arrived) is answered the same and not done twice (server/ops.js). Kept 30 days.
+  // `written_at`: when a message was written, if earlier than it reached the server (written without a
+  // network, sent later); shown as its time.
+  `
+  CREATE TABLE ops (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    op_id      TEXT NOT NULL,
+    status     INTEGER NOT NULL,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, op_id)
+  ) WITHOUT ROWID;
+  CREATE INDEX ops_created ON ops (created_at);
+  ALTER TABLE public_messages ADD COLUMN written_at TEXT;
+  `,
+  // 32: a note's own id given by the device that made it (a UUID): a note written without a network is
+  // shown, tagged, commented on or deleted by it before the server has numbered it (its address in the
+  // API: "u-<uid>"). Notes from before have none.
+  `
+  ALTER TABLE annotations ADD COLUMN uid TEXT;
+  CREATE UNIQUE INDEX annotations_uid ON annotations (workspace_id, uid) WHERE uid IS NOT NULL;
+  `,
+  // 33: the journal of what happened on people's devices (web/src/lib/log.js, server/clientlog.js) — to see
+  // what really went on when something failed. No texts of notes, messages or searches: screens, button
+  // names, failures, timings. `session`: one opening of the app (a tab); `device`: phone/computer, app or
+  // browser, version. Kept 30 days.
+  `
+  CREATE TABLE client_events (
+    id          INTEGER PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session     TEXT NOT NULL,
+    device      TEXT NOT NULL,
+    at          TEXT NOT NULL,
+    level       TEXT NOT NULL CHECK (level IN ('info', 'warn', 'error')),
+    kind        TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    data        TEXT,
+    received_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX client_events_user ON client_events (user_id, at);
+  CREATE INDEX client_events_at ON client_events (at);
+  `,
+  // 34: the feed of changes (server/feed.js): what changed in a workspace, in order — a device asks "what
+  // changed after N?" and keeps the workspace's notes on itself (web/src/lib/feed.js). Written by
+  // triggers, so no path that changes a note can forget it: the note itself, its tags (and a tag's
+  // rename), its comments and their reactions. Kept 60 days; a device further behind gets everything anew.
+  `
+  CREATE TABLE changes (
+    seq          INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id INTEGER NOT NULL,
+    entity       TEXT NOT NULL,
+    entity_id    INTEGER NOT NULL,
+    at           TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX changes_ws ON changes (workspace_id, seq);
+  CREATE TRIGGER changes_note_ins AFTER INSERT ON annotations BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) VALUES (NEW.workspace_id, 'note', NEW.id);
+  END;
+  CREATE TRIGGER changes_note_upd AFTER UPDATE ON annotations BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) VALUES (NEW.workspace_id, 'note', NEW.id);
+  END;
+  CREATE TRIGGER changes_note_del AFTER DELETE ON annotations BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) VALUES (OLD.workspace_id, 'note', OLD.id);
+  END;
+  CREATE TRIGGER changes_note_tag_ins AFTER INSERT ON annotation_tags BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) SELECT workspace_id, 'note', id FROM annotations WHERE id = NEW.annotation_id;
+  END;
+  CREATE TRIGGER changes_note_tag_del AFTER DELETE ON annotation_tags BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) SELECT workspace_id, 'note', id FROM annotations WHERE id = OLD.annotation_id;
+  END;
+  CREATE TRIGGER changes_tag_rename AFTER UPDATE OF name ON tags BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) SELECT NEW.workspace_id, 'note', annotation_id FROM annotation_tags WHERE tag_id = NEW.id;
+  END;
+  CREATE TRIGGER changes_comment_ins AFTER INSERT ON public_messages WHEN NEW.ref LIKE 'note:%' BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) SELECT workspace_id, 'note', id FROM annotations WHERE id = CAST(substr(NEW.ref, 6) AS INTEGER);
+  END;
+  CREATE TRIGGER changes_comment_upd AFTER UPDATE ON public_messages WHEN NEW.ref LIKE 'note:%' BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) SELECT workspace_id, 'note', id FROM annotations WHERE id = CAST(substr(NEW.ref, 6) AS INTEGER);
+  END;
+  CREATE TRIGGER changes_comment_del AFTER DELETE ON public_messages WHEN OLD.ref LIKE 'note:%' BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id) SELECT workspace_id, 'note', id FROM annotations WHERE id = CAST(substr(OLD.ref, 6) AS INTEGER);
+  END;
+  CREATE TRIGGER changes_reaction_ins AFTER INSERT ON message_reactions BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id)
+      SELECT a.workspace_id, 'note', a.id FROM public_messages m JOIN annotations a ON a.id = CAST(substr(m.ref, 6) AS INTEGER)
+      WHERE m.id = NEW.message_id AND m.ref LIKE 'note:%';
+  END;
+  CREATE TRIGGER changes_reaction_del AFTER DELETE ON message_reactions BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id)
+      SELECT a.workspace_id, 'note', a.id FROM public_messages m JOIN annotations a ON a.id = CAST(substr(m.ref, 6) AS INTEGER)
+      WHERE m.id = OLD.message_id AND m.ref LIKE 'note:%';
+  END;
+  `,
+  // 35: personal tasks in the feed and in the queue: a change of a task or its subtasks is a change of
+  // the task for its owner (changes.user_id; workspace 0 — tasks belong to a person, not a workspace);
+  // a task's own id from the device that made it (as notes, migration 32).
+  `
+  ALTER TABLE changes ADD COLUMN user_id INTEGER;
+  CREATE INDEX changes_user ON changes (user_id, seq) WHERE user_id IS NOT NULL;
+  ALTER TABLE tasks ADD COLUMN uid TEXT;
+  CREATE UNIQUE INDEX tasks_uid ON tasks (user_id, uid) WHERE uid IS NOT NULL;
+  CREATE TRIGGER changes_task_ins AFTER INSERT ON tasks BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id, user_id) VALUES (0, 'task', NEW.id, NEW.user_id);
+  END;
+  CREATE TRIGGER changes_task_upd AFTER UPDATE ON tasks BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id, user_id) VALUES (0, 'task', NEW.id, NEW.user_id);
+  END;
+  CREATE TRIGGER changes_task_del AFTER DELETE ON tasks BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id, user_id) VALUES (0, 'task', OLD.id, OLD.user_id);
+  END;
+  CREATE TRIGGER changes_subtask_ins AFTER INSERT ON subtasks BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id, user_id) SELECT 0, 'task', id, user_id FROM tasks WHERE id = NEW.task_id;
+  END;
+  CREATE TRIGGER changes_subtask_upd AFTER UPDATE ON subtasks BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id, user_id) SELECT 0, 'task', id, user_id FROM tasks WHERE id = NEW.task_id;
+  END;
+  CREATE TRIGGER changes_subtask_del AFTER DELETE ON subtasks BEGIN
+    INSERT INTO changes (workspace_id, entity, entity_id, user_id) SELECT 0, 'task', id, user_id FROM tasks WHERE id = OLD.task_id;
+  END;
+  `,
+  // 36: analytics — the system of the device a minute was spent on (android, ios, other; '' — before it was recorded)
+  `
+  ALTER TABLE activity_minutes ADD COLUMN os TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 /**

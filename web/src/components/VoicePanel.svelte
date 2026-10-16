@@ -1,10 +1,12 @@
 <script>
-  import { tts, setLang, setVoice, sayOnce, voicesFor, VOICE_DEFAULTS } from '../lib/tts.svelte.js';
+  import { tts, setLang, sayOnce, voicesFor, loadRecordings, voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch, NARRATOR } from '../lib/tts.svelte.js';
   import { dict, loadDict, addRule, updateRule, deleteRule, applyDict } from '../lib/pronunciations.svelte.js';
   import { withStress, toPlus } from '../lib/pronounce.js';
   import { session } from '../lib/session.svelte.js';
   import { device } from '../lib/mobile.svelte.js';
   import Icon from './Icon.svelte';
+  import UiSelect from './UiSelect.svelte';
+  import { plural } from '../lib/format.js';
 
   /**
    * The sidebar's "Озвучка": tone and rate of the voice per language (as in the phone's player) and,
@@ -15,20 +17,14 @@
 
   $effect(() => {
     if (visible) void loadDict();
+    if (visible) loadRecordings();
   });
 
   const coordinator = $derived(Boolean(session.user?.isCoordinator || session.user?.isAdmin));
   const v = $derived(tts[tts.lang]);
-  const defaults = $derived(VOICE_DEFAULTS[tts.lang]);
   const voices = $derived(voicesFor(tts.lang));
-  /** @typedef {'pitch' | 'rate'} Knob */
-  /** @type {{ key: Knob, label: string, min: number, max: number, step: number, show: (x: number) => string }[]} */
-  const KNOBS = [
-    { key: 'pitch', label: 'Тон', min: 0.5, max: 2, step: 0.1, show: (x) => x.toFixed(1) },
-    { key: 'rate', label: 'Темп', min: 0.5, max: 3, step: 0.1, show: (x) => `${x.toFixed(1)}×` },
-  ];
-  /** @param {(typeof KNOBS)[number]} k @param {number} x */
-  const set = (k, x) => setVoice(k.key, Number((Math.round(Math.min(k.max, Math.max(k.min, x)) / k.step) * k.step).toFixed(2)));
+  /** This language is heard from its recording (the narrator). */
+  const recording = $derived(v.source === 'audio' && tts.recorded.includes(tts.lang));
 
   const SAMPLE = {
     ru: 'Локальная вселенная Небадон входит в сверхвселенную Орвонтон; её столица — Салвингтон.',
@@ -72,92 +68,93 @@
   <!-- On the phone the player has its own voice settings (and the language): only the dictionary here. -->
   {#if !device.mobile}
   <div class="panel-head voice-head">
-    <div class="segmented" role="radiogroup" aria-label="Язык чтения">
+    <div class="ui-chips voice-chips" role="radiogroup" aria-label="Язык чтения">
       {#each /** @type {const} */ ([['ru', 'Русский'], ['en', 'English']]) as [id, label] (id)}
-        <button role="radio" aria-checked={tts.lang === id} class:active={tts.lang === id} onclick={() => setLang(id)}>{label}</button>
+        <button class="ui-chip" class:on={tts.lang === id} role="radio" aria-checked={tts.lang === id} onclick={() => setLang(id)}>{label}</button>
       {/each}
     </div>
   </div>
 
   <section class="voice-knobs">
-    <div class="box-title">Голос</div>
-    {#each KNOBS as k (k.key)}
-      <div class="voice-knob">
-        <div class="voice-knob-head">
-          <span>{k.label}</span>
-          <span class="muted">{k.show(v[k.key])}</span>
-          <span class="spacer"></span>
-          <button class="icon-btn small-btn" onclick={() => set(k, defaults[k.key])} disabled={v[k.key] === defaults[k.key]}
-            title="По умолчанию: {k.show(defaults[k.key])}" aria-label="{k.label}: по умолчанию"><Icon name="reset" size={16} /></button>
-        </div>
-        <div class="voice-knob-row">
-          <button class="icon-btn small-btn" onclick={() => set(k, v[k.key] - k.step)} aria-label="{k.label}: меньше"><Icon name="minus" size={16} /></button>
-          <input type="range" min={k.min} max={k.max} step={k.step} value={v[k.key]} aria-label={k.label}
-            oninput={(e) => set(k, Number(e.currentTarget.value))} />
-          <button class="icon-btn small-btn" onclick={() => set(k, v[k.key] + k.step)} aria-label="{k.label}: больше"><Icon name="plus" size={16} /></button>
-        </div>
+    <div class="ui-label">Голос</div>
+    <!-- as the phone's player: the voice (the narrator or a synthesized one), the speed and the tone in one row -->
+    <div class="tts-list voice-card">
+      <UiSelect class="tts-list-row" label="Голос" title="Голос для {tts.lang === 'ru' ? 'русского' : 'английского'} текста" value={voiceChoice()}
+        onchange={(x) => (chooseVoice(x), x !== NARRATOR && !tts.playing && sayOnce(applyDict(SAMPLE[tts.lang], tts.lang)))} options={voiceOptions()} />
+      <div class="tts-list-row tts-pace">
+        <span class="tts-label">Скорость</span>
+        <button class="tts-rate" onclick={nextRate} aria-label="Скорость {currentRate()}×, нажмите — быстрее" title="Нажмите — быстрее (после 2× — снова 0.6×)">{Number(currentRate().toFixed(2))}×</button>
+        {#if !recording}
+          <span class="tts-label tts-tone-label">Тон</span>
+          <button class="ui-round small" onclick={() => stepPitch(-1)} disabled={v.pitch <= 0.5} aria-label="Тон ниже"><Icon name="minus" size={16} /></button>
+          <span class="tts-value tts-tone">{v.pitch.toFixed(1)}</span>
+          <button class="ui-round small" onclick={() => stepPitch(1)} disabled={v.pitch >= 2} aria-label="Тон выше"><Icon name="plus" size={16} /></button>
+        {/if}
       </div>
-    {/each}
-    <label class="voice-pick">
-      <span>Голос</span>
-      <select class="text-input" value={v.voice} onchange={(e) => (setVoice('voice', e.currentTarget.value), tts.playing || sayOnce(applyDict(SAMPLE[tts.lang], tts.lang)))}>
-        <option value="">Системный по умолчанию</option>
-        {#each voices as x (x.name)}<option value={x.name}>{x.name}{x.online ? ' · онлайн' : ''}</option>{/each}
-      </select>
-    </label>
+    </div>
+    {#if recording}
+      <p class="muted small">Книгу читает диктор; подсвечивается абзац, который звучит.</p>
+    {:else}
     {#if !voices.length}
       <p class="muted small">Браузер не нашёл голосов для этого языка.</p>
     {:else if voices.length < 3}
       <p class="muted small">Больше голосов: Windows → Параметры → Время и язык → Речь → «Добавить голоса»; после установки перезапустите браузер.</p>
     {/if}
-    <button class="btn voice-try" onclick={() => sayOnce(applyDict(SAMPLE[tts.lang], tts.lang))}><Icon name="play" size={14} />Прослушать пример</button>
+    <button class="ui-btn voice-try" onclick={() => sayOnce(applyDict(SAMPLE[tts.lang], tts.lang))}><Icon name="play" size={14} />Прослушать пример</button>
+    {/if}
   </section>
   {/if}
 
   <section class="voice-dict">
-    <div class="box-title">Словарь произношения{#if device.mobile}{' · '}{tts.lang === 'ru' ? 'русский' : 'английский'}{/if}</div>
-    <p class="muted small">Общий для всех. Слово заменяется с начала, поэтому правило для «Небадон» сработает и для «Небадона», «Небадону».
-      Ударение — знак <b>+</b> перед ударной гласной: <span class="mono">Небад+он</span>.</p>
+    {#if !device.mobile}<div class="ui-label">Словарь произношения</div>{/if}
+    <p class="ui-hint">{tts.lang === 'ru' ? 'Русский' : 'Английский'} · общий для всех. Слово заменяется с начала: правило для «Небадон» сработает и для «Небадона», «Небадону».
+      Ударение — <b>+</b> перед ударной гласной: <span class="mono">Небад+он</span>.</p>
     {#if coordinator}
-      <form class="voice-add" onsubmit={add}>
-        <input class="text-input" bind:value={written} placeholder="Как написано" aria-label="Как написано" />
-        <input class="text-input" bind:value={spoken} placeholder="Как читать" aria-label="Как читать" />
-        <div class="row-end">
-          <button type="button" class="btn" onclick={() => sayOnce(withStress(spoken))} disabled={!spoken.trim()}><Icon name="play" size={14} />Прослушать</button>
-          <button class="btn primary" disabled={!written.trim() || !spoken.trim()}>Добавить</button>
+      <!-- a new rule: a card with its two fields, «listen» and «add» -->
+      <form class="voice-add voice-add-card" onsubmit={add}>
+        <input class="ui-input" bind:value={written} placeholder="Как написано" aria-label="Как написано" />
+        <input class="ui-input" bind:value={spoken} placeholder="Как читать" aria-label="Как читать" />
+        <div class="voice-add-actions">
+          <button type="button" class="ui-round" onclick={() => sayOnce(withStress(spoken))} disabled={!spoken.trim()} aria-label="Прослушать" title="Прослушать"><Icon name="play" size={18} /></button>
+          <button class="ui-btn primary" disabled={!written.trim() || !spoken.trim()}>Добавить</button>
         </div>
       </form>
     {/if}
     {#if dict.list.filter((p) => p.lang === tts.lang).length > 8}
-      <input class="text-input" bind:value={filter} placeholder="Найти в словаре" aria-label="Найти в словаре" />
+      <label class="ui-search">
+        <Icon name="search" size={18} />
+        <input bind:value={filter} placeholder="Найти в словаре" aria-label="Найти в словаре" />
+        {#if filter}<button class="ui-search-clear" onclick={(e) => (e.preventDefault(), (filter = ''))} aria-label="Очистить"><Icon name="close" size={16} /></button>{/if}
+      </label>
     {/if}
+    {#if rules.length}<div class="ui-label voice-count">{rules.length} {plural(rules.length, 'слово', 'слова', 'слов')}</div>{/if}
     <ul class="voice-rules">
       {#each rules as p (p.id)}
         <li>
           {#if editing === p.id}
             <form class="voice-add" onsubmit={(e) => saveEdit(e, p)}>
-              <input class="text-input" bind:value={editWritten} aria-label="Как написано" />
-              <input class="text-input" bind:value={editSpoken} aria-label="Как читать" />
-              <div class="row-end">
-                <button type="button" class="btn" onclick={() => (editing = null)}>Отмена</button>
-                <button class="btn primary">Сохранить</button>
+              <input class="ui-input" bind:value={editWritten} aria-label="Как написано" />
+              <input class="ui-input" bind:value={editSpoken} aria-label="Как читать" />
+              <div class="voice-add-actions">
+                <button type="button" class="ui-btn" onclick={() => (editing = null)}>Отмена</button>
+                <button class="ui-btn primary">Сохранить</button>
               </div>
             </form>
           {:else}
-            <span class="voice-rule"><b>{p.written}</b> → {p.spoken}</span>
-            <button class="icon-btn small-btn" onclick={() => sayOnce(p.spoken)} title="Прослушать" aria-label="Прослушать {p.written}"><Icon name="play" size={14} /></button>
+            <span class="voice-rule"><b>{p.written}</b><span class="voice-spoken">{p.spoken}</span></span>
+            <button class="ui-round small" onclick={() => sayOnce(p.spoken)} title="Прослушать" aria-label="Прослушать {p.written}"><Icon name="play" size={16} /></button>
             {#if coordinator}
-              <button class="icon-btn small-btn" onclick={() => startEdit(p)} title="Изменить" aria-label="Изменить {p.written}"><Icon name="edit" size={14} /></button>
-              <button class="icon-btn small-btn" class:danger={confirmDelete === p.id}
+              <button class="ui-round small" onclick={() => startEdit(p)} title="Изменить" aria-label="Изменить {p.written}"><Icon name="edit" size={16} /></button>
+              <button class="ui-round small" class:danger={confirmDelete === p.id}
                 onclick={() => (confirmDelete === p.id ? deleteRule(p.id) : (confirmDelete = p.id))}
-                title={confirmDelete === p.id ? 'Нажмите ещё раз для удаления' : 'Удалить'} aria-label="Удалить {p.written}"><Icon name="trash" size={14} /></button>
+                title={confirmDelete === p.id ? 'Нажмите ещё раз для удаления' : 'Удалить'} aria-label="Удалить {p.written}"><Icon name="trash" size={16} /></button>
             {/if}
           {/if}
         </li>
       {/each}
     </ul>
     {#if dict.loaded && !rules.length}
-      <p class="muted small">{filter ? 'Ничего не найдено.' : `Для ${tts.lang === 'ru' ? 'русского' : 'английского'} пока пусто.`}</p>
+      <p class="ui-hint">{filter ? 'Ничего не найдено.' : `Для ${tts.lang === 'ru' ? 'русского' : 'английского'} пока пусто.`}</p>
     {/if}
   </section>
 </div>

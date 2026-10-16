@@ -15,7 +15,7 @@ const IMAGE_TYPES = /** @type {Record<string, string>} */ ({ png: 'image/png', j
  */
 export function registerBookRoutes(router, db) {
   const q = {
-    parts: db.prepare('SELECT id, title_ru AS titleRu, title_en AS titleEn, subtitle_ru AS subtitleRu FROM parts ORDER BY id'),
+    parts: db.prepare('SELECT id, title_ru AS titleRu, title_en AS titleEn, subtitle_ru AS subtitleRu, subtitle_en AS subtitleEn FROM parts ORDER BY id'),
     // `paragraphs`: how many — the audio reader's progress through the whole book.
     papers: db.prepare(
       `SELECT id, part_id AS partId, title_ru AS titleRu, title_en AS titleEn,
@@ -26,7 +26,9 @@ export function registerBookRoutes(router, db) {
       'SELECT paper_id AS paperId, num, title_ru AS titleRu, title_en AS titleEn FROM sections WHERE num > 0 ORDER BY paper_id, num',
     ),
     paper: db.prepare(
-      `SELECT p.id, p.title_ru AS titleRu, p.title_en AS titleEn, p.part_id AS partId, pt.title_ru AS partTitleRu
+      `SELECT p.id, p.title_ru AS titleRu, p.title_en AS titleEn, p.part_id AS partId, pt.title_ru AS partTitleRu, pt.title_en AS partTitleEn,
+              pt.subtitle_ru AS partIntroRu, pt.subtitle_en AS partIntroEn,
+              p.id > 0 AND p.id = (SELECT min(x.id) FROM papers x WHERE x.part_id = p.part_id AND x.id > 0) AS partStart
        FROM papers p JOIN parts pt ON pt.id = p.part_id WHERE p.id = ?`,
     ),
     paperSections: db.prepare(
@@ -40,6 +42,7 @@ export function registerBookRoutes(router, db) {
     sectionExists: db.prepare('SELECT 1 FROM sections WHERE paper_id = ? AND num = ?'),
     refExists: db.prepare('SELECT 1 FROM paragraphs WHERE ref = ?'),
     byPage: db.prepare('SELECT ref FROM paragraphs WHERE page_ref = ?'),
+    stemAliases: db.prepare("SELECT value FROM meta WHERE key = 'ru_stem_aliases'"),
   };
 
   /** @type {unknown} */
@@ -81,6 +84,10 @@ export function registerBookRoutes(router, db) {
       next: id < last ? id + 1 : null,
     };
   });
+
+  // The Russian stem merges (fleeting vowels: отец/отца) the search index uses: [long, short][] —
+  // the device's search without a network splits words exactly as the server's (shared/search/text.js).
+  router.on('GET', '/api/stem-aliases', () => JSON.parse(/** @type {{ value: string } | undefined} */ (q.stemAliases.get())?.value ?? '[]'));
 
   // Resolves "5", "5:1", "5:1.3" or a page reference "62.3" / "(62.3)" into an app path.
   router.on('GET', '/api/goto', ({ url }) => {

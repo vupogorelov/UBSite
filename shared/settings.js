@@ -4,16 +4,32 @@
 
 /**
  * @typedef {{
- *   theme: 'system' | 'light' | 'paper' | 'dark' | 'graphite',
+ *   theme: 'system' | 'paper' | 'graphite',
  *   fontFamily: 'serif' | 'sans' | 'roboto',
  *   fontSize: number,
+ *   chatFontSize: number,
+ *   kanbanFontSize: number,
+ *   taskListFontSize: number,
+ *   chatBg: string,
+ *   chatWallpaper: string,
+ *   chatBubble: string,
+ *   chatOwn: string,
+ *   chatFont: 'sans' | 'serif',
+ *   chatRadius: number,
  *   fontWeight: number,
  *   lineHeight: number,
  *   columnWidth: number,
+ *   textAlign: 'left' | 'justify',
+ *   hyphens: boolean,
+ *   flashTone: 'warm' | 'cool',
+ *   readLang: 'ru' | 'en',
  *   enMode: 'full' | 'collapsed' | 'hidden',
  *   textActions: 'top' | 'bottom' | 'side',
+ *   placeMode: 'separate' | 'shared',
  *   showRefs: boolean,
  *   showPageRefs: boolean,
+ *   altNames: boolean,
+ *   termPairs: boolean,
  *   showNotes: boolean,
  *   showRail: boolean,
  *   showResolved: boolean,
@@ -26,19 +42,27 @@
  *   colorBlue: string,
  *   colorPink: string,
  *   colorPurple: string,
+ *   phoneNav: string,
+ *   glassBars: boolean,
+ *   navLabels: boolean,
+ *   barsAutoHide: boolean,
+ *   navStyle: 'bar' | 'air',
  * }} Settings
  *
  * `when`: the setting only applies while another setting has one of the given values; otherwise
- * the form shows it disabled with `whenHint`.
- * @typedef {{ key: keyof Settings, label: string, hint?: string, when?: { key: keyof Settings, values: unknown[] }, whenHint?: string } & (
- *   | { type: 'choice', options: [string, string][], default: string }
+ * the form shows it disabled with `whenHint`. `hidden`: stored like the others, but changed elsewhere
+ * (not in the settings form).
+ * @typedef {{ key: keyof Settings, label: string, hint?: string, when?: { key: keyof Settings, values: unknown[] }, whenHint?: string, hidden?: boolean } & (
+ *   | { type: 'choice', options: [string, string][], default: string, swatches?: boolean }
  *   | { type: 'range', min: number, max: number, step: number, unit: string, default: number, valueLabels?: Record<number, string> }
  *   | { type: 'toggle', default: boolean }
  *   | { type: 'text', maxLength: number, swatch?: string, default: string }
  * )} SettingDef
  *
- * @typedef {{ title: string, scope: 'user' | 'workspace', items: SettingDef[] }} SettingGroup
+ * @typedef {{ title: string, scope: 'user' | 'workspace', section: string, icon: string, items: SettingDef[] }} SettingGroup
  * scope "user": personal for each member of a workspace; "workspace": shared by all members.
+ * The settings form has two levels: sections (`section`) listing their groups as rows with a summary
+ * of the current values, and a group's own page with its settings.
  */
 
 /** Highlight colors: id → settings key holding its workspace-specific name. */
@@ -53,18 +77,23 @@ export const NOTE_COLORS = /** @type {const} */ ([
 /** @type {SettingGroup[]} */
 export const SETTINGS_GROUPS = [
   {
-    title: 'Оформление',
+    title: 'Оформление', section: 'Чтение', icon: 'theme',
     scope: 'user',
     items: [
+      // Two modes, switched by the button in the header: light (Paper) and dark (Graphite);
+      // until the first switch — as on the device.
       {
-        key: 'theme', label: 'Тема', type: 'choice', default: 'system',
-        options: [['system', 'Системная'], ['light', 'Светлая'], ['paper', 'Бумага'], ['dark', 'Тёмная'], ['graphite', 'Графит']],
+        key: 'theme', label: 'Тема', type: 'choice', default: 'system', hidden: true,
+        options: [['system', 'Как на устройстве'], ['paper', 'Светлая'], ['graphite', 'Тёмная']],
       },
       {
         key: 'fontFamily', label: 'Шрифт', type: 'choice', default: 'serif',
         options: [['serif', 'С засечками'], ['sans', 'Geist'], ['roboto', 'Roboto']],
       },
-      { key: 'fontSize', label: 'Размер шрифта', type: 'range', min: 14, max: 26, step: 1, unit: 'px', default: 18 },
+      {
+        key: 'fontSize', label: 'Размер шрифта', type: 'range', min: 14, max: 26, step: 1, unit: 'px', default: 18,
+        hint: 'На телефоне и планшете — также сведением и разведением двух пальцев над текстом книги.',
+      },
       {
         key: 'fontWeight', label: 'Толщина шрифта', type: 'range', min: 300, max: 700, step: 100, unit: '', default: 400,
         valueLabels: { 300: 'Тонкий', 400: 'Обычный', 500: 'Средний', 600: 'Полужирный', 700: 'Жирный' },
@@ -73,15 +102,36 @@ export const SETTINGS_GROUPS = [
       },
       { key: 'lineHeight', label: 'Межстрочный интервал', type: 'range', min: 1.3, max: 2.1, step: 0.1, unit: '', default: 1.6 },
       { key: 'columnWidth', label: 'Ширина колонки', type: 'range', min: 560, max: 1200, step: 20, unit: 'px', default: 820 },
+      {
+        key: 'textAlign', label: 'Выравнивание текста', type: 'choice', default: 'left',
+        hint: '«По ширине» — строки ровные с обоих краёв. На узком экране лучше вместе с переносами: иначе между словами появляются широкие промежутки.',
+        options: [['left', 'По левому краю'], ['justify', 'По ширине']],
+      },
+      {
+        key: 'hyphens', label: 'Переносы слов', type: 'toggle', default: false,
+        hint: 'Длинные слова переносятся по слогам — русские и английские по правилам своего языка. Меняется только вид: копирование, заметки и поиск работают как прежде.',
+      },
+      {
+        key: 'flashTone', label: 'Подсветка найденного абзаца', type: 'choice', default: 'warm',
+        hint: 'Абзац, к которому вы перешли (из поиска, заметки, ссылки), на мгновение подсвечивается и плавно гаснет.',
+        options: [['warm', 'Тёплая'], ['cool', 'Холодная']],
+      },
     ],
   },
   {
-    title: 'Текст',
+    title: 'Текст', section: 'Чтение', icon: 'book-open',
     scope: 'user',
     items: [
       {
+        key: 'readLang', label: 'Язык чтения', type: 'choice', default: 'ru',
+        hint: 'English — оригинал (издание Uversa Press) без сверочного блока; слой перевода при этом не показывается. Интерфейс остаётся русским.',
+        options: [['ru', 'Русский'], ['en', 'English']],
+      },
+      {
         key: 'enMode', label: 'Английский оригинал', type: 'choice', default: 'full',
         hint: 'В свёрнутом виде видна одна строка; клик по ней раскрывает абзац.',
+        when: { key: 'readLang', values: ['ru'] },
+        whenHint: 'При чтении по-английски сверочного блока нет.',
         options: [['full', 'Полностью'], ['collapsed', 'Свёрнуто'], ['hidden', 'Скрыт']],
       },
       {
@@ -89,12 +139,25 @@ export const SETTINGS_GROUPS = [
         hint: 'Где показывать «Комментарий · Обсудить · Перевести · Ссылка…» при выделении. Системное меню телефона появляется рядом с выделением, поэтому наше удобнее у края экрана. «Сбоку» — колонка у того края, где нет выделенного слова.',
         options: [['top', 'Сверху'], ['bottom', 'Снизу'], ['side', 'Сбоку (авто)']],
       },
+      {
+        key: 'placeMode', label: 'Место в книге: чтение и озвучка', type: 'choice', default: 'separate',
+        hint: '«Раздельно» — у чтения глазами и у озвучки своё место и свой прогресс. «Общее» — одно место на оба режима: где остановились глазами, оттуда продолжит голос, и наоборот. Место переходит между вашими устройствами.',
+        options: [['separate', 'Раздельно'], ['shared', 'Общее']],
+      },
       { key: 'showRefs', label: 'Номера абзацев (5:1.3)', type: 'toggle', default: true },
       { key: 'showPageRefs', label: 'Номера страниц (62.3)', type: 'toggle', default: true },
+      {
+        key: 'termPairs', label: 'Пары терминов при наведении', type: 'toggle', default: true,
+        hint: 'На компьютере: наведите мышь на имя или термин из глоссария — он и его пара в другом языке подсветятся оранжевым, другие упоминания в абзаце — голубым. Если английский скрыт или свёрнут, пара появится подсказкой.',
+      },
+      {
+        key: 'altNames', label: 'Названия по смыслу', type: 'toggle', default: false,
+        hint: 'Салвингтон → Спасоград, Дивинингтон → Божеград… — как в переводе Общества Урантии Нью-Йорка. Отмечены пунктиром, под пальцем или мышью — название в переводе. Список — ниже, «Словарь названий».',
+      },
     ],
   },
   {
-    title: 'Заметки',
+    title: 'Заметки', section: 'Заметки и перевод', icon: 'notes',
     scope: 'user',
     items: [
       { key: 'showNotes', label: 'Закладки и комментарии в тексте', type: 'toggle', default: true },
@@ -106,7 +169,7 @@ export const SETTINGS_GROUPS = [
     ],
   },
   {
-    title: 'Перевод',
+    title: 'Перевод', section: 'Заметки и перевод', icon: 'translate',
     scope: 'user',
     items: [
       {
@@ -129,7 +192,66 @@ export const SETTINGS_GROUPS = [
     ],
   },
   {
-    title: 'Цвета закладок',
+    // every conversation alike: the chat list's chats, a paragraph's thread, comments on notes, proposals.
+    // `swatches`: a choice of colours (web: round swatches; each theme has its own shade of a colour).
+    title: 'Чаты', section: 'Интерфейс', icon: 'discuss',
+    scope: 'user',
+    items: [
+      {
+        key: 'chatBg', label: 'Фон', type: 'choice', default: 'default', swatches: true,
+        options: [['default', 'Как в теме'], ['sky', 'Небо'], ['ice', 'Лёд'], ['mint', 'Мята'], ['sage', 'Шалфей'], ['lavender', 'Лаванда'], ['lilac', 'Сирень'], ['rose', 'Роза'], ['peach', 'Персик'], ['sand', 'Песок'], ['pearl', 'Жемчуг'], ['stone', 'Камень']],
+      },
+      {
+        key: 'chatWallpaper', label: 'Узор на фоне', type: 'choice', default: 'none', swatches: true,
+        options: [['none', 'Без узора'], ['dots', 'Точки'], ['grid', 'Сетка'], ['diagonal', 'Диагональ'], ['cross', 'Ромбы'], ['waves', 'Волны'], ['rings', 'Кольца']],
+      },
+      {
+        key: 'chatBubble', label: 'Сообщения собеседников', type: 'choice', default: 'default', swatches: true,
+        options: [['default', 'Как в теме'], ['white', 'Белые'], ['cream', 'Сливки'], ['mist', 'Туман'], ['mint', 'Мятные'], ['rose', 'Розовые'], ['lilac', 'Сиреневые'], ['sand', 'Песочные']],
+      },
+      {
+        key: 'chatOwn', label: 'Мои сообщения', type: 'choice', default: 'default', swatches: true,
+        options: [['default', 'Как в теме'], ['blue', 'Голубые'], ['sky', 'Небесные'], ['green', 'Зелёные'], ['mint', 'Мятные'], ['lavender', 'Лавандовые'], ['rose', 'Розовые'], ['peach', 'Персиковые'], ['yellow', 'Жёлтые']],
+      },
+      {
+        key: 'chatFontSize', label: 'Размер шрифта сообщений', type: 'range', min: 12, max: 24, step: 1, unit: 'px', default: 15,
+        hint: 'Во всех чатах одинаково; абзацы книги в них — чуть крупнее. На телефоне и планшете — также двумя пальцами в любом чате.',
+      },
+      {
+        key: 'chatFont', label: 'Шрифт сообщений', type: 'choice', default: 'sans',
+        options: [['sans', 'Как в интерфейсе'], ['serif', 'Как в книге']],
+      },
+      { key: 'chatRadius', label: 'Скругление сообщений', type: 'range', min: 4, max: 22, step: 1, unit: 'px', default: 14 },
+    ],
+  },
+  {
+    // its page is an editor of its own (web: NavEditor), not the schema form
+    title: 'Панели', section: 'Интерфейс', icon: 'dots',
+    scope: 'user',
+    items: [
+      { key: 'phoneNav', label: 'Разделы нижней панели', type: 'text', maxLength: 80, default: 'search,notes,listen,chat', hidden: true },
+      // the tasks' kanban: its cards' size, changed by pinching two fingers over it (TasksPage)
+      { key: 'kanbanFontSize', label: 'Размер карточек канбана', type: 'range', min: 10, max: 20, step: 1, unit: 'px', default: 14, hidden: true },
+      // …and of the tasks' list
+      { key: 'taskListFontSize', label: 'Размер задач в списке', type: 'range', min: 11, max: 22, step: 1, unit: 'px', default: 15, hidden: true },
+      {
+        key: 'navStyle', label: 'Вид нижней панели', type: 'choice', default: 'bar',
+        hint: 'Air glass — панель парит над текстом, со скруглёнными краями; линия прогресса чтения встроена в неё сверху. Плеер — часть той же формы, его настройки раскрывают её вверх.',
+        options: [['bar', 'Обычная'], ['air', 'Air glass']],
+      },
+      {
+        key: 'glassBars', label: 'Стеклянные панели', type: 'toggle', default: false,
+        hint: 'Нижняя панель и плеер полупрозрачны: текст книги размыто просвечивает сквозь них. Шапка остаётся сплошной — одного цвета с системной строкой.',
+      },
+      { key: 'navLabels', label: 'Подписи разделов в нижней панели', type: 'toggle', default: true, hint: 'Без подписей панель ниже, остаются одни значки.' },
+      {
+        key: 'barsAutoHide', label: 'Прятать панели при прокрутке', type: 'toggle', default: true,
+        hint: 'Листаете вниз — шапка и нижняя панель уходят, вверх или касание текста — возвращаются. Выключено — панели всегда на месте.',
+      },
+    ],
+  },
+  {
+    title: 'Цвета закладок', section: 'Пространство', icon: 'bookmark',
     scope: 'workspace',
     items: [
       { key: 'colorYellow', label: 'Жёлтый', type: 'text', maxLength: 40, swatch: 'yellow', default: 'Важно' },
@@ -159,7 +281,11 @@ export function sanitizeSettings(input, scope) {
   const out = {};
   if (!input || typeof input !== 'object') return out;
   const src = { .../** @type {Record<string, unknown>} */ (input) };
-  if (src.theme === 'sepia') src.theme = 'paper'; // the Sepia theme was replaced by Paper
+  // Sepia was replaced by Paper; then Light and Dark were dropped for Paper and Graphite.
+  if (src.theme === 'sepia' || src.theme === 'light') src.theme = 'paper';
+  if (src.theme === 'dark') src.theme = 'graphite';
+  // "Air glass 2" became the one Air glass.
+  if (src.navStyle === 'air2') src.navStyle = 'air';
   // One "trMode" switch was split into trMarks + trMine (trText is new).
   if (typeof src.trMode === 'string' && src.trMarks === undefined) {
     src.trMarks = src.trMode !== 'off';

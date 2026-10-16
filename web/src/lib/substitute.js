@@ -8,7 +8,7 @@
  * `original` (plain text) is shown in a hover tooltip (.tr-sub:hover::after).
  * `kind` styles the fragment: "mine" (the reader's own variant), "approved" (new edition),
  * "review" (the original stays visible, struck out, and the variant follows it).
- * @typedef {{ id: number, start: number, end: number, text: string, original?: string, kind?: 'mine' | 'approved' | 'review' }} Substitution
+ * @typedef {{ id: number, start: number, end: number, text: string, original?: string, kind?: 'mine' | 'approved' | 'review' | 'alias' }} Substitution
  */
 
 const escapeAttr = (/** @type {string} */ s) => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');

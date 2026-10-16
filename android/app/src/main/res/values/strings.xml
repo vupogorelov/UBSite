@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Urantia Papers</string>
+    <string name="server_title">Адрес сайта</string>
+    <string name="server_short">Адрес сайта</string>
+    <string name="server_hint">https://upexplorer.ddns.net</string>
+    <string name="open">Открыть</string>
+    <string name="cancel">Отмена</string>
+    <string name="channel">Чтение вслух</string>
+    <string name="play">Слушать</string>
+    <string name="pause">Пауза</string>
+    <string name="next">Дальше</string>
+    <string name="prev">Назад</string>
+    <string name="close">Закрыть</string>
+</resources>

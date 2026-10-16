@@ -1,5 +1,5 @@
 <script>
-  import { createTask, tasks, loadTasks, today } from '../lib/tasks.svelte.js';
+  import { createTask, loadTasks } from '../lib/tasks.svelte.js';
   import { showToast } from '../lib/toast.svelte.js';
   import Icon from './Icon.svelte';
 
@@ -11,20 +11,17 @@
 
   let open = $state(false);
   let title = $state('');
-  let due = $state('');
-  let listId = $state('');
 
   function toggle() {
     open = !open;
     if (open) {
       title = suggest;
-      due = '';
       void loadTasks();
     }
   }
   async function add() {
     if (!title.trim()) return;
-    const t = await createTask({ title: title.trim(), due: due || null, listId: listId ? Number(listId) : null, ...link() });
+    const t = await createTask({ title: title.trim(), ...link() });
     if (t) {
       open = false;
       showToast('Задача добавлена — она в «Моих задачах»');
@@ -40,16 +37,7 @@
   {#if open}
     <form class="menu add-task-menu" onsubmit={(e) => (e.preventDefault(), add())}>
       <!-- svelte-ignore a11y_autofocus -->
-      <input class="text-input" bind:value={title} autofocus aria-label="Задача" placeholder="Что сделать" />
-      <div class="add-task-row">
-        <input type="date" class="text-input" bind:value={due} aria-label="Срок" min={today()} />
-        {#if tasks.lists.length}
-          <select class="text-input" bind:value={listId} aria-label="Список">
-            <option value="">Без списка</option>
-            {#each tasks.lists as l (l.id)}<option value={String(l.id)}>{l.emoji ? `${l.emoji} ` : ''}{l.title}</option>{/each}
-          </select>
-        {/if}
-      </div>
+      <input class="text-input" bind:value={title} autofocus aria-label="Задача" placeholder="Что сделать (можно с #меткой)" />
       <div class="row-end">
         <button type="button" class="btn" onclick={() => (open = false)}>Отмена</button>
         <button class="btn primary" disabled={!title.trim()}>Добавить</button>

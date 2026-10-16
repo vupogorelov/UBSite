@@ -1,0 +1,14 @@
+# Text is kept with LF, in git and in the working folder alike (the project is written with LF;
+# Windows' autocrlf would otherwise turn every file into a change).
+* text=auto eol=lf
+# binaries
+*.png binary
+*.webp binary
+*.jpg binary
+*.ico binary
+*.woff2 binary
+*.mp3 binary
+*.apk binary
+*.jks binary
+*.jar binary
+*.gz binary

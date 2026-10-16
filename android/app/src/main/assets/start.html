@@ -1,0 +1,39 @@
+<!doctype html>
+<!-- Shown when the site does not open: the address can be corrected here (it may have moved). -->
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root { --bg: #f0eee6; --fg: #141413; --muted: #6b6a64; --line: #d8d5ca; --accent: #c96442; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #10141d; --fg: #ecebe6; --muted: #9a9ca3; --line: #2a303c; } }
+    body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+    main { max-width: 420px; margin: 0 auto; padding: 48px 20px; }
+    h1 { font-size: 22px; font-weight: 600; margin: 0 0 8px; }
+    p { color: var(--muted); margin: 0 0 24px; }
+    label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+    input { box-sizing: border-box; width: 100%; font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: inherit; }
+    .row { display: flex; gap: 10px; margin-top: 16px; }
+    button { flex: 1; font: inherit; padding: 12px; border-radius: 10px; border: 1px solid var(--line); background: transparent; color: inherit; }
+    button.main { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Сайт не открылся</h1>
+    <p>Нет связи или сайт переехал. Проверьте интернет или укажите новый адрес.</p>
+    <label for="url">Адрес сайта</label>
+    <input id="url" type="url" inputmode="url" autocomplete="off" />
+    <div class="row">
+      <button id="retry">Повторить</button>
+      <button id="open" class="main">Открыть</button>
+    </div>
+  </main>
+  <script>
+    const field = document.getElementById('url');
+    field.value = window.UBNative ? UBNative.server() : '';
+    document.getElementById('open').onclick = () => UBNative.setServer(field.value);
+    document.getElementById('retry').onclick = () => UBNative.setServer(UBNative.server());
+  </script>
+</body>
+</html>

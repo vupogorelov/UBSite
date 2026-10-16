@@ -3,6 +3,7 @@
 import { api } from './api.js';
 import { showToast } from './toast.svelte.js';
 import { refreshCounts } from './notify.svelte.js';
+import { session } from './session.svelte.js';
 
 /** @typedef {import('./api.js').Proposal} Proposal */
 /** @typedef {{ ref: string, start: number, end: number, original: string }} Fragment */
@@ -11,6 +12,7 @@ export const tr = $state({
   /** @type {number | null} */ paperId: null,
   /** @type {Proposal[]} */ proposals: [],
   /** Public messages per paragraph ref. @type {Record<string, number>} */ messages: {},
+  /** A guest's view (not signed in): the published variants per paragraph ref — numbers, not the variants. @type {Record<string, number>} */ guestProposals: {},
   /** @type {import('./api.js').VotingConfig | null} */ config: null,
   /** Incremented on every change, so lists elsewhere know to reload. */
   version: 0,
@@ -40,6 +42,13 @@ export async function toggleFollow() {
 
 /** @param {number} paperId */
 export async function loadPublicPaper(paperId) {
+  if (!session.user) {
+    // a guest (a shared link): the numbers only
+    const g = await api.guestPaper(paperId);
+    Object.assign(tr, { paperId, proposals: [], messages: g.messages, guestProposals: g.proposals });
+    return;
+  }
+  tr.guestProposals = {};
   const r = await api.publicPaper(paperId);
   tr.paperId = paperId;
   tr.proposals = r.proposals;

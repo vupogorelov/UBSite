@@ -115,6 +115,7 @@ const MIME = /** @type {Record<string, string>} */ ({
   '.mp3': 'audio/mpeg',
   '.webp': 'image/webp',
   '.jpg': 'image/jpeg',
+  '.apk': 'application/vnd.android.package-archive',
 });
 
 /**
@@ -123,30 +124,38 @@ const MIME = /** @type {Record<string, string>} */ ({
  */
 export function createStatic(dir) {
   const root = resolve(dir);
-  /** @param {string} file */
-  const fileSize = (file) => {
+  /** The file's size and an ETag from its size and time of change (-1: no such file). @param {string} file */
+  const fileInfo = (file) => {
     try {
       const st = statSync(file);
-      return st.isFile() ? st.size : -1;
+      return st.isFile() ? { size: st.size, etag: `"${st.size.toString(36)}-${Math.floor(st.mtimeMs).toString(36)}"` } : { size: -1, etag: '' };
     } catch {
-      return -1;
+      return { size: -1, etag: '' };
     }
   };
   /** @param {Req} req @param {Res} res @param {string} pathname */
   return (req, res, pathname) => {
     let file = join(root, decodeURIComponent(pathname));
     if (!file.startsWith(root + sep) && file !== root) throw new HttpError(403, 'Forbidden');
-    let size = fileSize(file);
-    if (size < 0) {
+    let info = fileInfo(file);
+    if (info.size < 0) {
       file = join(root, 'index.html');
-      size = fileSize(file);
-      if (size < 0) throw new HttpError(404, 'web/dist not found: run "npm run build" or use "npm run dev"');
+      info = fileInfo(file);
+      if (info.size < 0) throw new HttpError(404, 'web/dist not found: run "npm run build" or use "npm run dev"');
     }
     const immutable = pathname.startsWith('/assets/'); // Vite puts content-hashed files here
+    const cacheControl = immutable ? 'public, max-age=31536000, immutable' : 'no-cache';
+    // (the browser checks sw.js, index.html… on every visit: unchanged ones are answered with 304)
+    if (req.headers['if-none-match'] === info.etag) {
+      res.writeHead(304, { ETag: info.etag, 'Cache-Control': cacheControl }).end();
+      return;
+    }
+    const size = info.size;
     res.writeHead(200, {
       'Content-Type': MIME[extname(file)] ?? 'application/octet-stream',
       'Content-Length': size,
-      'Cache-Control': immutable ? 'public, max-age=31536000, immutable' : 'no-cache',
+      'Cache-Control': cacheControl,
+      ETag: info.etag,
     });
     if (req.method === 'HEAD') res.end();
     else createReadStream(file).pipe(res);

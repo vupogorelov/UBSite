@@ -15,21 +15,29 @@
    * }}
    */
   let { x, y, below, original, items, fragment, onclose } = $props();
+  /** «Предложить свой вариант»: the fragment is taken before closing (closing drops the props). */
+  function propose() {
+    const f = fragment;
+    onclose();
+    openThread(f.ref, { compose: f });
+  }
 </script>
 
+<!-- (phone: the variants are a sheet from the bottom, over a dimmed page) -->
+<button class="sheet-scrim tr-pop-scrim" aria-label="Закрыть" onclick={onclose}></button>
 <div class="tr-popover" class:below style:left="{x}px" style:top="{y}px" role="dialog" aria-label="Варианты перевода">
   <div class="tr-popover-head">
-    <span class="box-title">{original ? 'Исходный текст' : 'Варианты перевода'}</span>
-    <button class="icon-btn small-btn" aria-label="Закрыть" onclick={onclose}><Icon name="close" /></button>
+    <b>{original ? 'Исходный текст' : 'Варианты перевода'}</b>
+    <button class="ui-round plain small" aria-label="Закрыть" onclick={onclose}><Icon name="close" size={18} /></button>
   </div>
   {#if original}
     <div class="tr-original-big">{fragment.original}</div>
-    <div class="box-title">Варианты</div>
+    <div class="ui-label">Варианты</div>
   {:else}
     <div class="tr-original">Оригинал: «{fragment.original}»</div>
   {/if}
   {#each items as p (p.id)}
     <ProposalCard {p} compact />
   {/each}
-  <button class="btn wide" onclick={() => (onclose(), openThread(fragment.ref, { compose: fragment }))}>Предложить свой вариант</button>
+  <button class="ui-btn tr-propose" onclick={propose}><Icon name="edit" size={16} />Предложить свой вариант</button>
 </div>

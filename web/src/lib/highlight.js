@@ -80,3 +80,48 @@ export function setHighlights(name, root, map, priority = 0) {
 export function clearHighlights(name) {
   if (supported) CSS.highlights.delete(name);
 }
+
+// Chrome before ~120 (the Android app's WebView on some phones is 114) does not resolve var() inside
+// ::highlight(): the colors come out transparent. There the rules are copied with their values resolved.
+const oldChrome = Number(/Chrome\/(\d+)/.exec(typeof navigator === 'undefined' ? '' : navigator.userAgent)?.[1] ?? 999) < 120;
+
+/** Writes the ::highlight() rules with plain colors (old Chrome only); call after the theme changed. */
+export function resolveHighlightColors() {
+  if (!oldChrome || !supported) return;
+  const probe = document.createElement('span');
+  probe.style.display = 'none';
+  document.body.append(probe);
+  let css = '';
+  for (const sheet of document.styleSheets) {
+    /** @type {CSSRuleList} */
+    let rules;
+    try {
+      rules = sheet.cssRules;
+    } catch {
+      continue; // (another origin's sheet: fonts)
+    }
+    for (const rule of rules) {
+      if (!(rule instanceof CSSStyleRule) || !rule.selectorText.includes('::highlight(')) continue;
+      let decl = '';
+      // (the rule as written: a shorthand with var() — text-decoration: underline dotted var(--accent) —
+      // is not visible in its longhands)
+      for (const part of rule.style.cssText.split(';')) {
+        const colon = part.indexOf(':');
+        const prop = part.slice(0, colon).trim();
+        const value = part.slice(colon + 1).trim();
+        if (colon < 0 || !value.includes('var(')) continue;
+        probe.style.setProperty(prop, value);
+        decl += `${prop}:${getComputedStyle(probe).getPropertyValue(prop)};`;
+      }
+      if (decl) css += `${rule.selectorText}{${decl}}\n`;
+    }
+  }
+  probe.remove();
+  let style = document.getElementById('hl-resolved');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'hl-resolved';
+    document.head.append(style);
+  }
+  style.textContent = css;
+}

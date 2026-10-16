@@ -9,10 +9,14 @@
 
 const LIMIT = 50;
 
-/** Threads the user follows, with the moment from which their news count. Needs :user. */
+/**
+ * Threads the user follows, with the moment from which their news count. Needs :user.
+ * A note's conversation ("note:7") is followed by the note's author and by those who wrote in it.
+ */
 const FOLLOWED = `
   taken(ref, since) AS (
     SELECT ref, created_at FROM public_messages WHERE author_id = :user AND kind = 'message'
+    UNION ALL SELECT 'note:' || id, created_at FROM annotations WHERE author_id = :user
     UNION ALL SELECT ref, created_at FROM proposals WHERE author_id = :user
     UNION ALL SELECT p.ref, v.created_at FROM votes v JOIN proposals p ON p.id = v.proposal_id WHERE v.user_id = :user
     UNION ALL SELECT ref, created_at FROM thread_follows WHERE user_id = :user AND follow = 1
@@ -23,14 +27,19 @@ const FOLLOWED = `
     GROUP BY ref
   )`;
 /**
- * News for the user: others' messages and events in followed paragraph threads, and messages
- * anywhere that @mention the user (channels and workspace chats have their own unread counters).
+ * News for the user: others' messages and events in followed paragraph threads and note
+ * conversations, and messages anywhere that @mention the user (channels and workspace chats have
+ * their own unread counters). Members-only conversations count only while the user is a member.
  */
 const NEWS = `
   FROM public_messages m LEFT JOIN followed f ON f.ref = m.ref
-  WHERE ((f.ref IS NOT NULL AND m.created_at >= f.since AND m.ref NOT LIKE 'chan:%' AND m.ref NOT LIKE 'ws:%')
+  WHERE ((f.ref IS NOT NULL AND m.created_at >= f.since AND m.ref NOT LIKE 'chan:%' AND m.ref NOT LIKE 'ws:%' AND m.ref NOT LIKE 'dm:%')
          OR m.id IN (SELECT message_id FROM mentions WHERE user_id = :user))
-    AND (m.author_id IS NULL OR m.author_id != :user) AND m.hidden_at IS NULL`;
+    AND (m.author_id IS NULL OR m.author_id != :user) AND m.hidden_at IS NULL
+    AND (m.ref NOT LIKE 'note:%' OR EXISTS (SELECT 1 FROM annotations a JOIN workspace_members wm
+           ON wm.workspace_id = a.workspace_id AND wm.user_id = :user WHERE m.ref = 'note:' || a.id))
+    AND (m.ref NOT LIKE 'ws:%' OR EXISTS (SELECT 1 FROM workspace_members wm
+           WHERE wm.user_id = :user AND m.ref = 'ws:' || wm.workspace_id))`;
 
 /**
  * @param {DatabaseSync} db
@@ -45,12 +54,18 @@ export function createNotifications(db, tr) {
              p.original, v.text, m.id > :seen AS unread,
              EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND user_id = :user) AS mention,
              CASE WHEN m.ref LIKE 'chan:%' THEN (SELECT '# ' || title FROM channels WHERE id = CAST(substr(m.ref, 6) AS INTEGER))
-                  WHEN m.ref LIKE 'ws:%' THEN (SELECT name FROM workspaces WHERE id = CAST(substr(m.ref, 4) AS INTEGER)) END AS chatTitle
+                  WHEN m.ref LIKE 'ws:%' THEN (SELECT name FROM workspaces WHERE id = CAST(substr(m.ref, 4) AS INTEGER))
+                  WHEN m.ref LIKE 'note:%' THEN (SELECT 'Заметка · ' || a.ref FROM annotations a WHERE a.id = CAST(substr(m.ref, 6) AS INTEGER)) END AS chatTitle,
+             na.ref AS noteRef, na.workspace_id AS noteWorkspace, nw.name AS noteWorkspaceName, nw.kind AS noteWorkspaceKind,
+             mm.id AS markedId, mm.body AS markedBody
       ${NEWS.replace('FROM public_messages m', `FROM public_messages m
         LEFT JOIN users u ON u.id = m.author_id
         LEFT JOIN proposals p ON p.id = m.proposal_id
         LEFT JOIN proposal_versions v ON v.proposal_id = p.id AND v.version = p.version
-        LEFT JOIN paragraphs pa ON pa.ref = m.ref
+        LEFT JOIN annotations na ON m.ref LIKE 'note:%' AND na.id = CAST(substr(m.ref, 6) AS INTEGER)
+        LEFT JOIN workspaces nw ON nw.id = na.workspace_id
+        LEFT JOIN public_messages mm ON m.ref LIKE 'mark:%' AND mm.id = m.reply_to
+        LEFT JOIN paragraphs pa ON pa.ref = coalesce(na.ref, m.ref)
         LEFT JOIN papers pp ON pp.id = pa.paper_id`)}
       ORDER BY m.id DESC LIMIT ${LIMIT}`),
     unread: db.prepare(`WITH ${FOLLOWED} SELECT count(*) AS n ${NEWS} AND m.id > :seen`),

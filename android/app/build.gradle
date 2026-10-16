@@ -1,0 +1,46 @@
+plugins {
+    id 'com.android.application'
+}
+
+// The signing key (made by build.ps1 on the first build).
+def keyProps = new Properties()
+def keyFile = rootProject.file('keystore.properties')
+if (keyFile.exists()) keyFile.withInputStream { keyProps.load(it) }
+
+android {
+    namespace = 'ubsite.app'
+    compileSdk = 36
+
+    defaultConfig {
+        applicationId = 'ubsite.app'
+        minSdk = 26
+        targetSdk = 36
+        versionCode = 6
+        versionName = '1.5'
+    }
+
+    signingConfigs {
+        release {
+            if (keyFile.exists()) {
+                storeFile = rootProject.file('keystore.jks')
+                storePassword = keyProps['password']
+                keyAlias = 'ubsite'
+                keyPassword = keyProps['password']
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled = true
+            shrinkResources = true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig = signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+}

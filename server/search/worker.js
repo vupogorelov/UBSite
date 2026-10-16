@@ -5,7 +5,7 @@ import { parentPort } from 'node:worker_threads';
 import { openDb } from '../db.js';
 import { createSearch } from './engine.js';
 import { createTagStore } from '../tags.js';
-import { QueryError } from './query.js';
+import { QueryError } from '../../shared/search/query.js';
 
 const port = /** @type {import('node:worker_threads').MessagePort} */ (parentPort);
 const db = openDb();

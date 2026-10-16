@@ -1,7 +1,9 @@
 <script>
-  import { tasks, patchTask, deleteTask, addSubtask, patchSubtask, deleteSubtask, placeLabel } from '../lib/tasks.svelte.js';
+  import { patchTask, taskTags, tagCounts, setTaskTags, deleteTask, addSubtask, patchSubtask, deleteSubtask, placeLabel, openTaskMessage } from '../lib/tasks.svelte.js';
   import { navigate } from '../lib/router.svelte.js';
   import Icon from './Icon.svelte';
+  import TagInput from './TagInput.svelte';
+  import { titleTags } from '../../../shared/tasktags.js';
 
   /** Full editing of one task. @type {{ task: import('../lib/api.js').Task, onclose?: () => void }} */
   let { task, onclose } = $props();
@@ -46,21 +48,15 @@
 <div class="task-editor">
   <input class="text-input task-editor-title" value={task.title} aria-label="Задача"
     onchange={(e) => value(e).trim() && save({ title: value(e).trim() })} />
+  <!-- All the task's tags: the title's #words and the added ones; a removed #word leaves the title too -->
+  <div class="task-tags">
+    <TagInput value={taskTags(task)} fromTitle={titleTags(task.title)} source={tagCounts()} placeholder="Добавить метку"
+      onchange={(names) => setTaskTags(task, names)} />
+  </div>
   <textarea class="text-area" rows="3" placeholder="Описание, мысли, план…" value={task.notes ?? ''}
     onchange={(e) => save({ notes: value(e).trim() || null })}></textarea>
 
   <div class="task-fields">
-    <label>
-      <span>Срок</span>
-      <input type="date" class="text-input" value={task.due ?? ''} onchange={(e) => save({ due: value(e) || null })} />
-    </label>
-    <label>
-      <span>Список</span>
-      <select class="text-input" value={task.listId ?? ''} onchange={(e) => save({ listId: value(e) ? Number(value(e)) : null })}>
-        <option value="">Без списка</option>
-        {#each tasks.lists as l (l.id)}<option value={l.id}>{l.emoji ? `${l.emoji} ` : ''}{l.title}</option>{/each}
-      </select>
-    </label>
     <label>
       <span>Место в книге</span>
       <span class="task-place-input">
@@ -71,22 +67,24 @@
       </span>
       {#if placeError}<span class="field-error">{placeError}</span>{/if}
     </label>
-    <label>
-      <span>Метки</span>
-      <input class="text-input" value={task.tags.map((t) => '#' + t).join(' ')} placeholder="#чтение #доклад"
-        onchange={(e) => save({ tags: value(e).split(/[\s,]+/).filter(Boolean) })} />
-    </label>
+    {#if task.messageChat}
+      <div class="task-from-msg">
+        <span>Из сообщения</span>
+        <button class="link-btn" onclick={() => openTaskMessage(task)}><Icon name="discuss" size={14} />{task.messageChatTitle ?? 'сообщение'}</button>
+      </div>
+    {/if}
   </div>
 
-  <div class="segmented small-seg" role="radiogroup" aria-label="Статус">
+  <div class="ui-label">Статус</div>
+  <div class="ui-chips" role="radiogroup" aria-label="Статус">
     {#each STATUS as [v, label] (v)}
-      <button role="radio" aria-checked={task.status === v} class:active={task.status === v} onclick={() => save({ status: v })}>{label}</button>
+      <button class="ui-chip" role="radio" aria-checked={task.status === v} class:on={task.status === v} onclick={() => save({ status: v })}>{label}</button>
     {/each}
   </div>
 
-  <label class="toggle">
-    <input type="checkbox" checked={task.important} onchange={(e) => save({ important: e.currentTarget.checked })} />
-    <span>Важная</span>
+  <label class="ui-option ui-switch-row">
+    <span><b>Важная</b><span class="muted small">Красный кружок в списке; фильтр «звёздочка»</span></span>
+    <input type="checkbox" class="ui-switch" checked={task.important} onchange={(e) => save({ important: e.currentTarget.checked })} />
   </label>
 
   <div class="subtasks">
@@ -104,10 +102,10 @@
     </form>
   </div>
 
-  <div class="row-end">
-    <button class="btn" class:danger-text={confirmDelete} onblur={() => (confirmDelete = false)} onclick={remove}>
-      {confirmDelete ? 'Точно удалить?' : 'Удалить задачу'}
+  <div class="task-editor-actions">
+    <button class="ui-btn" class:danger-text={confirmDelete} onblur={() => (confirmDelete = false)} onclick={remove}>
+      <Icon name="trash" size={18} />{confirmDelete ? 'Точно удалить?' : 'Удалить'}
     </button>
-    {#if onclose}<button class="btn primary" onclick={onclose}>Готово</button>{/if}
+    {#if onclose}<button class="ui-btn primary" onclick={onclose}>Готово</button>{/if}
   </div>
 </div>

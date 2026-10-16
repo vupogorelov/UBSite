@@ -3,9 +3,10 @@
   import Icon from './Icon.svelte';
 
   /**
-   * A chat's round avatar (§ paragraph, # channel, a letter for a workspace) with a small badge at
-   * its bottom right: who can read the chat — globe (everyone), two people (members), lock (private).
-   * @type {{ chat: { kind: string, title: string, members?: number } | null }}
+   * A chat's round avatar (§ paragraph, # channel, a letter for a workspace) with small badges:
+   * bottom right shows who can read it (a broadcast channel is marked by its title, not here). The Book's voice channel
+   * keeps the open book as its main mark.
+   * @type {{ chat: { kind: string, title: string, members?: number, voice?: boolean } | null }}
    */
   let { chat } = $props();
 
@@ -13,7 +14,7 @@
   const vis = $derived(chat ? visibility(chat) : null);
 </script>
 
-<span class="tg-chat-avatar" data-kind={chat?.kind}>
-  {text}
+<span class="tg-chat-avatar" data-kind={chat?.voice || chat?.kind === 'dm' ? 'voice' : chat?.kind}>
+  {#if chat?.voice || chat?.kind === 'dm'}<Icon name="book-open" size={20} />{:else}{text}{/if}
   {#if vis}<span class="tg-vis-badge" title={vis.full} role="img" aria-label={vis.full}><Icon name={vis.icon} size={11} /></span>{/if}
 </span>

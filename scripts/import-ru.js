@@ -105,12 +105,15 @@ transaction(db, () => {
     }
     db.exec('UPDATE users SET notif_seen_id = 0');
   }
+  // titles are plain text: the source's line breaks in them become ". " (after a dash — a space)
+  /** @param {string} t */
+  const plainTitle = (t) => t.replace(/\s*([–—])\s*<br\s*\/?>\s*/g, ' $1 ').replace(/\s*<br\s*\/?>\s*/g, '. ');
   const updPaper = db.prepare('UPDATE papers SET title_ru = ? WHERE id = ?');
-  for (const [id, title] of ru.papers) updPaper.run(title, id);
+  for (const [id, title] of ru.papers) updPaper.run(plainTitle(title), id);
   const updSection = db.prepare('UPDATE sections SET title_ru = ? WHERE paper_id = ? AND num = ?');
   for (const s of sections) {
     const title = ru.titles.get(SECTION_IN_FILE[`${s.paper_id}:${s.num}`] ?? `${s.paper_id}:${s.num}`);
-    if (title) updSection.run(title, s.paper_id, s.num);
+    if (title) updSection.run(plainTitle(title), s.paper_id, s.num);
   }
 });
 console.log('\nRussian text replaced. Rebuilding the search index…');

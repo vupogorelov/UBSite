@@ -7,6 +7,7 @@
   import { ui } from '../lib/ui.svelte.js';
   import { notify } from '../lib/notify.svelte.js';
   import GlossaryPanel from './GlossaryPanel.svelte';
+  import Icon from './Icon.svelte';
   import SummaryPanel from './SummaryPanel.svelte';
 
   /** @type {{ visible: boolean, onnavigate?: () => void }} */
@@ -44,6 +45,12 @@
   const ALL_SCOPES = /** @type {const} */ ([
     ['queue', 'Ждут меня'], ['voting', 'Голосование'], ['mine', 'Мои'], ['approved', 'Принятые'], ['glossary', 'Глоссарий'], ['summary', 'Сводка'],
   ]);
+  /** @type {HTMLElement | undefined} */ let scopesRow = $state();
+  // the chosen list's chip in view (opened on the glossary from the settings, it is past the row's edge)
+  $effect(() => {
+    void scope;
+    if (visible) scopesRow?.querySelector('.ui-chip.on')?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  });
   const SCOPES = $derived(translator ? ALL_SCOPES : ALL_SCOPES.filter(([v]) => v !== 'queue'));
   const waiting = $derived(scope === 'voting' ? list.filter((p) => p.can.vote && p.votes.mine === null).length : 0);
 
@@ -59,24 +66,22 @@
   }
 </script>
 
-<div class="notes-panel">
-  <div class="panel-head">
-  <div class="segmented small-seg" role="radiogroup" aria-label="Списки переводов">
+<div class="notes-panel tr-panel">
+  <div class="panel-head tr-head">
+  <!-- the lists, then the glossary and the summary: chips in one scrolling row -->
+  <div class="ui-chips tr-scopes" role="radiogroup" aria-label="Списки переводов" bind:this={scopesRow}>
     {#each SCOPES as [value, label] (value)}
-      <button role="radio" aria-checked={scope === value} class:active={scope === value} onclick={() => (ui.trScope = value)}>
-        {label}{#if value === 'queue' && notify.queue}<span class="seg-count">{notify.queue}</span>{/if}
+      {#if value === 'glossary'}<span class="ui-chips-sep" aria-hidden="true"></span>{/if}
+      <button class="ui-chip" class:on={scope === value} role="radio" aria-checked={scope === value} onclick={() => (ui.trScope = value)}>
+        {label}{#if value === 'queue' && notify.queue}<span class="tr-n">{notify.queue}</span>{/if}
       </button>
     {/each}
   </div>
   {#if scope !== 'glossary' && scope !== 'summary'}
-  <p class="hint">
-    {#if session.user?.isTranslator}Вы переводчик: публикуете варианты и голосуете.{:else}Вы можете делать черновики и обсуждать; публикуют и голосуют переводчики.{/if}
-    {#if tr.config}Правило: ≥{Math.round(tr.config.threshold * 100)}% за, кворум {tr.config.quorum}, срок {tr.config.durationDays} дн.{/if}
-  </p>
   {#if error}<div class="search-error">{error}</div>{/if}
-  <div class="search-summary">
-    {list.length} {plural(list.length, 'предложение', 'предложения', 'предложений')}
-    {#if waiting}<span class="facet active">ждут вашего голоса: {waiting}</span>{/if}
+  <div class="ui-label tr-count">
+    <span>{list.length} {plural(list.length, 'предложение', 'предложения', 'предложений')}</span>
+    {#if waiting}<span class="ui-chip small on">ждут вашего голоса: {waiting}</span>{/if}
   </div>
   {/if}
   </div>
@@ -86,30 +91,43 @@
     <SummaryPanel {visible} />
   {:else}
   {#if !list.length && !error}
-    <p class="muted small">
-      {#if scope === 'mine'}Выделите фрагмент русского текста и нажмите «Перевести» — появится ваш черновик.
-      {:else if scope === 'queue'}Вы проголосовали по всем открытым предложениям.
-      {:else}Пока пусто.{/if}
-    </p>
+    <div class="ui-empty">
+      <span class="ui-tile big"><Icon name="translate" size={22} /></span>
+      <b>{scope === 'queue' ? 'Всё проголосовано' : scope === 'mine' ? 'Черновиков пока нет' : 'Пока пусто'}</b>
+      <p class="muted small">
+        {#if scope === 'mine'}Выделите фрагмент русского текста и нажмите «Перевести» — появится ваш черновик.
+        {:else if scope === 'queue'}Вы проголосовали по всем открытым предложениям.
+        {:else if scope === 'approved'}Принятые варианты появятся здесь после голосования.
+        {:else}Предложения появятся здесь, когда переводчики опубликуют их на голосование.{/if}
+      </p>
+    </div>
   {/if}
-  <ol class="results">
+  <ol class="ui-cards tr-cards">
     {#each list as p (p.id)}
       <li>
-        <a href="/{p.ref}" class="result" onclick={(e) => open(e, p)}>
-          <div class="result-head">
-            <b>{p.ref}</b><span class="ellipsis">{p.paperTitle ?? ''}</span><span class="spacer"></span>
-            <span class="status-badge" data-status={p.status}>{STATUS_NAMES[p.status]}</span>
-          </div>
-          <div class="result-ru"><del class="muted">{p.original}</del></div>
-          <div class="result-ru"><ins>{p.text}</ins></div>
-          {#if p.status !== 'draft'}
-            <div class="note-date">
-              {votingSummary(p)}{p.votes.mine !== null ? ' · ваш голос учтён' : ''}{p.status === 'voting' ? ` · ${timeLeft(p.closesAt)}` : ''}
-            </div>
-          {/if}
+        <a href="/{p.ref}" class="ui-card tr-card" onclick={(e) => open(e, p)}>
+          <span class="ui-card-body">
+            <span class="tr-card-top">
+              <span class="ui-card-meta"><b>{p.ref}</b>{p.paperTitle ? ` · ${p.paperTitle}` : ''}</span>
+              <span class="status-badge tr-status" data-status={p.status}>{STATUS_NAMES[p.status]}</span>
+            </span>
+            <span class="tr-was"><del>{p.original}</del></span>
+            <span class="tr-now">{p.text}</span>
+            {#if p.status !== 'draft'}
+              <span class="ui-card-foot tr-foot">
+                {votingSummary(p)}{p.votes.mine !== null ? ' · ваш голос учтён' : ''}{p.status === 'voting' ? ` · ${timeLeft(p.closesAt)}` : ''}
+              </span>
+            {/if}
+          </span>
         </a>
       </li>
     {/each}
   </ol>
+  {#if list.length}
+    <p class="ui-hint tr-rule">
+      {#if session.user?.isTranslator}Вы переводчик: публикуете варианты и голосуете.{:else}Вы можете делать черновики и обсуждать; публикуют и голосуют переводчики.{/if}
+      {#if tr.config}Правило: ≥{Math.round(tr.config.threshold * 100)}% за, кворум {tr.config.quorum}, срок {tr.config.durationDays} дн.{/if}
+    </p>
+  {/if}
   {/if}
 </div>

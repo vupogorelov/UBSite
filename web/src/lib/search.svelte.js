@@ -1,6 +1,9 @@
 // @ts-check
 import { api } from './api.js';
 import { navigate, parsePath } from './router.svelte.js';
+import { settings } from './settings.svelte.js';
+import { aliases } from './aliases.svelte.js';
+import { unalias } from '../../../shared/aliases.js';
 
 /** @typedef {import('./api.js').SearchResult} SearchResult */
 
@@ -35,7 +38,8 @@ export async function runSearch(text, opts = {}) {
   const my = ++token;
   search.loading = true;
   try {
-    const d = await api.search(q, 0);
+    // "Названия по смыслу": a query for "Спасоград" looks for "Салвингтон", as the text has it
+    const d = await api.search(settings.altNames && aliases.list.length ? unalias(q, aliases.list) : q, 0);
     if (my !== token) return;
     Object.assign(search, { query: q, total: d.total, facets: d.facets, results: d.results, refs: d.refs ?? [], error: '' });
     if (opts.record !== false) api.addHistory(q).then(loadLibrary, () => {});

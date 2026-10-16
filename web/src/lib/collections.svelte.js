@@ -24,6 +24,53 @@ export async function loadCollections(force = false) {
   }
 }
 
+// ---- Every collection readable without a network (TODO.md "Без сети", 3.4) ----
+// The workspace's collections and those subscribed to are fetched quietly in the background — the
+// service worker keeps each answer (public/sw.js, "ub-last"), so a collection never opened here reads
+// without a network too. Fetched again only when changed (its updatedAt). Changing a collection needs
+// the network: it is shared by many, and changes without a network are not offered (an honest message).
+
+const KEPT_KEY = 'ub.keptCollections';
+let keeping = false;
+/** Fetches what changed among the workspace's collections (with a network; quietly). @param {number} ws */
+export async function keepCollections(ws) {
+  if (keeping || navigator.onLine === false) return;
+  keeping = true;
+  try {
+    /** @type {Record<string, string>} */
+    let kept = {};
+    try {
+      kept = JSON.parse(localStorage.getItem(`${KEPT_KEY}.${ws}`) ?? '{}') ?? {};
+    } catch {}
+    const r = await fetch(`/api/workspaces/${ws}/collections`).then((x) => (x.ok ? x.json() : null));
+    if (!r) return;
+    /** @type {Record<string, string>} */
+    const next = {};
+    for (const c of [...r.own, ...r.subscribed]) {
+      next[c.id] = c.updatedAt;
+      if (kept[c.id] === c.updatedAt) continue;
+      const ok = await fetch(`/api/collections/${c.id}`).then((x) => x.ok, () => false);
+      if (!ok) delete next[c.id];
+    }
+    try {
+      localStorage.setItem(`${KEPT_KEY}.${ws}`, JSON.stringify(next));
+    } catch {}
+  } catch {
+  } finally {
+    keeping = false;
+  }
+}
+/** Signing out (the kept answers are cleared too): what was kept is forgotten, fetched anew next time. */
+export function forgetKeptCollections() {
+  try {
+    for (const k of Object.keys(localStorage)) if (k.startsWith(KEPT_KEY)) localStorage.removeItem(k);
+  } catch {}
+}
+if (typeof window !== 'undefined') {
+  addEventListener('online', () => void keepCollections(current.ws));
+  setInterval(() => document.visibilityState === 'visible' && void keepCollections(current.ws), 10 * 60_000);
+}
+
 /** Runs a change, then reloads the lists. @template T @param {() => Promise<T>} fn @returns {Promise<T | null>} */
 export async function changeCollections(fn) {
   try {

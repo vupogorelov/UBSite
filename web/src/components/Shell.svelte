@@ -1,15 +1,21 @@
 <script>
+  import { book, titleIn } from '../lib/lang.svelte.js';
+  import { paperLabel, sectionLabel } from '../lib/format.js';
   import { onMount } from 'svelte';
+  import { startActivity } from '../lib/activity.js';
   import { api } from '../lib/api.js';
-  import { applySettings, setSetting } from '../lib/settings.svelte.js';
-  import { linkClick, route, navigate, lastPath, exitPrompt, onBack } from '../lib/router.svelte.js';
+  import { applySettings, setSetting, theme } from '../lib/settings.svelte.js';
+  import { linkClick, route, navigate, lastPath, exitPrompt, onBack, back } from '../lib/router.svelte.js';
   import { notify, startPolling, refreshCounts } from '../lib/notify.svelte.js';
   import NotificationsMenu from './NotificationsMenu.svelte';
   import { search, runSearch, stepHit } from '../lib/search.svelte.js';
   import { ui, setTab, NARROW } from '../lib/ui.svelte.js';
   import { session, switchWorkspace } from '../lib/session.svelte.js';
-  import { toast } from '../lib/toast.svelte.js';
+  import { toast, runToastAction } from '../lib/toast.svelte.js';
+  import PlaceOffer from './PlaceOffer.svelte';
   import Icon from './Icon.svelte';
+  import { notesUi } from '../lib/notesui.svelte.js';
+  import { syncStatusBar } from '../lib/settings.svelte.js';
   import GotoBox from './GotoBox.svelte';
   import Toc from './Toc.svelte';
   import SearchPanel from './SearchPanel.svelte';
@@ -27,8 +33,11 @@
   import BottomNav from './BottomNav.svelte';
   import Ribbon from './Ribbon.svelte';
   import AudioPlayer from './AudioPlayer.svelte';
+  import MiniPlayer from './MiniPlayer.svelte';
+  import UiSelect from './UiSelect.svelte';
   import VoicePanel from './VoicePanel.svelte';
   import AboutPage from './AboutPage.svelte';
+  import SupportPage from './SupportPage.svelte';
   import { tts } from '../lib/tts.svelte.js';
   import { SECTIONS } from '../lib/sections.svelte.js';
   import ReadingQuick from './ReadingQuick.svelte';
@@ -56,7 +65,8 @@
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
     const stopChat = connectChat();
-    return () => (stopPolling(), stopChat());
+    const stopActivity = startActivity(); // analytics: a minute of activity (lib/activity.js)
+    return () => (stopPolling(), stopChat(), stopActivity());
   });
   // Counters are refreshed on navigation too.
   let seenPath = route.path;
@@ -67,11 +77,11 @@
     }
   });
 
-  const THEMES = /** @type {const} */ (['light', 'paper', 'dark', 'graphite']);
-  function cycleTheme() {
-    const current = THEMES.indexOf(/** @type {any} */ (document.documentElement.dataset.theme));
-    setSetting('theme', THEMES[(current + 1) % THEMES.length]);
+  /** The one theme switch: light (Paper) ↔ dark (Graphite). */
+  function toggleTheme() {
+    setSetting('theme', theme.dark ? 'paper' : 'graphite');
   }
+  const themeLabel = $derived(theme.dark ? 'Светлая тема' : 'Тёмная тема');
 
   /** @param {string} q */
   function searchFromTopbar(q) {
@@ -130,7 +140,9 @@
     const handle = /** @type {HTMLElement} */ (e.currentTarget);
     handle.setPointerCapture(e.pointerId);
     resizing = true;
-    const move = (/** @type {PointerEvent} */ ev) => setWidth(ev.clientX);
+    // The width counts from the sidebar's own left edge (the ribbon stands before it), so the edge stays under the cursor.
+    const left = handle.parentElement?.getBoundingClientRect().left ?? 0;
+    const move = (/** @type {PointerEvent} */ ev) => setWidth(ev.clientX - left);
     const stop = () => {
       handle.removeEventListener('pointermove', move);
       handle.removeEventListener('pointerup', stop);
@@ -172,7 +184,9 @@
   const chatPage = $derived(route.path === '/chat' || route.path.startsWith('/chat?'));
   /** /about — the project's about.md. */
   const aboutPage = $derived(route.path === '/about');
-  const fullPage = $derived(tasksPage || chatPage || aboutPage);
+  /** /support — supporting the project (the fundraising widget). */
+  const supportPage = $derived(route.path === '/support');
+  const fullPage = $derived(tasksPage || chatPage || aboutPage || supportPage);
 
   // ---- Phone layout ----
   /** The book itself is on screen (not chat, tasks or a collection). */
@@ -181,6 +195,8 @@
   const chatOpen = $derived(chatPage && route.path.includes('c='));
   let quick = $state(false);
   /** The audio reader's panel is over the book (phone); a section screen covers it, reading goes on. */
+  /** A page of its own covers the book (the reader may stay under it while reading aloud). */
+  const otherPage = $derived(tasksPage || chatPage || aboutPage || supportPage || collectionId !== null);
   const listening = $derived(reading && tts.open && !ui.sidebarOpen);
   // The bars come back whenever a panel is opened.
   $effect(() => {
@@ -196,10 +212,13 @@
     if (chatPage) return { kicker: '', title: 'Чат' };
     if (tasksPage) return { kicker: '', title: 'Мои задачи' };
     if (aboutPage) return { kicker: '', title: 'О приложении' };
+    if (supportPage) return { kicker: '', title: 'Поддержать проект' };
     if (collectionId !== null) return { kicker: '', title: 'Подборка' };
     const p = toc?.papers.find((x) => x.id === view.paper);
     if (!p) return { kicker: '', title: 'Книга Урантии' };
-    return { kicker: p.id === 0 ? 'Предисловие' : `Текст ${p.id}`, title: p.id === 0 ? 'Книга Урантии' : p.titleRu };
+    // the kicker follows the reading: «Текст 5 · §1» — the section on screen
+    const sec = view.section ? ` · §${sectionLabel(p.id, view.section)}` : '';
+    return { kicker: paperLabel(p.id) + sec, title: p.id === 0 ? (book.main === 'en' ? 'The Urantia Book' : 'Книга Урантии') : titleIn(p, book.main) };
   });
 
   const initials = $derived((session.user?.displayName ?? session.user?.username ?? '?').slice(0, 1).toUpperCase());
@@ -211,22 +230,74 @@
       ? NOTES_TABS.map((s) => /** @type {[import('../lib/ui.svelte.js').Tab, string, string]} */ ([s.tab, s.label, s.icon]))
       : [],
   );
+  /**
+   * Phone: a section's own screen has the reference's header — it melts into the page: ← · the
+   * section's name in the middle · its actions and the bell. One place decides which screen is shown,
+   * in this order: a page of its own (it covers everything; the sidebar may still be "open" under it),
+   * then a sidebar screen over the book (notes, collections, tags), then a collection being read.
+   * @type {{ kind: 'page' | 'panel' | 'collection', title: string } | null}
+   */
+  const screen = $derived.by(() => {
+    if (!device.mobile) return null;
+    if (chatPage) return chatOpen ? null : { kind: 'page', title: 'Чат' };
+    if (tasksPage) return { kind: 'page', title: 'Задачи' };
+    if (aboutPage) return { kind: 'page', title: 'О приложении' };
+    if (supportPage) return { kind: 'page', title: 'Поддержать проект' };
+    if (ui.sidebarOpen && shownTabs.length > 0) return { kind: 'panel', title: NOTES_TABS.find((x) => x.tab === ui.tab)?.label ?? '' };
+    if (ui.sidebarOpen && ui.tab === 'voice') return { kind: 'panel', title: 'Словарь озвучки' };
+    if (ui.sidebarOpen && ui.tab === 'translate') return { kind: 'panel', title: 'Перевод' };
+    if (ui.sidebarOpen && ui.tab === 'search') return { kind: 'panel', title: 'Поиск' };
+    if (collectionId !== null && !ui.sidebarOpen) return { kind: 'collection', title: 'Подборка' };
+    return null;
+  });
+  const sectionHead = $derived(screen !== null);
+  const sectionTitle = $derived(screen?.title ?? '');
+  /** ← : a page — to the book; a sidebar screen — closes; a collection — back where it was opened from. */
+  function sectionBack() {
+    if (screen?.kind === 'collection') back(lastPath());
+    else if (screen?.kind === 'page') navigate(lastPath(), { root: true });
+    else ui.sidebarOpen = false;
+  }
+  // the status bar follows the header's color (a section screen's header is the page's color)
+  $effect(() => {
+    void sectionHead, reading, ui.sidebarOpen;
+    queueMicrotask(syncStatusBar);
+  });
 </script>
 
 <svelte:window onkeydown={onKeydown} />
 
 <div class="app" class:toc-open={ui.sidebarOpen && !fullPage} class:tasks-mode={fullPage} class:resizing style:--toc-width="{sidebarWidth}px"
-  class:mobile={device.mobile} class:reading class:chrome-hidden={reading && chrome.hidden && !ui.sidebarOpen && !listening}
+  class:mobile={device.mobile} class:reading class:chrome-hidden={reading && chrome.hidden && !ui.sidebarOpen && !listening} class:header-hidden={listening && chrome.hidden && !ui.sidebarOpen}
   class:in-conversation={device.mobile && chatOpen} class:listening>
-  <header class="topbar">
-    {#if device.mobile}
-      <!-- Phone header: where I am (tap → contents), reading settings, notifications. -->
-      <button class="m-here" onclick={() => (bookRoute ? (ui.sidebarOpen && ui.tab === 'toc' ? (ui.sidebarOpen = false) : setTab('toc')) : navigate(lastPath()))}
+  <header class="topbar" class:screen-head={sectionHead} class:scrolled={chrome.scrolled}>
+    {#if sectionHead}
+      <button class="icon-btn" onclick={sectionBack} aria-label="Назад"><Icon name="back" /></button>
+      <h1 class="section-title">{sectionTitle}</h1>
+      <span class="screen-actions">
+        {#if chatPage}
+          {#if session.user?.isCoordinator || session.user?.isAdmin}
+            <button class="icon-btn" class:on={chatUi.creating} onclick={() => (chatUi.creating = !chatUi.creating)} aria-label="Новый канал"><Icon name="plus" /></button>
+          {/if}
+          <!-- the search field over the list opens from here -->
+          <button class="icon-btn" class:on={chatUi.search} onclick={() => (chatUi.search = !chatUi.search)} aria-label="Поиск по чатам" aria-expanded={chatUi.search}><Icon name="search" /></button>
+        {:else if screen?.kind === 'panel' && ui.tab === 'notes'}
+          <button class="icon-btn" class:on={notesUi.filters} onclick={() => (notesUi.filters = !notesUi.filters)} aria-label="Фильтры" aria-expanded={notesUi.filters}><Icon name="settings" /></button>
+        {/if}
+        <NotificationsMenu />
+      </span>
+    {:else if device.mobile}
+      <!-- Phone header: ☰ contents · where I am (in the middle; a tap — contents too) · Aa, bell, light/dark. -->
+      {#if bookRoute}
+        <button class="icon-btn m-toc" class:on={ui.sidebarOpen && ui.tab === 'toc'} onclick={() => (ui.sidebarOpen && ui.tab === 'toc' ? (ui.sidebarOpen = false) : setTab('toc'))}
+          aria-label="Оглавление" aria-expanded={ui.sidebarOpen && ui.tab === 'toc'}><Icon name="toc" /></button>
+      {/if}
+      <button class="m-here" class:m-here-center={bookRoute} onclick={() => (bookRoute ? (ui.sidebarOpen && ui.tab === 'toc' ? (ui.sidebarOpen = false) : setTab('toc')) : navigate(lastPath(), { root: true }))}
         aria-label="Оглавление">
         {#if here.kicker}<span class="m-here-kicker">{here.kicker}</span>{/if}
         <span class="m-here-title">{here.title}</span>
       </button>
-      <span class="spacer"></span>
+      {#if !bookRoute}<span class="spacer"></span>{/if}
       {#if chatPage && !chatOpen}
         <!-- the chat list: search and a new channel open from here (the list stays clean) -->
         <button class="icon-btn" class:on={chatUi.search} onclick={() => (chatUi.search = !chatUi.search)} aria-label="Поиск по чатам" aria-expanded={chatUi.search}><Icon name="search" /></button>
@@ -237,46 +308,52 @@
       {#if bookRoute}
         <button class="icon-btn m-aa" onclick={() => (quick = !quick)} aria-label="Настройки чтения" aria-expanded={quick}>Aa</button>
       {/if}
+      <!-- the bell last, at the right edge — as in every section header -->
+      <button class="icon-btn" onclick={toggleTheme} aria-label={themeLabel}><Icon name="theme" /></button>
       <NotificationsMenu />
     {:else}
     <button class="icon-btn" onclick={() => (ui.sidebarOpen = !ui.sidebarOpen)} aria-label="Боковая панель" aria-expanded={ui.sidebarOpen}>
       <Icon name="menu" />
     </button>
-    <a class="brand" href="/0" onclick={linkClick}>Urantian Docs Explorer</a>
+    <a class="brand" href="/0" onclick={linkClick}>Urantia Papers Explorer</a>
     <GotoBox bind:this={gotoBox} onsearch={searchFromTopbar} />
     <div class="spacer"></div>
     {#if session.workspaces.length > 1}
-      <select class="text-input ws-switch" aria-label="Рабочее пространство" value={session.workspace?.id}
-        onchange={(e) => switchWorkspace(Number(e.currentTarget.value))}>
-        {#each session.workspaces as w (w.id)}
-          <option value={w.id}>{w.kind === 'personal' ? 'Личное' : w.name}</option>
-        {/each}
-      </select>
+      <!-- the workspace: the same choice as everywhere (a card in the middle on a computer) -->
+      <UiSelect variant="inline" class="ws-switch" title="Рабочее пространство" value={String(session.workspace?.id ?? '')}
+        onchange={(x) => switchWorkspace(Number(x))}
+        options={session.workspaces.map((w) => ({ value: String(w.id), label: w.kind === 'personal' ? 'Личное' : w.name, hint: w.kind === 'personal' ? 'Только ваши заметки' : 'Общее с участниками' }))} />
     {/if}
     <NotificationsMenu />
-    <button class="icon-btn" onclick={cycleTheme} title="Сменить тему" aria-label="Сменить тему">
-      <Icon name="theme" />
-    </button>
+    <button class="icon-btn" onclick={toggleTheme} title={themeLabel} aria-label={themeLabel}><Icon name="theme" /></button>
     <button class="icon-btn" onclick={() => open('settings')} title="Настройки" aria-label="Настройки">
       <Icon name="settings" />
     </button>
+    <button class="icon-btn" class:on={supportPage} onclick={() => (supportPage ? navigate(lastPath(), { root: true }) : navigate('/support'))}
+      title="Поддержать проект" aria-label="Поддержать проект"><Icon name="ruble" /></button>
     <div class="user-menu">
       <button class="avatar" onclick={() => (menuOpen = !menuOpen)} aria-haspopup="menu" aria-expanded={menuOpen}
         title={session.user?.username}>{initials}</button>
       {#if menuOpen}
         <button class="menu-scrim" aria-label="Закрыть меню" onclick={() => (menuOpen = false)}></button>
-        <div class="menu" role="menu">
-          <div class="menu-head">{session.user?.displayName ?? session.user?.username}</div>
-          <button role="menuitem" onclick={() => open('workspaces')}>Рабочие пространства</button>
-          {#if session.user?.isAdmin}<button role="menuitem" onclick={() => open('admin')}>Администрирование</button>{/if}
-          <button role="menuitem" onclick={() => open('account')}>Аккаунт и пароль</button>
-          {#if pwa.canInstall}
-            <button role="menuitem" onclick={() => ((menuOpen = false), install())}>Установить приложение</button>
-          {:else if pwa.ios}
-            <button role="menuitem" onclick={() => ((menuOpen = false), showToast('iPhone/iPad: кнопка «Поделиться» в Safari → «На экран „Домой“»'))}>
-              Установить на iPhone…
-            </button>
-          {/if}
+        <!-- as the phone's «Ещё»: the profile (→ account), then a grouped list -->
+        <div class="menu user-card" role="menu">
+          <button class="more-profile" role="menuitem" onclick={() => open('account')}>
+            <span class="avatar">{initials}</span>
+            <span class="more-profile-name"><b>{session.user?.displayName ?? session.user?.username}</b><span>@{session.user?.username} · аккаунт и пароль</span></span>
+            <Icon name="chevron" size={18} />
+          </button>
+          <div class="more-group">
+            <button class="more-row" role="menuitem" onclick={() => open('workspaces')}><Icon name="layers" size={20} /><span class="more-row-label">Рабочие пространства</span><Icon name="chevron" size={16} /></button>
+            {#if session.user?.isAdmin}<button class="more-row" role="menuitem" onclick={() => open('admin')}><Icon name="lock" size={20} /><span class="more-row-label">Администрирование</span><Icon name="chevron" size={16} /></button>{/if}
+            <button class="more-row" role="menuitem" onclick={() => open('settings')}><Icon name="settings" size={20} /><span class="more-row-label">Настройки</span><Icon name="chevron" size={16} /></button>
+            {#if pwa.canInstall}
+              <button class="more-row" role="menuitem" onclick={() => ((menuOpen = false), install())}><Icon name="plus" size={20} /><span class="more-row-label">Установить приложение</span></button>
+            {:else if pwa.ios}
+              <button class="more-row" role="menuitem" onclick={() => ((menuOpen = false), showToast('iPhone/iPad: кнопка «Поделиться» в Safari → «На экран „Домой“»'))}>
+                <Icon name="plus" size={20} /><span class="more-row-label">Установить на iPhone</span></button>
+            {/if}
+          </div>
         </div>
       {/if}
     </div>
@@ -332,20 +409,36 @@
     {/if}
     <button class="toc-scrim" aria-label="Закрыть панель" onclick={() => (ui.sidebarOpen = false)}></button>
     <main class="reader-pane">
-      {#if tasksPage}<TasksPage />{:else if chatPage}<ChatPage />{:else if aboutPage}<AboutPage />{:else if collectionId !== null}<CollectionReader id={collectionId} />{:else}<Reader />{/if}
+      {#if tasksPage}<TasksPage />{:else if chatPage}<ChatPage />{:else if aboutPage}<AboutPage />{:else if supportPage}<SupportPage />{:else if collectionId !== null}<CollectionReader id={collectionId} />{/if}
+      <!-- the book: while it is read aloud it stays under another page (hidden) — the voice goes on until ■ -->
+      {#if !otherPage || tts.open}
+        <div class="reader-host" class:behind={otherPage}><Reader background={otherPage} /></div>
+      {/if}
     </main>
   </div>
 
-  <SettingsPanel open={drawer === 'settings'} onclose={() => (drawer = 'none')} />
+  <SettingsPanel open={drawer === 'settings'} onclose={() => (drawer = 'none')}
+    onglossary={() => {
+      // Настройки → Текст → Глоссарий терминов: «Перевод» on its glossary, over the book
+      drawer = 'none';
+      ui.trScope = 'glossary';
+      if (!bookRoute) navigate(lastPath(), { root: true });
+      setTab('translate');
+    }} />
   {#if drawer === 'workspaces'}<WorkspacesPanel onclose={() => (drawer = 'none')} />{/if}
   {#if drawer === 'admin'}<AdminPanel onclose={() => (drawer = 'none')} />{/if}
   {#if drawer === 'account'}<AccountPanel onclose={() => (drawer = 'none')} />{/if}
   {#if device.mobile}
-    <BottomNav {bookRoute} onopen={open} oncycletheme={cycleTheme} />
+    <BottomNav {bookRoute} onopen={open} />
     {#if listening}<AudioPlayer />{/if}
     {#if quick}<ReadingQuick onclose={() => (quick = false)} onall={() => ((quick = false), open('settings'))} />{/if}
+  {:else if tts.open}
+    <!-- the computer: reading aloud shows a small player over the book -->
+    <MiniPlayer />
   {/if}
-  {#if toast.message}<div class="toast" role="status">{toast.message}</div>{/if}
+  {#if toast.message}<div class="toast" class:with-action={toast.action} role="status">{toast.message}{#if toast.action}<button class="toast-action" onclick={runToastAction}>{toast.action.label}</button>{/if}</div>{/if}
+  <!-- only over the book: in the chat, tasks and other pages it would cover their controls; it waits for the book -->
+  {#if !tasksPage && !chatPage && !aboutPage && !supportPage && collectionId === null}<PlaceOffer />{/if}
   {#if exitPrompt.shown}
     <!-- "Back" with nothing to close: the next one leaves the app. Any tap (here "Отмена") keeps it. -->
     <div class="exit-prompt" role="alertdialog" aria-live="assertive" aria-label="Выход из приложения">
