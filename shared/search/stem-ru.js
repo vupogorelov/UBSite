@@ -90,7 +90,8 @@ export function stemRu(word) {
   if (w.endsWith('и') && w.length - 1 >= rv) w = w.slice(0, -1);
 
   // Step 3: the longest derivational ending in RV is removed only if it also lies in R2
-  const der = DERIVATIONAL.find((e) => w.endsWith(e) && w.length - e.length >= rv);
+  const cur = w; // (the word so far, for the callback)
+  const der = DERIVATIONAL.find((e) => cur.endsWith(e) && cur.length - e.length >= rv);
   if (der && w.length - der.length >= r2) w = w.slice(0, -der.length);
 
   // Step 4: superlative / double "н" / soft sign

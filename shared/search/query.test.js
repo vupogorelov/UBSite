@@ -27,6 +27,10 @@ test('phrases, exact forms, prefixes and proximity', () => {
     const near = parseQuery(text).clauses[0].alts[0];
     assert.ok(near.kind === 'near' && near.distance === 5 && near.atoms.length === 2, text);
   }
+  const chain = parseQuery('бог ~3 отец ~3 сын').clauses[0].alts[0];
+  assert.ok(chain.kind === 'near' && chain.atoms.length === 3, 'one chain, one distance');
+  // mixed distances in one chain: a message, not a failure (it was a TypeError)
+  assert.throws(() => parseQuery('бог ~3 отец ~5 сын'), (e) => e instanceof QueryError && /одно расстояние/.test(e.message));
 });
 
 test('filters', () => {

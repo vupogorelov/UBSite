@@ -41,7 +41,7 @@ test('the English text from its source: changes applied and reported, nothing re
       removed: { parts: [], papers: [], sections: [], paragraphs: ['5:1.0'] },
     },
   });
-  const first = await sync.run('manual');
+  const first = /** @type {any} */ (await sync.run('manual'));
   assert.equal(first.status, 'ok');
   assert.deepEqual([first.markupOnly, first.textChanged, first.notOurs, first.titles, first.removedThere], [1, 1, 1, 1, 1]);
   assert.equal(first.samples?.[0].ref, '5:1.2');

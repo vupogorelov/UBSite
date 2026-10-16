@@ -169,7 +169,7 @@ export function createAnalytics(db) {
       }));
       // in sum: everyone's minutes together (sessions — each person's, added up)
       const active = people.filter((p) => p.sessions);
-      const sum = (/** @type {string} */ k) => people.reduce((s, p) => s + p[k], 0);
+      const sum = (/** @type {keyof (typeof people)[number]} */ k) => people.reduce((s, p) => s + Number(p[k]), 0);
       /** @type {Record<string, number>} */
       const sections = {};
       for (const p of people) for (const [k, v] of Object.entries(p.sections)) sections[k] = (sections[k] ?? 0) + /** @type {number} */ (v);

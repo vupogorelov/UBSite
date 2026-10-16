@@ -11,7 +11,8 @@ function fakeApp(DUR) {
   w.__calls = [];
   /** @type {{ id: string }[]} */ let queue = [];
   /** @type {{ id: string } | null} */ let cur = null;
-  let timer = 0;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
   const next = () => {
     if (cur || !queue.length) return;
     cur = /** @type {{ id: string }} */ (queue.shift());

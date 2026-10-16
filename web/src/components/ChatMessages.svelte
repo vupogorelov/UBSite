@@ -267,7 +267,8 @@
             {:else if last}<span class="tg-avatar" style:--c={userColor(m.authorId)} title={m.authorName ?? ''}>{initials(m.authorName)}</span>{/if}
           </span>
         {/if}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <!-- (a tap opens the message's menu on a touch screen; the keyboard has the context-menu key) -->
+        <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
         <div class="tg-bubble" class:tail={last} class:hidden-msg={!!m.hiddenAt} class:book={!!m.post}
           oncontextmenu={(e) => openMenu(e, m, own)} ondblclick={() => !m.pending && onreply?.(m)}
           onpointerdown={(e) => (pointer = e.pointerType)} onclick={(e) => tap(e, m, own)}>
@@ -300,12 +301,12 @@
                   <!-- "> …" lines: a quote, as Telegram draws it; in a paragraph's thread — from the book -->
                   {#if bookRef && onquote}
                     <!-- a tap shows the quoted words in the paragraph at the top of this thread -->
-                    <blockquote class="tg-bq tg-bq-go" role="button" tabindex="0" title="Показать в абзаце"
+                    <div class="tg-bq tg-bq-go" role="button" tabindex="0" title="Показать в абзаце"
                       onclick={(e) => (e.stopPropagation(), onquote?.(b.text))}
-                      onkeydown={(e) => e.key === 'Enter' && onquote?.(b.text)}>
+                      onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onquote?.(b.text))}>
                       <b class="tg-bq-src">Книга Урантии · {bookRef}</b>
                       <span>{b.text}</span>
-                    </blockquote>
+                    </div>
                   {:else}
                     <blockquote class="tg-bq">
                       {#if bookRef}<a class="tg-bq-src" href="/{bookRef}" onclick={(e) => (e.preventDefault(), navigate(`/${bookRef}`))}>Книга Урантии · {bookRef}</a>{/if}

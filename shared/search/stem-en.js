@@ -62,7 +62,7 @@ const STEP4 = longestFirst(
 /** @param {string} word */
 export function stemEn(word) {
   if (word.length <= 2) return word;
-  if (Object.hasOwn(EXCEPTIONS1, word)) return EXCEPTIONS1[word];
+  if (Object.hasOwn(EXCEPTIONS1, word)) return EXCEPTIONS1[word] ?? word;
 
   // Consonant "y": at the start or after a vowel.
   let w = '';

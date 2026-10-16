@@ -33,7 +33,7 @@ test("marks are the marker's tasks: made, moved, untagged; the task's status mov
     const req = Object.assign(Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))]), { headers: {} });
     return /** @type {any} */ (await route.handler({ req, res: {}, params: route.params, url, user: who }));
   };
-  const mine = async () => /** @type {any[]} */ (await call('GET', '/api/tasks', admin)).tasks ?? (await call('GET', '/api/tasks', admin));
+  const mine = async () => { const r = /** @type {any} */ (await call('GET', '/api/tasks', admin)); return /** @type {any[]} */ (r.tasks ?? r); };
 
   const bug = chat.post('chan:1', anna, { body: '> цитата из книги\nНе открывается подборка на телефоне, см. 5:1.1' });
 

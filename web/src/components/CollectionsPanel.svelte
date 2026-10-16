@@ -301,6 +301,8 @@
       {/if}
       <ol class="coll-items">
         {#each open.list as it (it.id)}
+          <!-- (a row is focused on purpose: Alt+arrows move it in the list — a keyboard reorder) -->
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
           <li id="ci-{it.id}" class="coll-item" class:dragging={dragId === it.id} class:over={overId === it.id && dragId !== it.id}
             class:is-heading={it.kind === 'text' && it.heading} draggable={open.canEdit} tabindex="0"
             ondragstart={(e) => ((dragId = it.id), e.dataTransfer?.setData('text/plain', String(it.id)))}

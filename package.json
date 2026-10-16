@@ -13,11 +13,14 @@
     "admin": "node --disable-warning=ExperimentalWarning scripts/admin.js",
     "test": "node --test",
     "check:offline": "node --disable-warning=ExperimentalWarning scripts/check-offline.js",
-    "e2e": "node --disable-warning=ExperimentalWarning scripts/e2e/run.js"
+    "e2e": "node --disable-warning=ExperimentalWarning scripts/e2e/run.js",
+    "check": "svelte-check --threshold error"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^24.19.2",
     "svelte": "^5.57.1",
+    "svelte-check": "^4.7.6",
     "vite": "^8.3.2"
   }
 }

@@ -41,7 +41,7 @@ test('chat: channels, workspace chats, replies, reactions, mentions and unread c
   assert.ok(notes.list(user(2)).some((n) => n.id === hello.id && n.mention));
 
   // reactions toggle
-  assert.deepEqual(chat.react(hello.id, user(2), '👍').map((r) => [r.emoji, r.n, r.mine]), [['👍', 1, true]]);
+  assert.deepEqual(chat.react(hello.id, user(2), '👍').map((/** @type {any} */ r) => [r.emoji, r.n, r.mine]), [['👍', 1, true]]);
   assert.deepEqual(chat.react(hello.id, user(2), '👍'), []);
   assert.throws(() => chat.react(hello.id, user(2), '💩'), /Неизвестная реакция/);
 

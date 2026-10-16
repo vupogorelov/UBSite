@@ -34,7 +34,7 @@ function setup() {
     return tr.evaluate(id);
   };
   const user = (/** @type {number} */ id, translator = true) =>
-    ({ id, username: 'u', displayName: null, isAdmin: false, isTranslator: translator, isCoordinator: false });
+    ({ id, username: 'u', displayName: null, email: null, emailVerified: false, isAdmin: false, isTranslator: translator, isCoordinator: false });
   const status = (/** @type {number} */ id) => tr.get(id).status;
   return { db, tr, add, vote, user, status };
 }

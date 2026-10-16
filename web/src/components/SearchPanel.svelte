@@ -15,8 +15,8 @@
   let { onnavigate, history = false } = $props();
 
   /** ☆ — saved queries (and the form to save the current one), history — recent queries only. */
-  /** @type {'none' | 'help' | 'saved' | 'history' | 'save'} */
-  let panel = $state(history && !search.query ? 'history' : 'none');
+  // svelte-ignore state_referenced_locally (how the panel opens: `history` at that moment, by design)
+  let panel = $state(/** @type {'none' | 'help' | 'saved' | 'history' | 'save'} */ (history && !search.query ? 'history' : 'none'));
   /** The field has the focus: a line of the syntax under it. */
   let focused = $state(false);
   /** (it goes a moment after the focus: a tap below must not see the list move under the finger) @type {ReturnType<typeof setTimeout> | undefined} */

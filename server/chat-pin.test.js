@@ -29,10 +29,10 @@ test('a pinned message: one per chat, pinned by whoever made the chat or an admi
   assert.equal(chat.info('chan:7', anna).canPin, true);
   assert.equal(chat.info('chan:7', boris).canPin, false);
   assert.throws(() => chat.pin('chan:7', boris, a.id), /создатель чата или администратор/);
-  assert.equal(chat.pin('chan:7', anna, a.id).pinned.body, 'Первое');
+  assert.equal(chat.pin('chan:7', anna, a.id).pinned?.body, 'Первое');
   // one per chat: a new pin replaces the old one
   chat.pin('chan:7', anna, b.id);
-  assert.equal(chat.info('chan:7', boris).pinned.id, b.id);
+  assert.equal(chat.info('chan:7', boris).pinned?.id, b.id);
   // only a message of this chat
   const elsewhere = chat.post('chan:1', anna, { body: 'В общем' });
   assert.throws(() => chat.pin('chan:7', anna, elsewhere.id), /не из этого чата/);

@@ -31,8 +31,10 @@ export function normalizeWord(word) {
 }
 
 /** @type {Map<string, string>} */
+/** @type {Map<string, string>} */
 const stemCache = new Map();
 /** Russian stems with a fleeting vowel → their short variant (отец → отц). */
+/** @type {Map<string, string>} */
 let ruAliases = new Map();
 
 /** @param {Map<string, string>} aliases */

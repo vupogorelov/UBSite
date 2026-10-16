@@ -81,10 +81,10 @@ test("note comments: the note's conversation — members only, replies, mentions
   // the owner deletes others' comments; the note goes — its conversation goes too
   assert.equal(chat.ownsChat(key, user(1)), true);
   await call('DELETE', `/api/workspaces/2/annotations/${note.id}`, 1);
-  assert.equal(db.prepare('SELECT count(*) AS n FROM public_messages WHERE ref = ?').get(key).n, 0);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM public_messages WHERE ref = ?').get(key)?.n, 0);
 
   // and so does a deleted workspace (its notes cascade)
   const n2 = await call('POST', '/api/workspaces/2/annotations', 1, { ref: '5:1.1', comment: 'ещё' });
   db.exec('DELETE FROM workspaces WHERE id = 2');
-  assert.equal(db.prepare('SELECT count(*) AS n FROM public_messages WHERE ref = ?').get(`note:${n2.id}`).n, 0);
+  assert.equal(db.prepare('SELECT count(*) AS n FROM public_messages WHERE ref = ?').get(`note:${n2.id}`)?.n, 0);
 });

@@ -360,14 +360,15 @@ export function createChat(db, auth) {
     mark(id, user, mark) {
       if (!user.isAdmin) throw new HttpError(403, 'Отмечать сообщения может администратор');
       if (mark !== null && !MARKS.includes(/** @type {string} */ (mark))) throw new HttpError(400, 'Отметка: take, work или done');
+      const m = /** @type {string | null} */ (mark); // (checked above)
       const msg = /** @type {any} */ (q.one.get(id));
       if (!msg || msg.kind !== 'message') throw new HttpError(404, 'Сообщение не найдено');
       access(msg.chat, user, false);
       transaction(db, () => {
-        q.setMark.run(mark, mark === null ? null : user.id, mark, id);
-        markHook?.(msg, user.id, /** @type {string | null} */ (mark));
-        if (mark !== null && msg.authorId && msg.authorId !== user.id) {
-          const { id: note } = /** @type {{ id: number }} */ (q.markNote.get(`mark:${msg.chat}`, user.id, mark, id));
+        q.setMark.run(m, m === null ? null : user.id, m, id);
+        markHook?.(msg, user.id, m);
+        if (m !== null && msg.authorId && msg.authorId !== user.id) {
+          const { id: note } = /** @type {{ id: number }} */ (q.markNote.get(`mark:${msg.chat}`, user.id, m, id));
           q.addMention.run(note, msg.authorId);
         }
       });

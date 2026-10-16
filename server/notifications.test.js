@@ -12,7 +12,7 @@ test('notifications: following by taking part, read on opening, mute and the vot
   const tr = createTranslation(db);
   const n = createNotifications(db, tr);
   const user = (/** @type {number} */ id, translator = true) =>
-    ({ id, username: 'u', displayName: null, isAdmin: false, isTranslator: translator, isCoordinator: false });
+    ({ id, username: 'u', displayName: null, email: null, emailVerified: false, isAdmin: false, isTranslator: translator, isCoordinator: false });
   const say = (/** @type {number} */ author, /** @type {string} */ body, ago = 0) =>
     db.prepare(`INSERT INTO public_messages (ref, author_id, body, created_at) VALUES ('5:1.1', ?, ?, datetime('now', ?))`)
       .run(author, body, `-${ago} minutes`);

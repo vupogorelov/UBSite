@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sentences } from './sentences.js';
 
-const split = (t) => sentences(t).map(([a, b]) => t.slice(a, b));
+const split = (/** @type {string} */ t) => sentences(t).map(([a, b]) => t.slice(a, b));
 
 test('splits at sentence ends, keeps abbreviations inside', () => {
   assert.deepEqual(split('Бог есть любовь. Он — Отец всех! Так ли? «Да», — сказал он.'),

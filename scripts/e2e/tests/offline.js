@@ -19,7 +19,7 @@ export default {
       async (/** @type {string[]} */ us) => Promise.all(us.map(async (u) => { const r = await fetch(u); return [await r.text(), r.headers.get('x-offline')]; })),
       urls,
     );
-    const same = off.filter(([text, from], i) => from === '1' && text === online[i]).length;
+    const same = off.filter((/** @type {[string, string | null]} */ [text, from], /** @type {number} */ i) => from === '1' && text === online[i]).length;
     t.check('без сети каждый ответ копии == ответ сервера', same === urls.length, `${same} из ${urls.length}`);
 
     await page.goto(`${BASE}/84`, { waitUntil: 'load' });

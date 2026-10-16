@@ -228,6 +228,8 @@
 
 {#snippet row(/** @type {Task} */ t, /** @type {string | null} */ group)}
   {@const subsOpen = t.subtasks.length > 0 && !folded.has(t.id)}
+  <!-- (a row is focused on purpose: Alt+arrows move it in the list — a keyboard reorder) -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <li class="task-row" class:is-done={t.status === 'done'} id="task-{t.id}" tabindex={group !== null ? 0 : -1}
     class:dragging={dragRow?.id === t.id} class:drop-before={group !== null && overRow === `${group}:${t.id}`}
     draggable={group !== null}
@@ -344,7 +346,7 @@
           </p>
         {/if}
         {#each groups as [key, , list] (key)}
-          <section class="task-group" class:drop-end={overRow === `${key}:end`}
+          <section class="task-group" role="group" aria-label="Задачи" class:drop-end={overRow === `${key}:end`}
             ondragover={(e) => dragOverRow(e, key, 'end')} ondrop={(e) => (e.preventDefault(), dropRow(key, null))}>
             <ol class="task-list">{#each list as t (t.id)}{@render row(t, key)}{/each}</ol>
           </section>

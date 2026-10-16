@@ -53,8 +53,7 @@
   /** @typedef {'none' | 'settings' | 'workspaces' | 'admin' | 'account'} Drawer */
   let drawer = $state(/** @type {Drawer} */ ('none'));
   let menuOpen = $state(false);
-  /** @type {GotoBox} */
-  let gotoBox;
+  let gotoBox = $state(/** @type {GotoBox | undefined} */ (undefined));
   /** @type {SearchPanel | undefined} */
   let searchPanel = $state();
 
@@ -92,7 +91,7 @@
   function onKeydown(e) {
     if ((e.ctrlKey || e.metaKey) && e.code === 'KeyK') {
       e.preventDefault();
-      gotoBox.focus();
+      gotoBox?.focus();
     } else if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'KeyF') {
       e.preventDefault();
       setTab('search');

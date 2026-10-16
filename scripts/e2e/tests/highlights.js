@@ -21,7 +21,7 @@ export default {
           continue;
         }
         for (const rule of rules) {
-          if (!(rule instanceof CSSStyleRule) || !rule.selectorText.includes('::highlight(') || s.ownerNode?.id === 'hl-resolved') continue;
+          if (!(rule instanceof CSSStyleRule) || !rule.selectorText.includes('::highlight(') || /** @type {Element | null} */ (s.ownerNode)?.id === 'hl-resolved') continue;
           // a declaration lost by the browser (a shorthand with var()) shows as an empty longhand
           if (rule.style.cssText.includes('var(') || /: ;/.test(rule.style.cssText)) withVar.push(rule.selectorText);
         }

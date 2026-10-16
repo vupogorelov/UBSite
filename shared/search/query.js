@@ -255,8 +255,11 @@ export function parseQuery(text) {
       if (!prev || prev.neg || neg || !last || last.type === 'regex' || lx.type === 'regex') {
         throw new QueryError('«РЯДОМ» соединяет только слова и фразы, без исключений и регулярных выражений');
       }
-      if (last.type === 'near' && last.distance === pendingNear) last.items.push(lx);
-      else prev.alts[prev.alts.length - 1] = { type: 'near', distance: pendingNear, items: [last, lx] };
+      if (last.type === 'near') {
+        // one chain, one distance: «бог ~3 отец ~3 сын» (mixed ones would nest a chain in a chain)
+        if (last.distance !== pendingNear) throw new QueryError('В одной цепочке «РЯДОМ» — одно расстояние: например, «бог ~3 отец ~3 сын»');
+        last.items.push(lx);
+      } else prev.alts[prev.alts.length - 1] = { type: 'near', distance: pendingNear, items: [last, lx] };
       pendingNear = null;
     } else if (pendingOr) {
       const prev = /** @type {(typeof raw)[number]} */ (raw.at(-1));
