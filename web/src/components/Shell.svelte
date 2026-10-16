@@ -39,19 +39,15 @@
   import { showToast } from '../lib/toast.svelte.js';
   import Reader from './Reader.svelte';
   import { PAGES, pageOf } from '../lib/pages.js';
-  // Opened apart from the reading — the pages (lib/pages.js) and the drawers: loaded when first opened,
-  // so the start carries the book only. A few seconds after the start they are fetched ahead (they open
-  // without waiting, and the service worker keeps every part of the build for use without a network anyway).
-  const later = {
-    workspaces: () => import('./WorkspacesPanel.svelte'),
-    admin: () => import('./AdminPanel.svelte'),
-    account: () => import('./AccountPanel.svelte'),
-  };
+  import { DRAWERS } from '../lib/drawers.js';
+  // Opened apart from the reading — the pages (lib/pages.js) and the drawers (lib/drawers.js): loaded when
+  // first opened, so the start carries the book only. A few seconds after the start they are fetched ahead
+  // (they open without waiting, and the service worker keeps every part of the build for use without a network anyway).
   import SettingsPanel from './SettingsPanel.svelte';
 
   let toc = $state(/** @type {import('../lib/api.js').Toc | null} */ (null));
   let tocError = $state('');
-  /** @typedef {'none' | 'settings' | 'workspaces' | 'admin' | 'account'} Drawer */
+  /** @typedef {import('../lib/drawers.js').Drawer} Drawer */
   let drawer = $state(/** @type {Drawer} */ ('none'));
   let menuOpen = $state(false);
   let gotoBox = $state(/** @type {GotoBox | undefined} */ (undefined));
@@ -61,7 +57,7 @@
   $effect(applySettings);
 
   onMount(() => {
-    const ahead = setTimeout(() => [...PAGES.map((p) => p.load), ...Object.values(later)].forEach((load) => load().catch(() => {})), 4000);
+    const ahead = setTimeout(() => [...PAGES, ...DRAWERS].forEach((x) => x.load().catch(() => {})), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
     const stopChat = connectChat();
@@ -412,9 +408,9 @@
       if (!bookRoute) navigate(lastPath(), { root: true });
       setTab('translate');
     }} />
-  {#if drawer === 'workspaces'}{#await later.workspaces() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
-  {#if drawer === 'admin'}{#await later.admin() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
-  {#if drawer === 'account'}{#await later.account() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
+  {#each DRAWERS as d (d.id)}
+    {#if drawer === d.id}{#await d.load() then m}<m.default onclose={() => (drawer = 'none')} />{/await}{/if}
+  {/each}
   {#if device.mobile}
     <BottomNav {bookRoute} onopen={open} />
     {#if listening}<AudioPlayer />{/if}
