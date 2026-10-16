@@ -1,10 +1,11 @@
 // @ts-check
-// In-app notifications (the bell) and the vote queue counter. No real time: the counters are
-// refreshed on navigation, when the tab gets focus again and once a minute while it is visible.
+// In-app notifications (the bell) and the vote queue counter. Refreshed at once when a message comes
+// over the live stream (lib/chat.svelte.js), on navigation, when the tab gets focus again, and — for what
+// the stream does not carry (votes, the queue, a newer build) — every five minutes while it is visible.
 import { api } from './api.js';
 import { checkVersion } from './version.svelte.js';
 
-const POLL_MS = 60_000;
+const POLL_MS = 5 * 60_000;
 
 export const notify = $state({
   unread: 0,

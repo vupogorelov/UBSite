@@ -60,6 +60,22 @@ function createHub(auth, workspaceOf) {
       clients.set(res, userId);
       req.on('close', () => clients.delete(res));
     },
+    /**
+     * An event of one's own to each open tab: `pick` says what this person is to be told (null — nothing).
+     * @param {(userId: number) => Record<string, unknown> | null} pick
+     */
+    tell(pick) {
+      /** @type {Map<number, string | null>} */
+      const said = new Map(); // (one person's tabs are told the same)
+      for (const [res, uid] of clients) {
+        if (!said.has(uid)) {
+          const event = pick(uid);
+          said.set(uid, event ? `data: ${JSON.stringify(event)}\n\n` : null);
+        }
+        const data = said.get(uid);
+        if (data) res.write(data);
+      }
+    },
     /** @param {string} key @param {Record<string, unknown>} event */
     publish(key, event) {
       const c = parseKey(key);

@@ -5,6 +5,7 @@ import { openDb } from './db.js';
 import { createRouter, createStatic, sendJson, HttpError, FileResponse, STREAM } from './http.js';
 import { createAuth, readCookie, SESSION_COOKIE, viaLocalProxy, clientIp } from './auth.js';
 import { createRateLimit } from './ratelimit.js';
+import { createLive } from './live.js';
 import { createTagStore } from './tags.js';
 import { createMarkTasks } from './marktasks.js';
 import { startBackups, lastBackup } from './backup.js';
@@ -228,6 +229,8 @@ server.listen(PORT, HOST, () =>
   console.log(`Urantia Papers Explorer: http://${HOST}:${PORT}${mailer.enabled ? '' : ' (почта не настроена: письма не отправляются)'}`),
 );
 startBackups(db);
+// notes and tasks changed: the open tabs concerned are told at once (server/live.js)
+createLive(db, chat.hub, auth).start();
 // The Book speaks once a day at its hour (checked every minute; once a day at most).
 setInterval(() => {
   try {

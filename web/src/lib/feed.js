@@ -105,6 +105,8 @@ function createFeed(o) {
   }
 
   return {
+    /** The open key ("<person>:<workspace>", "<person>:tasks"); "" — none. */
+    key: () => space.key,
     /** What is kept. @returns {T[]} */
     items: () => /** @type {T[]} */ (space.items),
     /** The kept items are read (for the first paint). */
@@ -180,5 +182,14 @@ if (typeof window !== 'undefined') {
   };
   addEventListener('online', both);
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && both());
-  setInterval(() => document.visibilityState === 'visible' && both(), 60_000);
+  // Told by the server the moment something changed (server/live.js, over the chat's live stream): the
+  // feed concerned is fetched then. notes: the workspaces that changed ('all' — the stream was down).
+  addEventListener('ub-live-changed', (e) => {
+    const d = /** @type {CustomEvent<{ notes: number[] | 'all', tasks: boolean }>} */ (e).detail;
+    const ws = Number(notesFeed.key().split(':')[1]);
+    if (d.notes === 'all' || d.notes.includes(ws)) void notesFeed.pull();
+    if (d.tasks) void tasksFeed.pull();
+  });
+  // (a quiet check now and then, in case a word of the stream was missed)
+  setInterval(() => document.visibilityState === 'visible' && both(), 10 * 60_000);
 }

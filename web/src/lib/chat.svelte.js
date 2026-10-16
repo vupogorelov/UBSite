@@ -6,7 +6,7 @@ import { session } from './session.svelte.js';
 import { notify, refreshCounts } from './notify.svelte.js';
 import { navigate } from './router.svelte.js';
 
-/** @typedef {{ type: 'message' | 'edit' | 'delete' | 'reactions' | 'typing' | 'reload' | 'pin' | 'mark', key: string } & Record<string, any>} ChatEvent */
+/** @typedef {{ type: 'message' | 'edit' | 'delete' | 'reactions' | 'typing' | 'reload' | 'pin' | 'mark' | 'changed', key: string } & Record<string, any>} ChatEvent */
 
 export const chat = $state({
   /** @type {import('./api.js').ChatSummary[]} */ list: [],
@@ -125,6 +125,11 @@ export function sendTyping(key) {
 /** @param {ChatEvent} e */
 function handle(e) {
   const me = session.user?.id;
+  if (e.type === 'changed') {
+    // notes or tasks changed (server/live.js): the feeds fetch them (lib/feed.js)
+    dispatchEvent(new CustomEvent('ub-live-changed', { detail: e }));
+    return;
+  }
   if (e.type === 'typing') {
     if (e.userId === me) return;
     chat.typing[e.key] = { name: e.name, until: Date.now() + 5000 };
@@ -160,6 +165,8 @@ export function connectChat() {
     if (!lost) return;
     lost = false;
     void loadChats();
+    // what changed while the stream was down: the notes and tasks are fetched again (lib/feed.js)
+    dispatchEvent(new CustomEvent('ub-live-changed', { detail: { notes: 'all', tasks: true } }));
     if (chat.active) for (const fn of listeners) fn(/** @type {ChatEvent} */ ({ type: 'reload', key: chat.active }));
   };
   es.onmessage = (ev) => {
