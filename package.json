@@ -14,7 +14,8 @@
     "test": "node --test",
     "check:offline": "node --disable-warning=ExperimentalWarning scripts/check-offline.js",
     "e2e": "node --disable-warning=ExperimentalWarning scripts/e2e/run.js",
-    "check": "svelte-check --threshold error"
+    "check": "svelte-check --threshold error && node scripts/check-css.js",
+    "check:css": "node scripts/check-css.js"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
