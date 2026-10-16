@@ -1,6 +1,6 @@
 // @ts-check
 import { orOnDevice } from './offline-search.js';
-import { enqueue, ruleFor, outboxHooks } from './outbox.svelte.js';
+import { enqueue, policyFor, outboxHooks } from './outbox.svelte.js';
 import { log } from './log.js';
 
 /**
@@ -164,8 +164,8 @@ outboxHooks.unauthorized = () => hooks.unauthorized();
  * @param {string} method @param {string} url @param {unknown} [body]
  */
 async function request(method, url, body) {
-  const rule = method === 'GET' ? null : ruleFor(method, url);
-  if (rule && rule !== 'drop') return enqueue(method, url, body, rule);
+  const policy = method === 'GET' ? null : policyFor(method, url);
+  if (policy?.mode === 'queue') return enqueue(method, url, body, policy);
   const path = `${method} ${url.split('?')[0]}`; // (for the journal: no query — searches stay private)
   const t0 = performance.now();
   /** @type {Response} */
@@ -178,7 +178,7 @@ async function request(method, url, body) {
     });
   } catch (err) {
     // (known to be offline: expected, not noted)
-    if (rule !== 'drop' && navigator.onLine !== false) log('api', path, { failed: 'нет связи' }, 'warn');
+    if (policy?.mode !== 'drop' && navigator.onLine !== false) log('api', path, { failed: 'нет связи' }, 'warn');
     // (a reading falls back to what the device keeps; a change that needs the server says so)
     if (method !== 'GET') throw new Error('Нужна связь с сервером — попробуйте, когда она появится');
     throw err;

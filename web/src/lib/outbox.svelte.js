@@ -7,6 +7,7 @@
 // once however many times it arrives (server/ops.js), so a change sent again after a broken connection
 // is not doubled. A change that needs the server at the moment (sign-in, administration, votes…) is
 // sent directly and, without a network, says so. "Печатает…" and activity beats are not kept at all.
+// Which is which: shared/api-policy.js.
 //
 // A queued change's promise settles when it is sent (perhaps much later): the places that show the
 // change at once (a message with its clock) do not wait for it. Refused by the server (no rights, not
@@ -14,8 +15,9 @@
 // message with "!") and in "Ждут отправки", to be tried again or given up.
 
 import { log } from './log.js';
+import { writePolicy } from '../../../shared/api-policy.js';
 
-/** @typedef {'message' | 'read' | 'mute' | 'pinned' | 'settings' | 'history' | 'note' | 'task' | 'react' | 'mark' | 'pin' | 'follow'} Kind */
+/** @typedef {import('../../../shared/api-policy.js').Kind} Kind */
 /**
  * @typedef {{
  *   seq?: number, id: string, user: number, method: string, url: string, body: unknown, kind: Kind,
@@ -24,49 +26,11 @@ import { log } from './log.js';
  */
 
 /**
- * What waits in the queue. `merge`: a newer change of the same thing replaces the waiting one
- * ('replace') or adds to it ('patch': the fields together).
- * @type {[method: string, path: RegExp, kind: Kind, merge?: 'replace' | 'patch'][]}
+ * What a change does without a network (shared/api-policy.js — one list for the app): it waits here
+ * ('queue'), means nothing later ('drop') or needs the server now ('direct').
+ * @param {string} method @param {string} url
  */
-const RULES = [
-  ['POST', /^\/api\/chat\/c\/[^/]+\/messages$/, 'message'],
-  ['POST', /^\/api\/chat\/c\/[^/]+\/read$/, 'read', 'replace'],
-  ['PUT', /^\/api\/chat\/c\/[^/]+\/mute$/, 'mute', 'replace'],
-  ['PUT', /^\/api\/chat\/pinned$/, 'pinned', 'replace'],
-  // a message's reactions (a toggle each: in order, not merged), the administrator's mark, the pinned one,
-  // following a paragraph's thread (shown at once in the conversation)
-  ['POST', /^\/api\/chat\/messages\/\d+\/react$/, 'react'],
-  ['PUT', /^\/api\/chat\/messages\/\d+\/mark$/, 'mark', 'replace'],
-  ['PUT', /^\/api\/chat\/c\/[^/]+\/pin$/, 'pin', 'replace'],
-  ['POST', /^\/api\/public\/thread\/[^/]+\/follow$/, 'follow', 'replace'],
-  ['PUT', /^\/api\/workspaces\/\d+\/settings$/, 'settings', 'patch'],
-  ['POST', /^\/api\/workspaces\/\d+\/history$/, 'history'],
-  // notes, bookmarks, their comments and tags (shown at once: notes.svelte.js lays them over what the server knows)
-  ['POST', /^\/api\/workspaces\/\d+\/annotations$/, 'note'],
-  ['PATCH', /^\/api\/workspaces\/\d+\/annotations\/[^/]+$/, 'note'],
-  ['DELETE', /^\/api\/workspaces\/\d+\/annotations\/[^/]+$/, 'note'],
-  ['PUT', /^\/api\/workspaces\/\d+\/annotations\/[^/]+\/tags$/, 'note'],
-  ['POST', /^\/api\/workspaces\/\d+\/annotations\/[^/]+\/comments$/, 'note'],
-  ['PATCH', /^\/api\/workspaces\/\d+\/annotations\/[^/]+\/comments\/\d+$/, 'note'],
-  ['DELETE', /^\/api\/workspaces\/\d+\/annotations\/[^/]+\/comments\/\d+$/, 'note'],
-  // tasks and subtasks (tasks.svelte.js lays them over what the server knows, as notes)
-  ['POST', /^\/api\/tasks$/, 'task'],
-  ['PUT', /^\/api\/tasks\/order$/, 'task'],
-  ['PATCH', /^\/api\/tasks\/[^/]+$/, 'task'],
-  ['DELETE', /^\/api\/tasks\/[^/]+$/, 'task'],
-  ['POST', /^\/api\/tasks\/[^/]+\/subtasks$/, 'task'],
-  ['PATCH', /^\/api\/tasks\/[^/]+\/subtasks\/\d+$/, 'task'],
-  ['DELETE', /^\/api\/tasks\/[^/]+\/subtasks\/\d+$/, 'task'],
-];
-/** Not kept: they mean nothing later. */
-const EPHEMERAL = /^\/api\/(chat\/c\/[^/]+\/typing|activity)$/;
-
-/** @param {string} method @param {string} url */
-export function ruleFor(method, url) {
-  const path = url.split('?')[0];
-  if (EPHEMERAL.test(path)) return 'drop';
-  return RULES.find(([m, re]) => m === method && re.test(path)) ?? null;
-}
+export const policyFor = (method, url) => writePolicy(method, url.split('?')[0]);
 
 export const outbox = $state({
   /** The person's changes waiting to be sent or refused (in order). @type {Op[]} */
@@ -125,11 +89,11 @@ export const uuid = () => crypto.randomUUID?.() ?? `${Date.now().toString(36)}-$
 /**
  * Queues a change and sends it as soon as it can. Settles with the server's answer when sent.
  * @param {string} method @param {string} url @param {unknown} body
- * @param {NonNullable<ReturnType<typeof ruleFor>> & any[]} rule
+ * @param {{ kind: Kind, merge?: 'replace' | 'patch' }} policy the change's ('queue')
  * @returns {Promise<any>}
  */
-export async function enqueue(method, url, body, rule) {
-  const [, , kind, merge] = rule;
+export async function enqueue(method, url, body, policy) {
+  const { kind, merge } = policy;
   /** @type {Op} */
   const op = { id: uuid(), user: me, method, url, body, kind, at: new Date().toISOString(), state: 'wait', tries: 0 };
   if (kind === 'message' && body && typeof body === 'object') op.body = { ...body, writtenAt: op.at }; // (the time it was written)

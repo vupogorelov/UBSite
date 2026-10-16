@@ -21,7 +21,7 @@ export class HttpError extends Error {
 }
 
 export function createRouter() {
-  /** @type {{ method: string, re: RegExp, keys: string[], handler: Handler }[]} */
+  /** @type {{ method: string, path: string, re: RegExp, keys: string[], handler: Handler }[]} */
   const routes = [];
   return {
     /** @param {string} method @param {string} path e.g. "/api/papers/:id" @param {Handler} handler */
@@ -29,8 +29,10 @@ export function createRouter() {
       /** @type {string[]} */
       const keys = [];
       const re = new RegExp('^' + path.replace(/:(\w+)/g, (_, k) => (keys.push(k), '([^/]+)')) + '$');
-      routes.push({ method, re, keys, handler });
+      routes.push({ method, path, re, keys, handler });
     },
+    /** The routes as registered (the API's map: server/api-policy.test.js). */
+    list: () => routes.map((r) => ({ method: r.method, path: r.path })),
     /** @param {string} method @param {string} pathname */
     match(method, pathname) {
       for (const r of routes) {

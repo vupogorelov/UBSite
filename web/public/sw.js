@@ -22,16 +22,14 @@ const BOOK = 'ub-book';
 const LAST = 'ub-last';
 /** How long the network has before the saved answer is given. */
 const WAIT = 4000;
-/** The book's URLs (server/offline.js lists the same). */
-const BOOK_PATH = /^\/api\/(toc|glossary|pronunciations|stem-aliases|papers\/\d+(\/terms)?)$/;
-/**
- * The book's text (the contents, the papers): the device's copy answers first — a paper opens at once,
- * with or without a network. The copy follows the server by its manifest (lib/offline.svelte.js: at the
- * start, every hour, on coming back to the app), so it is the server's text; what it lacks, the network gives.
- */
-const TEXT_PATH = /^\/api\/(toc|papers\/\d+)$/;
-/** API reads never answered from a cache: live streams, files, the copy itself, sign-in. */
-const LIVE_PATH = /^\/api\/(chat\/stream|audio\/|offline\/|export|auth\/(login|logout|register)|search|workspaces\/\d+\/changes|tasks\/changes)/;
+// How each address of the API behaves without a network — one list for the whole app
+// (shared/api-policy.js; the build serves it as /api-policy.js): 'text' — the book's text, from the
+// device's copy first (a paper opens at once; the copy follows the server by its manifest); 'book' — the
+// rest of the book, the network first; 'live' — never from a cache; 'last' — the network first, its
+// last answer kept.
+importScripts(`/api-policy.js?v=${VERSION}`);
+/** @type {(path: string) => 'text' | 'book' | 'live' | 'last'} */
+const readPolicy = sw.apiPolicy.readPolicy;
 
 self.addEventListener('install', (/** @type {any} */ event) => {
   event.waitUntil(
@@ -154,9 +152,10 @@ self.addEventListener('fetch', (/** @type {any} */ event) => {
       event.respondWith(fromAudio(req, url.pathname).then((r) => r || fetch(req)));
       return;
     }
-    if (LIVE_PATH.test(url.pathname)) return;
-    if (TEXT_PATH.test(url.pathname)) event.respondWith(fromBook(url.pathname).then((r) => r || fetch(req)));
-    else if (BOOK_PATH.test(url.pathname)) event.respondWith(networkFirst(req, () => fromBook(url.pathname), false));
+    const mode = readPolicy(url.pathname);
+    if (mode === 'live') return;
+    if (mode === 'text') event.respondWith(fromBook(url.pathname).then((r) => r || fetch(req)));
+    else if (mode === 'book') event.respondWith(networkFirst(req, () => fromBook(url.pathname), false));
     else event.respondWith(networkFirst(req, () => caches.match(req, { cacheName: LAST }), true));
     return;
   }

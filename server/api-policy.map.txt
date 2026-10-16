@@ -1,0 +1,153 @@
+DELETE /api/aliases/:id direct
+DELETE /api/collections/:cid direct
+DELETE /api/collections/:cid/items/:iid direct
+DELETE /api/glossary/:id direct
+DELETE /api/pronunciations/:id direct
+DELETE /api/public/messages/:mid direct
+DELETE /api/public/proposals/:pid direct
+DELETE /api/tasks/:id queue task
+DELETE /api/tasks/:id/subtasks/:sid queue task
+DELETE /api/workspaces/:id direct
+DELETE /api/workspaces/:id/annotations/:aid queue note
+DELETE /api/workspaces/:id/annotations/:aid/comments/:cid queue note
+DELETE /api/workspaces/:id/history direct
+DELETE /api/workspaces/:id/members/:uid direct
+DELETE /api/workspaces/:id/queries/:qid direct
+GET /api/about last
+GET /api/about/:name last
+GET /api/admin/analytics last
+GET /api/admin/log last
+GET /api/admin/users last
+GET /api/admin/voting last
+GET /api/aliases last
+GET /api/audio last
+GET /api/audio/:lang/:file live
+GET /api/auth/invite/:token last
+GET /api/auth/me last
+GET /api/auth/registration last
+GET /api/chat last
+GET /api/chat/c/:key last
+GET /api/chat/c/:key/messages last
+GET /api/chat/c/:key/search last
+GET /api/chat/marked last
+GET /api/chat/stream live
+GET /api/chat/unread last
+GET /api/chat/users last
+GET /api/chat/voice last
+GET /api/collections/:cid last
+GET /api/collections/shared last
+GET /api/export live
+GET /api/glossary book
+GET /api/goto last
+GET /api/guest/paper/:id last
+GET /api/health live
+GET /api/integrations/en last
+GET /api/notifications last
+GET /api/notifications/count last
+GET /api/offline/file/:hash live
+GET /api/offline/manifest live
+GET /api/papers/:id text
+GET /api/papers/:id/terms book
+GET /api/places last
+GET /api/pronunciations book
+GET /api/public/config last
+GET /api/public/paper/:id last
+GET /api/public/proposals last
+GET /api/public/stats last
+GET /api/public/thread/:ref last
+GET /api/search live
+GET /api/search/highlights live
+GET /api/stem-aliases book
+GET /api/tasks last
+GET /api/tasks/changes live
+GET /api/tasks/count last
+GET /api/toc text
+GET /api/workspaces last
+GET /api/workspaces/:id last
+GET /api/workspaces/:id/annotations last
+GET /api/workspaces/:id/candidates last
+GET /api/workspaces/:id/changes live
+GET /api/workspaces/:id/collections last
+GET /api/workspaces/:id/members last
+GET /api/workspaces/:id/queries last
+GET /api/workspaces/:id/tags last
+HEAD /api/audio/:lang/:file live
+PATCH /api/admin/users/:uid direct
+PATCH /api/aliases/:id direct
+PATCH /api/chat/channels/:id direct
+PATCH /api/collections/:cid direct
+PATCH /api/collections/:cid/items/:iid direct
+PATCH /api/glossary/:id direct
+PATCH /api/pronunciations/:id direct
+PATCH /api/public/messages/:mid direct
+PATCH /api/public/proposals/:pid direct
+PATCH /api/tasks/:id queue task
+PATCH /api/tasks/:id/subtasks/:sid queue task
+PATCH /api/workspaces/:id direct
+PATCH /api/workspaces/:id/annotations/:aid queue note
+PATCH /api/workspaces/:id/annotations/:aid/comments/:cid queue note
+PATCH /api/workspaces/:id/members/:uid direct
+POST /api/activity drop
+POST /api/admin/invites direct
+POST /api/admin/users/:uid/reset direct
+POST /api/aliases direct
+POST /api/auth/email/resend direct
+POST /api/auth/forgot direct
+POST /api/auth/invite/:token direct
+POST /api/auth/login direct
+POST /api/auth/logout direct
+POST /api/auth/password direct
+POST /api/auth/register direct
+POST /api/auth/verify-email/:token direct
+POST /api/chat/c/:key/messages queue message
+POST /api/chat/c/:key/read queue read (replace)
+POST /api/chat/c/:key/typing drop
+POST /api/chat/channels direct
+POST /api/chat/messages/:mid/react queue react
+POST /api/chat/voice/post direct
+POST /api/collections/:cid/copy direct
+POST /api/collections/:cid/items direct
+POST /api/collections/:cid/subscribe direct
+POST /api/glossary direct
+POST /api/integrations/en/run direct
+POST /api/log direct
+POST /api/notifications/seen direct
+POST /api/pronunciations direct
+POST /api/public/assist direct
+POST /api/public/messages/:mid/hide direct
+POST /api/public/proposals direct
+POST /api/public/proposals/:pid/moderate direct
+POST /api/public/proposals/:pid/publish direct
+POST /api/public/proposals/:pid/vote direct
+POST /api/public/proposals/:pid/withdraw direct
+POST /api/public/thread/:ref/follow queue follow (replace)
+POST /api/public/thread/:ref/messages direct
+POST /api/tasks queue task
+POST /api/tasks/:id/subtasks queue task
+POST /api/workspaces direct
+POST /api/workspaces/:id/annotations queue note
+POST /api/workspaces/:id/annotations/:aid/comments queue note
+POST /api/workspaces/:id/collections direct
+POST /api/workspaces/:id/history queue history
+POST /api/workspaces/:id/invites direct
+POST /api/workspaces/:id/members direct
+POST /api/workspaces/:id/queries direct
+POST /api/workspaces/:id/tags/delete direct
+POST /api/workspaces/:id/tags/rename direct
+PUT /api/admin/registration direct
+PUT /api/admin/voting direct
+PUT /api/auth/email direct
+PUT /api/auth/profile direct
+PUT /api/chat/c/:key/mute queue mute (replace)
+PUT /api/chat/c/:key/pin queue pin (replace)
+PUT /api/chat/messages/:mid/mark queue mark (replace)
+PUT /api/chat/pinned queue pinned (replace)
+PUT /api/chat/voice direct
+PUT /api/collections/:cid/order direct
+PUT /api/integrations/en direct
+PUT /api/places/:kind direct
+PUT /api/tasks/order queue task
+PUT /api/workspaces/:id/annotations/:aid/tags queue note
+PUT /api/workspaces/:id/queries/:qid direct
+PUT /api/workspaces/:id/settings queue settings (patch)
+PUT /api/workspaces/:id/tags direct

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { readFileSync } from 'node:fs';
 
 // Each build gets an id: the service worker is registered as sw.js?v=<id>, so a new build
 // installs a fresh worker that drops the old caches; /version.json carries it too, so a running app
@@ -10,6 +11,19 @@ export default defineConfig({
   root: 'web',
   plugins: [
     svelte(),
+    {
+      // shared/api-policy.js for the service worker, which takes plain scripts (importScripts):
+      // the same file, its exports made the worker's own (self.apiPolicy)
+      name: 'api-policy',
+      apply: 'build',
+      generateBundle() {
+        const src = readFileSync(new URL('./shared/api-policy.js', import.meta.url), 'utf8');
+        if (/^\s*import\s/m.test(src)) this.error('shared/api-policy.js must import nothing: the service worker takes it as a plain script');
+        const body = src.replace(/^export \{ readPolicy, writePolicy, API_RULES \};\s*$/m, '');
+        if (body === src) this.error('shared/api-policy.js: its export line was not found');
+        this.emitFile({ type: 'asset', fileName: 'api-policy.js', source: `(() => {\n${body}\nself.apiPolicy = { readPolicy, writePolicy };\n})();\n` });
+      },
+    },
     {
       name: 'version-file',
       apply: 'build',
