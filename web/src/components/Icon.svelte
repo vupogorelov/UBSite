@@ -1,6 +1,6 @@
 <script>
   // Line icons in the style of the UI reference (Lucide-like, 24px grid, 1.8 stroke).
-  /** @type {{ name: 'menu' | 'settings' | 'theme' | 'close' | 'chevron' | 'search' | 'star' | 'history' | 'help' | 'trash' | 'edit' | 'up' | 'down' | 'toc' | 'notes' | 'tag' | 'translate' | 'bookmark' | 'comment' | 'discuss' | 'copy' | 'more' | 'dots' | 'headphones' | 'play' | 'pause' | 'stop' | 'play-line' | 'stop-line' | 'skip-back' | 'skip-forward' | 'rewind' | 'fast-forward' | 'reset' | 'minus' | 'ruble' | 'info' | 'globe' | 'users' | 'lock' | 'bell' | 'megaphone' | 'eye' | 'eye-off' | 'layers' | 'grip' | 'plus' | 'book-open' | 'link' | 'back' | 'check-square' | 'calendar' | 'list' | 'kanban' | 'inbox' | 'check' | 'pin' | 'cloud-download' | 'clock' | 'alert' | 'image' | 'share' | 'download', size?: number }} */
+  /** @type {{ name: import('../lib/icon-names.js').IconName, size?: number }} */
   let { name, size = 20 } = $props();
 </script>
 

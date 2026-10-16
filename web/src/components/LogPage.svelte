@@ -20,8 +20,7 @@
   let failedOnly = $state(false);
   let loading = $state(false);
   let more = $state(true);
-  /** @type {string | null} */
-  let open = $state(null);
+  let open = $state(/** @type {string | null} */ (null));
 
   /** @param {boolean} [append] */
   async function load(append = false) {

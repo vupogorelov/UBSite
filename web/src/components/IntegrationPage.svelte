@@ -10,10 +10,10 @@
    * often it is kept in step, "Синхронизировать сейчас", and the reports of the runs.
    */
 
-  /** @type {import('../lib/api.js').SyncConfig | null} */ let config = $state(null);
+  let config = $state(/** @type {import('../lib/api.js').SyncConfig | null} */ (null));
   /** @type {import('../lib/api.js').SyncRun[]} */ let runs = $state([]);
   let busy = $state(false);
-  /** @type {number | null} */ let openRun = $state(null);
+  let openRun = $state(/** @type {number | null} */ (null));
 
   async function load() {
     try {

@@ -25,8 +25,8 @@
   /** @typedef {import('../../../shared/settings.js').SettingGroup} SettingGroup */
   /** @typedef {import('../../../shared/settings.js').SettingDef} SettingDef */
 
-  /** The open group's page (its title), or null for the list. @type {string | null} */
-  let page = $state(null);
+  /** The open group's page (its title), or null for the list. */
+  let page = $state(/** @type {string | null} */ (null));
   const group = $derived(SETTINGS_GROUPS.find((g) => g.title === page) ?? null);
   /** Integrations (administrators): not a group of settings but a page of its own. */
   const INTEGRATION = 'Английский текст';

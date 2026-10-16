@@ -53,14 +53,12 @@
   if (session.user) loadRecordings(); // (a paragraph's ▶ plays the recording where the language is set to it)
 
   /** @typedef {import('../lib/router.svelte.js').Target} Target */
-  /** @typedef {import('./SelectionToolbar.svelte').ToolbarState} ToolbarState */
+  /** @typedef {import('../lib/notes.svelte.js').ToolbarState} ToolbarState */
 
-  /** @type {import('../lib/api.js').PaperData | null} */
-  let data = $state(null);
+  let data = $state(/** @type {import('../lib/api.js').PaperData | null} */ (null));
   let error = $state('');
   let loading = $state(false);
-  /** @type {string | null} */
-  let flashRef = $state(null);
+  let flashRef = $state(/** @type {string | null} */ (null));
   /** English paragraphs the reader expanded while in "collapsed" mode. */
   const expanded = new SvelteSet();
   /** The comparison (the English under the Russian): while English is read aloud it is shown in full, to be followed; reading in English there is none. */
@@ -75,8 +73,7 @@
   let article = $state();
   let token = 0;
   let scrollerWidth = $state(0);
-  /** @type {ToolbarState | null} */
-  let tb = $state(null);
+  let tb = $state(/** @type {ToolbarState | null} */ (null));
   /** Recomputes the toolbar's anchor rectangle (after scrolling). @type {(() => DOMRect | null) | null} */
   let tbRect = null;
 
@@ -157,7 +154,7 @@
    * Variants shown in place of the text: the approved ones ("Новая редакция" / "Правка") and, over
    * them, the reader's drafts and own proposals under vote ("Мои варианты поверх текста"; the latest
    * wins where they overlap).
-   * @type {{ p: import('../lib/api.js').Proposal, kind: 'mine' | 'approved' | 'review' }[]}
+   * @type {{ p: import('../lib/api.js').Proposal, kind: 'mine' | 'approved' | 'review', start: number, end: number }[]}
    */
   const subs = $derived.by(() => {
     const uid = session.user?.id;
@@ -165,10 +162,10 @@
       ? liveProposals.filter((p) => p.authorId === uid && (p.status === 'draft' || p.status === 'voting'))
       : [];
     const approved = settings.trText !== 'original' ? liveProposals.filter((p) => p.status === 'approved') : [];
-    const kind = settings.trText === 'review' ? 'review' : 'approved';
+    const kind = /** @type {'review' | 'approved'} */ (settings.trText === 'review' ? 'review' : 'approved');
     const refs = new Set([...mine, ...approved].map((p) => p.ref));
     return [...refs].flatMap((ref) => {
-      const top = pickNonOverlapping(mine.filter((p) => p.ref === ref)).map((p) => ({ p, kind: /** @type {const} */ ('mine'), start: p.start, end: p.end }));
+      const top = pickNonOverlapping(mine.filter((p) => p.ref === ref)).map((p) => ({ p, kind: /** @type {'mine' | 'approved' | 'review'} */ ('mine'), start: p.start, end: p.end }));
       const base = approved.filter((p) => p.ref === ref).map((p) => ({ p, kind, start: p.start, end: p.end }));
       return layer(top, base);
     });
@@ -206,8 +203,7 @@
   });
   /** Any translation display is on: Ctrl+click on a fragment opens its variants. */
   const trShown = $derived(main === 'ru' && (settings.trMarks || settings.trMine || settings.trText !== 'original')); // the layer is about the Russian
-  /** @type {{ x: number, y: number, below: boolean, items: import('../lib/api.js').Proposal[], original: boolean, fragment: import('../lib/translation.svelte.js').Fragment } | null} */
-  let pop = $state(null);
+  let pop = $state(/** @type {{ x: number, y: number, below: boolean, items: import('../lib/api.js').Proposal[], original: boolean, fragment: import('../lib/translation.svelte.js').Fragment } | null} */ (null));
   const touch = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
 
   /** Plain text of a paragraph's HTML (textContent equals the server's plain text). @param {string} html */
@@ -445,8 +441,7 @@
   // ---- Pulling on past the paper's end (or beginning): the next paper from its start, the previous at its end ----
   /** The paper to open at its end (pulled back into it). @type {number | null} */
   let landAtEnd = null;
-  /** @type {{ dir: import('../lib/edgepull.js').PullDir, p: number } | null} */
-  let pull = $state(null);
+  let pull = $state(/** @type {{ dir: import('../lib/edgepull.js').PullDir, p: number } | null} */ (null));
   /** @type {import('../lib/edgepull.js').PullOptions} */
   const pullOpts = {
     can: (dir) => !background && !!data && (dir === 'next' ? data.next !== null : data.prev !== null)
@@ -606,8 +601,7 @@
   });
   /** The place under the mouse ("ref:lang:start"), so a move within it changes nothing. @type {string | null} */
   let termAt = null;
-  /** @type {{ x: number, y: number, text: string, lang: string } | null} */
-  let termTip = $state(null);
+  let termTip = $state(/** @type {{ x: number, y: number, text: string, lang: string } | null} */ (null));
   /** Shown words of a variant or a dictionary name (.tr-sub): their text is drawn by CSS, so the element is marked. @type {HTMLElement[]} */
   let termSubs = [];
   let termFrame = 0;

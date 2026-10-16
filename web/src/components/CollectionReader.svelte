@@ -18,8 +18,7 @@
    */
   let { id } = $props();
 
-  /** @type {import('../lib/api.js').CollectionFull | null} */
-  let data = $state(null);
+  let data = $state(/** @type {import('../lib/api.js').CollectionFull | null} */ (null));
   let error = $state('');
   /** @type {HTMLElement | undefined} */ let article = $state();
 

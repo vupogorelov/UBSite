@@ -80,7 +80,7 @@ $deadline = (Get-Date).AddSeconds(30)
 while (-not $ok -and (Get-Date) -lt $deadline) {
   Start-Sleep -Milliseconds 700
   try {
-    $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/auth/me" -UseBasicParsing -TimeoutSec 3
+    $r = Invoke-WebRequest -Uri "http://127.0.0.1:$Port/api/health" -UseBasicParsing -TimeoutSec 3
     $ok = $r.StatusCode -eq 200
   } catch {}
 }

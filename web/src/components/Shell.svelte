@@ -48,11 +48,10 @@
   import AdminPanel from './AdminPanel.svelte';
   import AccountPanel from './AccountPanel.svelte';
 
-  /** @type {import('../lib/api.js').Toc | null} */
-  let toc = $state(null);
+  let toc = $state(/** @type {import('../lib/api.js').Toc | null} */ (null));
   let tocError = $state('');
-  /** @type {'none' | 'settings' | 'workspaces' | 'admin' | 'account'} */
-  let drawer = $state('none');
+  /** @typedef {'none' | 'settings' | 'workspaces' | 'admin' | 'account'} Drawer */
+  let drawer = $state(/** @type {Drawer} */ ('none'));
   let menuOpen = $state(false);
   /** @type {GotoBox} */
   let gotoBox;
@@ -169,7 +168,7 @@
     if (innerWidth <= NARROW) ui.sidebarOpen = false;
   }
 
-  /** @param {typeof drawer} d */
+  /** @param {Drawer} d */
   function open(d) {
     menuOpen = false;
     drawer = d;
@@ -227,7 +226,7 @@
   const NOTES_TABS = SECTIONS.filter((s) => s.id === 'notes' || s.phone === 'notes');
   const shownTabs = $derived(
     device.mobile && NOTES_TABS.some((s) => s.tab === ui.tab)
-      ? NOTES_TABS.map((s) => /** @type {[import('../lib/ui.svelte.js').Tab, string, string]} */ ([s.tab, s.label, s.icon]))
+      ? NOTES_TABS.map((s) => /** @type {[import('../lib/ui.svelte.js').Tab, string, import('../lib/icon-names.js').IconName]} */ ([s.tab, s.label, s.icon]))
       : [],
   );
   /**

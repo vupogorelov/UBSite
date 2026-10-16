@@ -12,6 +12,9 @@
 // The registration URL carries the build id (sw.js?v=…), so every new build installs a new worker
 // that replaces the old shell caches (the book, the last answers, the search index, the recordings stay).
 
+/** The worker's own scope (typed loosely: the checker knows the page's globals, not a worker's). @type {any} */
+const sw = self;
+
 const VERSION = new URL(self.location.href).searchParams.get('v') || 'dev';
 const CACHE = `ub-${VERSION}`;
 const BOOK = 'ub-book';
@@ -23,7 +26,7 @@ const BOOK_PATH = /^\/api\/(toc|glossary|pronunciations|stem-aliases|papers\/\d+
 /** API reads never answered from a cache: live streams, files, the copy itself, sign-in. */
 const LIVE_PATH = /^\/api\/(chat\/stream|audio\/|offline\/|export|auth\/(login|logout|register)|search|workspaces\/\d+\/changes|tasks\/changes)/;
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', (/** @type {any} */ event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
@@ -32,17 +35,17 @@ self.addEventListener('install', (event) => {
       await cache.put('/', res);
       const assets = [...html.matchAll(/(?:src|href)="(\/(?:assets|icons)\/[^"]+|\/theme\.js|\/manifest\.webmanifest)"/g)].map((m) => m[1]);
       await cache.addAll([...new Set(assets)]);
-      await self.skipWaiting();
+      await sw.skipWaiting();
     })(),
   );
 });
 
-self.addEventListener('activate', (event) => {
+self.addEventListener('activate', (/** @type {any} */ event) => {
   event.waitUntil(
     (async () => {
       // (the book, the last answers and the search's word index — lib/search.worker.js — stay)
       for (const key of await caches.keys()) if (key !== CACHE && key !== BOOK && key !== LAST && key !== 'ub-search' && key !== AUDIO) await caches.delete(key);
-      await self.clients.claim();
+      await sw.clients.claim();
     })(),
   );
 });
@@ -127,7 +130,7 @@ function networkFirst(req, saved, keep) {
   });
 }
 
-self.addEventListener('fetch', (event) => {
+self.addEventListener('fetch', (/** @type {any} */ event) => {
   const req = event.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);

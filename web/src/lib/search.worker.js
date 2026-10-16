@@ -20,7 +20,7 @@ async function read(path) {
 }
 
 /** @param {Blob | ReadableStream<Uint8Array>} data @param {CompressionStream | DecompressionStream} through */
-const transform = (data, through) => new Response((data instanceof Blob ? data.stream() : data).pipeThrough(through)).arrayBuffer();
+const transform = (data, through) => new Response((data instanceof Blob ? data.stream() : data).pipeThrough(/** @type {any} */ (through))).arrayBuffer();
 
 /** @param {string} key the book text's key ('' — not known: built, not kept) */
 async function load(key) {

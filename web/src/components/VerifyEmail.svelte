@@ -7,7 +7,7 @@
   /** /verify-email/<token>: the link from the confirmation letter (works signed in or not). @type {{ token: string }} */
   let { token } = $props();
 
-  /** @type {string | null} */ let email = $state(null);
+  let email = $state(/** @type {string | null} */ (null));
   let error = $state('');
 
   onMount(() => {

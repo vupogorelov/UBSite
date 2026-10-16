@@ -9,8 +9,7 @@
    */
   let { ref, start, end, text, proposalId = null, onpick } = $props();
 
-  /** @type {import('../lib/api.js').AssistResult | null} */
-  let hints = $state(null);
+  let hints = $state(/** @type {import('../lib/api.js').AssistResult | null} */ (null));
   let seq = 0;
   let first = true; // not reactive: the first request goes out at once, later ones after a pause in typing
 

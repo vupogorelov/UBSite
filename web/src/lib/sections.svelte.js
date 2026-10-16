@@ -9,7 +9,7 @@ import { search } from './search.svelte.js';
  * `tab`: a tab of the sidebar next to the book; `path`: a page of its own in place of the book.
  * `phone`: where the phone shows it. `badge`: a counter on the button (0 = none).
  * @typedef {{
- *   id: string, label: string, icon: string, group: 'book' | 'apps' | 'meta',
+ *   id: string, label: string, icon: import('./icon-names.js').IconName, group: 'book' | 'apps' | 'meta',
  *   phone: 'nav' | 'notes' | 'more',
  *   badge?: () => number,
  *   tab?: import('./ui.svelte.js').Tab, path?: string,

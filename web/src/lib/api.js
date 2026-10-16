@@ -132,7 +132,7 @@ import { log } from './log.js';
  *   messageId?: number | null, messageChat?: string | null, messageChatTitle?: string | null,
  *   doneAt: string | null, createdAt: string, updatedAt: string,
  *   subtasks: { id: number, title: string, done: boolean, pending?: 'wait', op?: string }[],
- *   uid?: string | null, pending?: 'wait', messageChatTitle?: string | null
+ *   uid?: string | null, pending?: 'wait'
  * }} Task
  * @typedef {Partial<Pick<Task, 'title' | 'notes' | 'status' | 'important' | 'due' | 'tags' | 'ref' | 'refEnd' | 'annotationId' | 'collectionId' | 'messageId'>>} TaskPatch
  * @typedef {{ kind: 'para', ref: string, refEnd?: string | null, body?: string | null, fragment?: { lang: 'ru' | 'en', start: number, end: number } }
@@ -329,6 +329,7 @@ export const api = {
    */
   adminLog: (f) =>
     request('GET', `/api/admin/log?${new URLSearchParams({ ...(f.user ? { user: String(f.user) } : {}), ...(f.failed ? { failed: '1' } : {}), ...(f.before ? { before: f.before } : {}) })}`),
+  /** @param {Partial<VotingConfig>} patch */
   adminSetVoting: (patch) => request('PUT', '/api/admin/voting', patch),
 
   // ---- Public layer: paragraph threads and translation proposals ----
@@ -381,9 +382,9 @@ export const api = {
   voicePause: (paused) => request('PUT', '/api/chat/voice', { paused }),
   /** An administrator's mark (null takes it off). @param {number} id @param {Mark | null} mark @returns {Promise<PublicMessage>} */
   markMessage: (id, mark) => request('PUT', `/api/chat/messages/${id}/mark`, { mark }),
-  /** Marked messages from the chats one may read (no mark — all). @param {Mark | null} mark @returns {Promise<PublicMessage[]>} */
   /** The search in one conversation. @param {string} key @param {string} q @param {Mark | null} mark @returns {Promise<PublicMessage[]>} */
   chatSearch: (key, q, mark) => request('GET', `/api/chat/c/${encodeURIComponent(key)}/search?q=${encodeURIComponent(q)}${mark ? `&mark=${mark}` : ''}`),
+  /** Marked messages from the chats one may read (no mark — all). @param {Mark | null} mark @returns {Promise<PublicMessage[]>} */
   markedMessages: (mark) => request('GET', `/api/chat/marked${mark ? `?mark=${mark}` : ''}`),
   /** @param {number} id @param {string} emoji @returns {Promise<{ reactions: Reaction[] }>} */
   react: (id, emoji) => request('POST', `/api/chat/messages/${id}/react`, { emoji }),

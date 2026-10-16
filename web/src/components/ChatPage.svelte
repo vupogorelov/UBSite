@@ -85,8 +85,8 @@
 
   // ---- Pinned chats: each user's own, up to 10, at the top in their order ----
   const pinnedKeys = $derived(chat.list.filter((c) => c.pinned !== null).map((c) => c.key));
-  /** The chat's menu: right click; on a touch screen a long press. @type {{ key: string, x: number, y: number } | null} */
-  let menu = $state(null);
+  /** The chat's menu: right click; on a touch screen a long press. */
+  let menu = $state(/** @type {{ key: string, x: number, y: number } | null} */ (null));
   /** @param {string} key @param {number} x @param {number} y */
   function openMenu(key, x, y) {
     menu = { key, x: Math.min(x, innerWidth - 230), y: Math.min(y, innerHeight - 80) };

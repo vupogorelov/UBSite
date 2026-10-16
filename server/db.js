@@ -788,7 +788,10 @@ const MIGRATIONS = [
 export function openDb(file = DEFAULT_DB_PATH) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
-  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
+  // WAL; `synchronous` stays FULL (SQLite's default): a commit survives a power cut — the writes are
+  // small, durability comes first. The log file is cut back to 32 MB after a checkpoint (without the
+  // limit it keeps its largest size for good).
+  db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_size_limit = 33554432;');
   migrate(db);
   return db;
 }

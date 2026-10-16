@@ -14,9 +14,9 @@
   /** @typedef {import('../lib/api.js').NameAlias} NameAlias */
   const empty = () => ({ written: '', alias: '', note: '', forms: '' });
   let draft = $state(empty());
-  /** @type {number | null} */ let editing = $state(null);
+  let editing = $state(/** @type {number | null} */ (null));
   let edit = $state(empty());
-  /** @type {number | null} */ let confirmDelete = $state(null);
+  let confirmDelete = $state(/** @type {number | null} */ (null));
 
   /** @param {Record<string, string>} f */
   const formsText = (f) => Object.entries(f).map(([k, v]) => `${k} = ${v}`).join('\n');

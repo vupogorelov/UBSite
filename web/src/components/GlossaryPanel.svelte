@@ -12,8 +12,8 @@
   let terms = $state([]);
   let loaded = false;
   let filter = $state('');
-  /** The term being edited: an id, 'new', or null. @type {number | 'new' | null} */
-  let editing = $state(null);
+  /** The term being edited: an id, 'new', or null. */
+  let editing = $state(/** @type {number | 'new' | null} */ (null));
   let form = $state({ en: '', ru: '', avoid: '', note: '' });
   let confirmDelete = $state(/** @type {number | null} */ (null));
 

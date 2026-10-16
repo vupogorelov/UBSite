@@ -13,6 +13,17 @@
   import BookPost from './BookPost.svelte';
 
   /**
+   * @typedef {{
+   *   id: number, authorId: number | null, authorName: string | null, body: string, createdAt: string, updatedAt?: string,
+   *   kind?: 'message' | 'event', hiddenAt?: string | null, mark?: import('../lib/api.js').Mark | null,
+   *   authorAgent?: boolean, linkedId?: number | null, comments?: number, post?: import('../lib/api.js').PublicMessage['post'],
+   *   reply?: { id: number, authorName: string | null, body: string } | null,
+   *   reactions?: import('../lib/api.js').Reaction[], writtenAt?: string | null,
+   *   pending?: 'wait' | 'failed', error?: string, op?: any
+   * }} Msg
+   */
+
+  /**
    * A conversation drawn like Telegram: bubbles (own on the right), grouped runs of one author with
    * the avatar and the tail at the end, date pills, service messages, replies (also a swipe to the left), reactions.
    * Used by the chat page, paragraph threads, proposal discussions and note comments.
@@ -24,14 +35,6 @@
    * `onquote`: a quote from the book tapped in a paragraph's thread (shown in the paragraph there);
    * `onmark`: the administrator's marks take / work / done (lib/marks.js);
    * `ondiscuss`: a Book's post of the channel → its discussion in the general chat.
-   * @typedef {{
-   *   id: number, authorId: number | null, authorName: string | null, body: string, createdAt: string, updatedAt?: string,
-   *   kind?: 'message' | 'event', hiddenAt?: string | null, mark?: import('../lib/api.js').Mark | null,
-   *   authorAgent?: boolean, linkedId?: number | null, comments?: number, post?: import('../lib/api.js').PublicMessage['post'],
-   *   reply?: { id: number, authorName: string | null, body: string } | null,
-   *   reactions?: import('../lib/api.js').Reaction[], writtenAt?: string | null,
-   *   pending?: 'wait' | 'failed', error?: string, op?: any
-   * }} Msg
    * `writtenAt`: written without a network, sent later — its time is shown. `pending`: still in the
    * device's queue (lib/outbox.svelte.js): a clock, or "!" with `error` and «Повторить» / «Удалить».
    * @type {{
@@ -129,8 +132,7 @@
   const bookRef = $derived(chatKey && /^\d+:\d+\.\d+$/.test(chatKey) ? chatKey : null);
 
   // ---- Context menu (right click; a tap on touch screens) and inline editing ----
-  /** @type {{ m: Msg, own: boolean, x: number, y: number } | null} */
-  let menu = $state(null);
+  let menu = $state(/** @type {{ m: Msg, own: boolean, x: number, y: number } | null} */ (null));
   /** @param {MouseEvent} e @param {Msg} m @param {boolean} own */
   function openMenu(e, m, own) {
     if (m.kind === 'event' || m.pending) return; // (not on the server yet: nothing to reply to or react on)
@@ -154,7 +156,7 @@
   /** A link to the message: the chat page opens the conversation at it. @param {Msg} m */
   const linkTo = (m) => `${location.origin}/chat?c=${encodeURIComponent(chatKey ?? '')}&m=${m.id}`;
 
-  /** @type {number | null} */ let editingId = $state(null);
+  let editingId = $state(/** @type {number | null} */ (null));
   let draft = $state('');
   async function saveEdit() {
     const m = messages.find((x) => x.id === editingId);

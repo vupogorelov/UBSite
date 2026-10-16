@@ -199,10 +199,9 @@
     if (tts.settingsOpen) void loadDict();
   });
   // The progress line: the share of the book read; dragging its knob moves reading there.
-  /** @type {number | null} */
-  let drag = $state(null);
-  /** Where the knob was let go: it stays there until reading has moved (the paper may still be loading). @type {number | null} */
-  let held = $state(null);
+  let drag = $state(/** @type {number | null} */ (null));
+  /** Where the knob was let go: it stays there until reading has moved (the paper may still be loading). */
+  let held = $state(/** @type {number | null} */ (null));
   /** @type {typeof tts.place} */
   let heldFrom = null;
   let heldTimer = 0;
@@ -226,8 +225,8 @@
     back = was;
     if (was) backTimer = window.setTimeout(() => (back = null), 8000);
   }
-  /** Where reading was before the last move along the line. @type {{ paper: number, key: string, s: number } | null} */
-  let back = $state(null);
+  /** Where reading was before the last move along the line. */
+  let back = $state(/** @type {{ paper: number, key: string, s: number } | null} */ (null));
   let backTimer = 0;
   function goBack() {
     if (!back) return;

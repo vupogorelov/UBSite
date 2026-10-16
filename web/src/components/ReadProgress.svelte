@@ -13,10 +13,8 @@
 
   $effect(() => loadBook());
 
-  /** @type {number | null} */
-  let share = $state(null);
-  /** @type {number | null} */
-  let drag = $state(null);
+  let share = $state(/** @type {number | null} */ (null));
+  let drag = $state(/** @type {number | null} */ (null));
   /** A place in another paper: reached once that paper is on screen. @type {{ paper: number, idx: number } | null} */
   let pending = null;
 

@@ -20,10 +20,10 @@
   let newTag = $state('');
   const expanded = new SvelteSet();
   /** Path being renamed, its new text, the path awaiting delete confirmation. */
-  /** @type {string | null} */ let editing = $state(null);
+  let editing = $state(/** @type {string | null} */ (null));
   let editText = $state('');
-  /** @type {string | null} */ let confirmDelete = $state(null);
-  /** @type {string | null} */ let coloring = $state(null);
+  let confirmDelete = $state(/** @type {string | null} */ (null));
+  let coloring = $state(/** @type {string | null} */ (null));
 
   $effect(() => {
     void notes.version;

@@ -12,7 +12,7 @@
       добавлять новые возможности для чтения и изучения книги.</p>
     <p>Любая сумма важна — спасибо!</p>
     <div class="support-widget">
-      <iframe src={WIDGET} title="Сбор средств ЮMoney" width="500" height="480" frameborder="0" allowtransparency="true" scrolling="no" loading="lazy"></iframe>
+      <iframe src={WIDGET} title="Сбор средств ЮMoney" width="500" height="480" frameborder="0" allowtransparency scrolling="no" loading="lazy"></iframe>
     </div>
     <p class="muted small">Форма не открылась? <a href={FUNDRAISE} target="_blank" rel="noopener">Перейти на страницу сбора в ЮMoney</a></p>
   </article>

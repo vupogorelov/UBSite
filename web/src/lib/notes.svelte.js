@@ -21,6 +21,11 @@ import { feedNotes, feedReady, feedApply, pull } from './feed.js';
 /** @typedef {{ ref: string, lang: 'ru' | 'en' | null, start: number | null, end: number | null, quote: string | null }} Anchor */
 /** A comment being written: for a new anchor, or for an existing note without comments. */
 /** @typedef {Anchor & { noteId: number | null }} Draft */
+/**
+ * The text actions' panel (SelectionToolbar): mode "new" — a fresh text selection; "edit" — an existing
+ * note; "para" — a whole paragraph.
+ * @typedef {{ mode: 'new' | 'edit' | 'para', x: number, y: number, below: boolean, cx?: number, anchor: Anchor, noteId: number | null, text: string }} ToolbarState
+ */
 
 export const notes = $state({
   /** @type {number | null} */ paperId: null,
@@ -298,7 +303,7 @@ export async function submitDraft(body) {
 
 /** Workspace-specific name of a highlight color. @param {NoteColor} color */
 export function colorName(color) {
-  const key = /** @type {const} */ (NOTE_COLORS.find(([c]) => c === color)?.[1] ?? 'colorYellow');
+  const key = NOTE_COLORS.find(([c]) => c === color)?.[1] ?? 'colorYellow';
   return settings[key] || settingDefaults()[key];
 }
 

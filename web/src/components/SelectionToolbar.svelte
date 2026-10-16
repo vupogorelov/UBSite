@@ -15,16 +15,7 @@
   import { showToast } from '../lib/toast.svelte.js';
   import { can, session } from '../lib/session.svelte.js';
 
-  /**
-   * mode "new": a fresh text selection; "edit": an existing note; "para": a whole paragraph.
-   * @typedef {{
-   *   mode: 'new' | 'edit' | 'para',
-   *   x: number, y: number, below: boolean, cx?: number,
-   *   anchor: import('../lib/notes.svelte.js').Anchor,
-   *   noteId: number | null,
-   *   text: string,
-   * }} ToolbarState
-   */
+  /** @typedef {import('../lib/notes.svelte.js').ToolbarState} ToolbarState */
 
   /** @type {{ tb: ToolbarState, onclose: () => void, ontranslate: () => void, onthread: () => void }} */
   let { tb, onclose, ontranslate, onthread } = $props();

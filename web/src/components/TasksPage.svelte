@@ -28,7 +28,7 @@
     if (!searching) query = '';
   }
   let refFilter = $state(/** @type {string | null} */ (null));
-  /** @type {number | null} */ let expanded = $state(null);
+  let expanded = $state(/** @type {number | null} */ (null));
   let showDone = $state(false);
   /** The star by the search: only the important ones (with a tag chosen, among its tasks). */
   let onlyImportant = $state(false);
@@ -115,15 +115,15 @@
     if (t && status !== 'todo') await patchTask(t.id, { status }); // (a new task is created to do)
     if (t) newTitle = '';
   }
-  /** Kanban: the column whose "+ Добавить задачу" is open. @type {import('../lib/api.js').TaskStatus | null} */
-  let addingIn = $state(null);
+  /** Kanban: the column whose "+ Добавить задачу" is open. */
+  let addingIn = $state(/** @type {import('../lib/api.js').TaskStatus | null} */ (null));
 
   // ---- Kanban: drag between columns (status) and within one (order) ----
   const COLUMNS = /** @type {const} */ ([['todo', 'Нужно сделать'], ['doing', 'В работе'], ['done', 'Готово']]);
   /** @param {import('../lib/api.js').TaskStatus} s */
   const column = (s) => shown.filter((t) => t.status === s).sort(s === 'done' ? (a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? '') : byOrder);
-  /** @type {number | null} */ let dragId = $state(null);
-  /** @type {string | null} */ let overCol = $state(null);
+  let dragId = $state(/** @type {number | null} */ (null));
+  let overCol = $state(/** @type {string | null} */ (null));
   /** @param {import('../lib/api.js').TaskStatus} status @param {number | null} beforeId */
   async function dropTo(status, beforeId) {
     const id = dragId;
@@ -147,8 +147,8 @@
   const toggleDone = (t) => patchTask(t.id, { status: t.status === 'done' ? 'todo' : 'done' });
 
   // ---- List: drag to reorder ----
-  /** @type {{ id: number, group: string } | null} */ let dragRow = $state(null);
-  /** @type {string | null} */ let overRow = $state(null); // "group:id" or "group:end"
+  let dragRow = $state(/** @type {{ id: number, group: string } | null} */ (null));
+  let overRow = $state(/** @type {string | null} */ (null)); // "group:id" or "group:end"
   /** @param {string} group */
   const canDrop = (group) => dragRow !== null && dragRow.group === group;
   /** @param {DragEvent} e @param {string} group @param {number | 'end'} at */

@@ -2,6 +2,8 @@
   import { tts, setLang, sayOnce, voicesFor, loadRecordings, voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch, NARRATOR } from '../lib/tts.svelte.js';
   import { dict, loadDict, addRule, updateRule, deleteRule, applyDict } from '../lib/pronunciations.svelte.js';
   import { withStress, toPlus } from '../lib/pronounce.js';
+  /** @type {['ru' | 'en', string][]} */
+  const LANGS = [['ru', 'Русский'], ['en', 'English']];
   import { session } from '../lib/session.svelte.js';
   import { device } from '../lib/mobile.svelte.js';
   import Icon from './Icon.svelte';
@@ -35,10 +37,10 @@
   let written = $state('');
   let spoken = $state('');
   let filter = $state('');
-  /** @type {number | null} */ let editing = $state(null);
+  let editing = $state(/** @type {number | null} */ (null));
   let editWritten = $state('');
   let editSpoken = $state('');
-  /** @type {number | null} */ let confirmDelete = $state(null);
+  let confirmDelete = $state(/** @type {number | null} */ (null));
 
   const rules = $derived.by(() => {
     const f = filter.trim().toLowerCase();
@@ -69,7 +71,7 @@
   {#if !device.mobile}
   <div class="panel-head voice-head">
     <div class="ui-chips voice-chips" role="radiogroup" aria-label="Язык чтения">
-      {#each /** @type {const} */ ([['ru', 'Русский'], ['en', 'English']]) as [id, label] (id)}
+      {#each LANGS as [id, label] (id)}
         <button class="ui-chip" class:on={tts.lang === id} role="radio" aria-checked={tts.lang === id} onclick={() => setLang(id)}>{label}</button>
       {/each}
     </div>

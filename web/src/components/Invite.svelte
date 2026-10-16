@@ -7,8 +7,7 @@
   /** @type {{ token: string }} */
   let { token } = $props();
 
-  /** @type {Awaited<ReturnType<typeof api.invite>> | null} */
-  let info = $state(null);
+  let info = $state(/** @type {Awaited<ReturnType<typeof api.invite>> | null} */ (null));
   let loadError = $state('');
   let username = $state('');
   let displayName = $state('');

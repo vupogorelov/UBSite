@@ -23,11 +23,9 @@
   let blurTimer;
   const currentSaved = $derived(library.saved.some((s) => s.query === search.input.trim()));
   let saveTitle = $state('');
-  /** @type {number | null} */
-  let editingId = $state(null);
+  let editingId = $state(/** @type {number | null} */ (null));
   let editTitle = $state('');
-  /** @type {number | null} */
-  let confirmDelete = $state(null);
+  let confirmDelete = $state(/** @type {number | null} */ (null));
   /** @type {HTMLInputElement} */
   let input;
   /** @type {HTMLElement} */

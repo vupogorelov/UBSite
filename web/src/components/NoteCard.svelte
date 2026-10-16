@@ -31,8 +31,7 @@
   const key = $derived(note ? `note:${note.id}` : null);
   const typing = $derived(key ? chat.typing[key] : null);
 
-  /** @type {{ id: number, authorName: string | null, body: string } | null} */
-  let reply = $state(null);
+  let reply = $state(/** @type {{ id: number, authorName: string | null, body: string } | null} */ (null));
   let confirmDelete = $state(false);
   let editingTags = $state(false);
   /** @type {ChatComposer | undefined} */

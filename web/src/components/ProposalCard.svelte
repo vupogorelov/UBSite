@@ -37,7 +37,7 @@
     const r = await change(() => api.editProposal(p.id, { text: editText, note: editNote || null }));
     if (r) editing = false;
   }
-  /** @type {{ id: number, authorName: string | null, body: string } | null} */ let replyTo = $state(null);
+  let replyTo = $state(/** @type {{ id: number, authorName: string | null, body: string } | null} */ (null));
   /** @param {string} body */
   async function sendReply(body) {
     const r = await change(() => api.postMessage(p.ref, body, p.id, replyTo?.id ?? null));

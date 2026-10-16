@@ -15,8 +15,7 @@
    * by paper, part or whole, its size told beforehand, the download shown with pause and cancel.
    */
 
-  /** @type {import('../lib/api.js').Toc | null} */
-  let toc = $state(null);
+  let toc = $state(/** @type {import('../lib/api.js').Toc | null} */ (null));
   onMount(() => {
     api.toc().then((t) => (toc = t), () => {});
     loadRecordings();

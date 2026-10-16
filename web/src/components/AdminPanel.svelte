@@ -19,14 +19,14 @@
    */
   let { onclose } = $props();
 
-  /** The open page, or null for the list. @type {'users' | 'access' | 'voting' | 'analytics' | 'log' | null} */
-  let page = $state(null);
+  /** The open page, or null for the list. */
+  let page = $state(/** @type {'users' | 'access' | 'voting' | 'analytics' | 'log' | null} */ (null));
   /** @type {Record<string, string>} */
   const PAGES = { users: 'Пользователи', access: 'Регистрация и приглашения', voting: 'Правило голосования', analytics: 'Аналитика', log: 'Журнал' };
-  /** Analytics: a person's open card ("back" closes it first). @type {number | null} */
-  let analyticsPerson = $state(null);
-  /** Users: a user's own page ("back" closes it first). @type {number | null} */
-  let userId = $state(null);
+  /** Analytics: a person's open card ("back" closes it first). */
+  let analyticsPerson = $state(/** @type {number | null} */ (null));
+  /** Users: a user's own page ("back" closes it first). */
+  let userId = $state(/** @type {number | null} */ (null));
   /** @param {import('../lib/api.js').AdminUser} u */
   const nameOf = (u) => u.displayName || u.username;
   /** The roles of a user as short marks. @param {import('../lib/api.js').AdminUser} u */
@@ -42,13 +42,10 @@
   let users = $state([]);
   const user = $derived(users.find((u) => u.id === userId) ?? null);
   let inviteAdmin = $state(false);
-  /** @type {{ label: string, url: string } | null} */
-  let link = $state(null);
-  /** @type {import('../lib/api.js').VotingConfig | null} */
-  let voting = $state(null);
+  let link = $state(/** @type {{ label: string, url: string } | null} */ (null));
+  let voting = $state(/** @type {import('../lib/api.js').VotingConfig | null} */ (null));
 
-  /** @type {boolean | null} */
-  let registration = $state(null);
+  let registration = $state(/** @type {boolean | null} */ (null));
 
   const load = () => api.adminUsers().then((u) => (users = u), (err) => showToast(err.message));
   onMount(() => {
@@ -147,7 +144,7 @@
     }
   }
 
-  /** @param {'users' | 'access' | 'voting' | 'analytics'} id */
+  /** @param {'users' | 'access' | 'voting' | 'analytics' | 'log'} id */
   function openPage(id) {
     page = id;
     analyticsPerson = null;

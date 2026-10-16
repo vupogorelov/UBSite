@@ -65,8 +65,8 @@
   });
 
   // ---- By day: who came, how long they read and listened ----
-  /** The day chosen on the charts (its numbers under them); null — the last day. @type {number | null} */
-  let dayAt = $state(null);
+  /** The day chosen on the charts (its numbers under them); null — the last day. */
+  let dayAt = $state(/** @type {number | null} */ (null));
   $effect(() => {
     void days;
     dayAt = null;

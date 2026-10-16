@@ -22,12 +22,12 @@
   /** One conversation of the chat page; `focus`: a message to open it at. @type {{ key: string, focus?: number | null, onback?: () => void }} */
   let { key, focus = null, onback } = $props();
 
-  /** @type {import('../lib/api.js').ChatInfo | null} */ let info = $state(null);
+  let info = $state(/** @type {import('../lib/api.js').ChatInfo | null} */ (null));
   /** @type {import('../lib/api.js').PublicMessage[]} */ let messages = $state([]);
   let hasMore = $state(true);
   let loadingOlder = false;
-  /** @type {number | null} */ let unreadAfter = $state(null);
-  /** @type {{ id: number, authorName: string | null, body: string } | null} */ let reply = $state(null);
+  let unreadAfter = $state(/** @type {number | null} */ (null));
+  let reply = $state(/** @type {{ id: number, authorName: string | null, body: string } | null} */ (null));
   /** @type {HTMLElement | undefined} */ let scroller = $state();
   /** @type {ChatMessages | undefined} */ let list = $state();
   let atBottom = $state(true);
@@ -227,7 +227,7 @@
   }
 
   // ---- The Book's voice: the administrator's controls in its channel ----
-  /** @type {{ paused: boolean, lastDay: string | null, hour: number } | null} */ let voice = $state(null);
+  let voice = $state(/** @type {{ paused: boolean, lastDay: string | null, hour: number } | null} */ (null));
   $effect(() => {
     if (info?.voice && session.user?.isAdmin) void api.voiceStatus().then((s) => (voice = s)).catch(() => {});
   });
@@ -380,7 +380,7 @@
   // ---- The search in the conversation: the magnifier in the header; in «Техподдержка» also the marks ----
   let searching = $state(false);
   let findText_ = $state('');
-  /** @type {import('../lib/api.js').Mark | null} */ let findMark = $state(null);
+  let findMark = $state(/** @type {import('../lib/api.js').Mark | null} */ (null));
   /** @type {import('../lib/api.js').PublicMessage[]} */ let found = $state([]);
   let findDone = $state(false);
   /** @type {HTMLInputElement | undefined} */ let findInput = $state();

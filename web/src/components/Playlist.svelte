@@ -22,8 +22,7 @@
    */
   let { onclose } = $props();
 
-  /** @type {{ papers: { id: number, titleRu: string, titleEn: string }[], sections: { paperId: number, num: number, titleRu: string, titleEn: string }[] } | null} */
-  let toc = $state(null);
+  let toc = $state(/** @type {{ papers: { id: number, titleRu: string, titleEn: string }[], sections: { paperId: number, num: number, titleRu: string, titleEn: string }[] } | null} */ (null));
   tocOnce ??= api.toc().catch(() => (tocOnce = null));
   tocOnce?.then((t) => (toc = t));
 

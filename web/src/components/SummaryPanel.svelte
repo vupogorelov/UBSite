@@ -8,10 +8,8 @@
   /** @type {{ visible: boolean }} */
   let { visible } = $props();
 
-  /** @type {import('../lib/api.js').TranslationStats | null} */
-  let stats = $state(null);
-  /** @type {import('../lib/api.js').Toc | null} */
-  let toc = $state(null);
+  let stats = $state(/** @type {import('../lib/api.js').TranslationStats | null} */ (null));
+  let toc = $state(/** @type {import('../lib/api.js').Toc | null} */ (null));
   let error = $state('');
   let loaded = -1;
 

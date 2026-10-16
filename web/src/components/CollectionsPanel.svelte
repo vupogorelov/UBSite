@@ -12,10 +12,8 @@
   let { visible, onnavigate } = $props();
 
   let newTitle = $state('');
-  /** @type {import('../lib/api.js').Collection[] | null} */
-  let shared = $state(null);
-  /** @type {import('../lib/api.js').CollectionFull | null} */
-  let open = $state(null);
+  let shared = $state(/** @type {import('../lib/api.js').Collection[] | null} */ (null));
+  let open = $state(/** @type {import('../lib/api.js').CollectionFull | null} */ (null));
   let error = $state('');
 
   $effect(() => {
@@ -57,13 +55,14 @@
   // ---- The open collection ----
   let editingTitle = $state(false);
   let titleDraft = $state('');
-  /** @type {number | null} */ let editingItem = $state(null);
+  let editingItem = $state(/** @type {number | null} */ (null));
   let itemDraft = $state('');
   let confirmDelete = $state(false);
-  /** @type {'heading' | 'text' | null} */ let adding = $state(null);
+  let adding = $state(/** @type {'heading' | 'text' | null} */ (null));
   let addDraft = $state('');
 
   /** @param {() => Promise<unknown>} fn */
+  /** @template T @param {() => Promise<T>} fn */
   const change = (fn) => changeCollections(fn);
 
   async function saveTitle() {
@@ -123,8 +122,8 @@
   }
 
   // ---- Reordering: drag and drop, or Alt+↑/↓ on a focused item ----
-  /** @type {number | null} */ let dragId = $state(null);
-  /** @type {number | null} */ let overId = $state(null);
+  let dragId = $state(/** @type {number | null} */ (null));
+  let overId = $state(/** @type {number | null} */ (null));
   /** @param {number[]} ids */
   async function reorder(ids) {
     if (!open) return;
@@ -262,7 +261,7 @@
         {#if (!open.member && open.shared) || (can.edit && (!open.member || open.workspaceId !== session.workspace?.id))}
           <div class="ui-chips">
             {#if !open.member && open.shared}
-              <button class="ui-chip" class:on={open.subscribed} onclick={() => open && change(() => api.subscribeCollection(open.id, !open.subscribed))}>
+              <button class="ui-chip" class:on={open.subscribed} onclick={() => { const o = open; if (o) change(() => api.subscribeCollection(o.id, !o.subscribed)); }}>
                 {open.subscribed ? 'Вы подписаны' : 'Подписаться'}
               </button>
             {/if}
@@ -276,11 +275,11 @@
           <div class="ui-options">
             <label class="ui-option ui-switch-row">
               <span><b>Общая</b><span class="muted small">Видна всем участникам: по ссылке, с подпиской и копированием</span></span>
-              <input type="checkbox" class="ui-switch" checked={open.shared} onchange={(e) => open && change(() => api.updateCollection(open.id, { shared: e.currentTarget.checked }))} />
+              <input type="checkbox" class="ui-switch" checked={open.shared} onchange={(e) => { const o = open, on = e.currentTarget.checked; if (o) change(() => api.updateCollection(o.id, { shared: on })); }} />
             </label>
             <label class="ui-option ui-switch-row">
               <span><b>Только фрагменты</b><span class="muted small">Скрыть исходные абзацы; абзацы без выделения видны целиком</span></span>
-              <input type="checkbox" class="ui-switch" checked={open.fragmentsOnly} onchange={(e) => open && change(() => api.updateCollection(open.id, { fragmentsOnly: e.currentTarget.checked }))} />
+              <input type="checkbox" class="ui-switch" checked={open.fragmentsOnly} onchange={(e) => { const o = open, on = e.currentTarget.checked; if (o) change(() => api.updateCollection(o.id, { fragmentsOnly: on })); }} />
             </label>
           </div>
         {/if}
@@ -355,12 +354,12 @@
                   {@const fold = open.fragmentsOnly ? 'Все абзацы скрыты настройкой «Только фрагменты»'
                     : it.collapsed ? 'Показывать абзац целиком' : 'Свернуть абзац: оставить только цитату'}
                   <button class="ui-round small" class:on={it.collapsed || open.fragmentsOnly} disabled={open.fragmentsOnly}
-                    onclick={() => open && change(() => api.editCollectionItem(open.id, it.id, { collapsed: !it.collapsed }))}
+                    onclick={() => { const o = open; if (o) change(() => api.editCollectionItem(o.id, it.id, { collapsed: !it.collapsed })); }}
                     aria-label={fold} title={fold} aria-pressed={it.collapsed}><Icon name={it.collapsed || open.fragmentsOnly ? 'eye-off' : 'eye'} /></button>
                 {/if}
                 <button class="ui-round small" onclick={() => editItem(it)} aria-label={it.kind === 'text' ? 'Изменить' : it.fragment ? 'Пояснение' : 'Комментарий'}
                   title={it.kind === 'text' ? 'Изменить' : it.fragment ? 'Пояснение к фрагменту' : 'Комментарий к элементу'}><Icon name={it.kind === 'text' ? 'edit' : 'comment'} /></button>
-                <button class="ui-round small" onclick={() => open && change(() => api.deleteCollectionItem(open.id, it.id))}
+                <button class="ui-round small" onclick={() => { const o = open; if (o) change(() => api.deleteCollectionItem(o.id, it.id)); }}
                   aria-label="Убрать из подборки" title="Убрать из подборки"><Icon name="close" /></button>
               </span>
             {/if}
