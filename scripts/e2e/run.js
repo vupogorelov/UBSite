@@ -10,7 +10,7 @@
 // Each file in tests/ exports { name, run(t) }; t.check(what, ok, detail) records a result.
 import { readdirSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { prepareDb, startServer, launch, phone } from './lib.js';
+import { prepareDb, startServer, launch, phone, computer } from './lib.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const filter = process.argv[2] ?? '';
@@ -30,6 +30,8 @@ try {
         kind,
         /** @param {{ init?: (arg: any) => void, arg?: unknown }} [opts] */
         page: (opts) => phone(browser, token, opts),
+        /** A computer (a mouse, no touch). */
+        computer: () => computer(browser, token),
         /** Not signed in. @param {{ init?: (arg: any) => void, arg?: unknown }} [opts] */
         guest: (opts) => phone(browser, '', opts),
         /** @param {string} what @param {boolean} ok @param {unknown} [detail] */

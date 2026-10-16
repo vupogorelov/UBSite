@@ -15,7 +15,8 @@
   import { search, stepHit, currentHit, clearSearch } from '../lib/search.svelte.js';
   import { notes, loadPaperNotes, hasThread } from '../lib/notes.svelte.js';
   import { NOTE_COLORS } from '../../../shared/settings.js';
-  import { setHighlights, clearHighlights, setRanges, anchorRange, textElement, textOffset } from '../lib/highlight.js';
+  import { setHighlights, clearHighlights, setRanges, anchorRange, textElement, textOffset, textElOf, caretAt } from '../lib/highlight.js';
+  import { createTermPairs } from '../lib/termpairs.svelte.js';
   import Icon from './Icon.svelte';
   import MarginRail from './MarginRail.svelte';
   import NoteCard from './NoteCard.svelte';
@@ -31,12 +32,11 @@
   import { quoteOf, placeLink, shareLink } from '../lib/share.js';
   import { askLogin } from '../lib/guest.svelte.js';
   import { aliases, loadAliases } from '../lib/aliases.svelte.js';
-  import { findAliases } from '../../../shared/aliases.js';
   import { pinchFont } from '../lib/pinch.js';
   import { ui } from '../lib/ui.svelte.js';
   import { tr, thread, loadPublicPaper, openThread as openPublicThread } from '../lib/translation.svelte.js';
   import { discussInChat } from '../lib/chat.svelte.js';
-  import { substituteHtml, pickNonOverlapping, layer } from '../lib/substitute.js';
+  import { tasksPerParagraph, marginMarks, variantLayers, substitutedParagraphs } from '../lib/paper-view.js';
   import { session } from '../lib/session.svelte.js';
   import { tasks, loadTasks } from '../lib/tasks.svelte.js';
   import { trackScroll, showChrome, holdChrome, device } from '../lib/mobile.svelte.js';
@@ -86,36 +86,10 @@
   // ---- Notes of this paper ----
   const paperNotes = $derived(data && notes.paperId === data.paper.id ? notes.items : []);
   const railItems = $derived(paperNotes.filter(hasThread));
-  /** ref → markers for the gutter */
-  // Open personal tasks per paragraph of this paper (a range marks each of its paragraphs).
+  // The margin of each paragraph (lib/paper-view.js): its open personal tasks, its notes' marks.
   if (session.user) void loadTasks();
-  const taskCounts = $derived.by(() => {
-    /** @type {Map<string, number>} */
-    const m = new Map();
-    if (!data) return m;
-    const index = new Map(data.paragraphs.map((p, i) => [p.ref, i]));
-    for (const t of tasks.items) {
-      if (t.status === 'done' || !t.ref) continue;
-      const a = index.get(t.ref);
-      if (a === undefined) continue;
-      const b = t.refEnd ? index.get(t.refEnd) ?? a : a;
-      for (let i = a; i <= b; i++) m.set(data.paragraphs[i].ref, (m.get(data.paragraphs[i].ref) ?? 0) + 1);
-    }
-    return m;
-  });
-  const markers = $derived.by(() => {
-    /** @type {Map<string, { bookmark: boolean, comments: number, firstThread: number | null, tags: Set<string> }>} */
-    const m = new Map();
-    for (const n of paperNotes) {
-      const e = m.get(n.ref) ?? { bookmark: false, comments: 0, firstThread: null, tags: new Set() };
-      e.bookmark ||= n.bookmark;
-      e.comments += n.comments.length;
-      for (const t of n.tags) e.tags.add(t);
-      if (n.comments.length && e.firstThread === null) e.firstThread = n.id;
-      m.set(n.ref, e);
-    }
-    return m;
-  });
+  const taskCounts = $derived(data ? tasksPerParagraph(data.paragraphs, tasks.items) : new Map());
+  const markers = $derived(marginMarks(paperNotes));
   const railFits = $derived(scrollerWidth >= settings.columnWidth + 360);
   const showRail = $derived(settings.showRail && railFits && (railItems.length > 0 || notes.draft !== null));
   const activeNote = $derived(paperNotes.find((n) => n.id === notes.activeId) ?? null);
@@ -150,54 +124,11 @@
   const liveProposals = $derived(paperProposals.filter((p) => p.status === 'approved' || p.status === 'voting' || p.status === 'draft'));
   /** ref → number of live proposals */
   const proposalCounts = $derived(Map.groupBy(liveProposals, (p) => p.ref));
-  /**
-   * Variants shown in place of the text: the approved ones ("Новая редакция" / "Правка") and, over
-   * them, the reader's drafts and own proposals under vote ("Мои варианты поверх текста"; the latest
-   * wins where they overlap).
-   * @type {{ p: import('../lib/api.js').Proposal, kind: 'mine' | 'approved' | 'review', start: number, end: number }[]}
-   */
-  const subs = $derived.by(() => {
-    const uid = session.user?.id;
-    const mine = settings.trMine && uid
-      ? liveProposals.filter((p) => p.authorId === uid && (p.status === 'draft' || p.status === 'voting'))
-      : [];
-    const approved = settings.trText !== 'original' ? liveProposals.filter((p) => p.status === 'approved') : [];
-    const kind = /** @type {'review' | 'approved'} */ (settings.trText === 'review' ? 'review' : 'approved');
-    const refs = new Set([...mine, ...approved].map((p) => p.ref));
-    return [...refs].flatMap((ref) => {
-      const top = pickNonOverlapping(mine.filter((p) => p.ref === ref)).map((p) => ({ p, kind: /** @type {'mine' | 'approved' | 'review'} */ ('mine'), start: p.start, end: p.end }));
-      const base = approved.filter((p) => p.ref === ref).map((p) => ({ p, kind, start: p.start, end: p.end }));
-      return layer(top, base);
-    });
-  });
+  /** Variants shown in place of the text (lib/paper-view.js). */
+  const subs = $derived(variantLayers(liveProposals, { uid: session.user?.id, mine: settings.trMine, text: settings.trText }));
   const subIds = $derived(new Set(subs.map((s) => s.p.id)));
-  /** ref → paragraph HTML with the variants substituted (only for paragraphs that have any). */
-  const substituted = $derived.by(() => {
-    /** @type {Map<string, string>} */
-    const out = new Map();
-    if (!data) return out;
-    const byRef = Map.groupBy(subs, (s) => s.p.ref);
-    // "Названия по смыслу": the dictionary's names in the paragraphs that have them (not where a variant stands)
-    const names = settings.altNames ? aliases.list : [];
-    const refs = new Set(byRef.keys());
-    if (names.length) for (const p of data.paragraphs) if (names.some((a) => p.ru.includes(a.written))) refs.add(p.ref);
-    for (const ref of refs) {
-      const para = data.paragraphs.find((x) => x.ref === ref);
-      if (!para) continue;
-      const variants = (byRef.get(ref) ?? []).map(({ p, kind }) => ({
-        id: p.id, start: p.start, end: p.end, text: p.text, kind,
-        original: kind === 'review' ? undefined : p.original, // in "Правка" the original is in plain view
-      }));
-      /** @type {import('../lib/substitute.js').Substitution[]} */
-      const named = names.length
-        ? findAliases(plainOf(para.ru), names)
-          .filter((n) => !variants.some((v) => n.start < v.end && v.start < n.end))
-          .map((n) => ({ id: 0, start: n.start, end: n.end, text: n.text, original: n.original, kind: 'alias' }))
-        : [];
-      out.set(ref, substituteHtml(para.ru, [...variants, ...named]));
-    }
-    return out;
-  });
+  /** ref → paragraph HTML with the variants and the dictionary's names put in (only the paragraphs that have any). */
+  const substituted = $derived(data ? substitutedParagraphs(data.paragraphs, subs, settings.altNames ? aliases.list : [], plainOf) : new Map());
   $effect(() => {
     if (settings.altNames && session.user) void loadAliases();
   });
@@ -513,9 +444,6 @@
     return { x: Math.min(Math.max(r.left + r.width / 2, 170), innerWidth - 170), y: below ? r.bottom + 8 : r.top - 8, below, cx: r.left + r.width / 2 };
   }
 
-  /** @param {Node | null} node @returns {HTMLElement | null} */
-  const textElOf = (node) => (node?.nodeType === Node.TEXT_NODE ? node.parentElement : /** @type {HTMLElement | null} */ (node))?.closest('[data-lang]') ?? null;
-
   function readSelection() {
     const sel = getSelection();
     if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
@@ -601,101 +529,19 @@
     }));
   });
 
-  // ---- Pairs of terms (a computer): the mouse over a glossary term lights it and its counterpart in the
-  // other language (orange), its other places in the paragraph (blue); a counterpart not in view — in a tip ----
-  /** @type {{ names: Map<number, [string, string]>, paras: Record<string, { ru: number[], en: number[] }> } | null} */
-  let terms = $state.raw(null);
+  // ---- Pairs of terms (a computer): a glossary term under the mouse lit with its counterpart (lib/termpairs.svelte.js) ----
+  const termPairs = createTermPairs(() => article);
   $effect(() => {
     const id = data?.paper.id;
-    terms = null;
+    termPairs.set(null);
     if (id === undefined || !settings.termPairs || device.touch || !session.user) return;
     let live = true;
-    api.paperTerms(id).then((r) => {
-      if (live) terms = { names: new Map(r.terms.map(([i, en, ru]) => [i, [en, ru]])), paras: r.paras };
-    }).catch(() => {});
+    api.paperTerms(id).then((r) => live && termPairs.set(r)).catch(() => {});
     return () => {
       live = false;
-      clearTerm();
+      termPairs.clear();
     };
   });
-  /** The place under the mouse ("ref:lang:start"), so a move within it changes nothing. @type {string | null} */
-  let termAt = null;
-  let termTip = $state(/** @type {{ x: number, y: number, text: string, lang: string } | null} */ (null));
-  /** Shown words of a variant or a dictionary name (.tr-sub): their text is drawn by CSS, so the element is marked. @type {HTMLElement[]} */
-  let termSubs = [];
-  let termFrame = 0;
-  /** @param {MouseEvent} e */
-  function onTermMove(e) {
-    if (!terms || e.buttons) return;
-    const { clientX: x, clientY: y } = e;
-    cancelAnimationFrame(termFrame);
-    termFrame = requestAnimationFrame(() => showTerm(x, y));
-  }
-  function clearTerm() {
-    cancelAnimationFrame(termFrame);
-    termAt = null;
-    termTip = null;
-    clearHighlights('term-cur');
-    clearHighlights('term-other');
-    for (const el of termSubs) el.classList.remove('term-cur', 'term-other');
-    termSubs = [];
-  }
-  /** @param {number} x @param {number} y */
-  function showTerm(x, y) {
-    const root = article;
-    if (!terms || !root) return;
-    const c = caretAt(x, y);
-    const lang = c?.lang === 'en' ? 'en' : 'ru';
-    const list = c?.ref ? terms.paras[c.ref]?.[lang] : undefined;
-    let hit = -1;
-    if (c && list) for (let i = 0; i < list.length; i += 3) if (list[i] <= c.off && c.off < list[i + 1]) hit = i;
-    if (!c || !list || hit < 0) return void (termAt && clearTerm());
-    const key = `${c.ref}:${lang}:${list[hit]}`;
-    if (key === termAt) return;
-    clearTerm();
-    termAt = key;
-    const id = list[hit + 2];
-    const other = lang === 'ru' ? 'en' : 'ru';
-    const theirs = terms.paras[c.ref]?.[other] ?? [];
-    const places = (/** @type {number[]} */ l) => l.flatMap((_, i) => (i % 3 === 0 && l[i + 2] === id ? [i] : []));
-    const mine = places(list), their = places(theirs);
-    // the counterpart: the same place in order, when both languages name the term as many times
-    const pair = their.length === mine.length ? their[mine.indexOf(hit)] : undefined;
-    const range = (/** @type {'ru' | 'en'} */ l, /** @type {number[]} */ arr, /** @type {number} */ i) => anchorRange(root, /** @type {string} */ (c.ref), l, arr[i], arr[i + 1]);
-    const cur = [range(lang, list, hit), pair === undefined ? null : range(other, theirs, pair)];
-    const others = [...mine.filter((i) => i !== hit).map((i) => range(lang, list, i)), ...their.filter((i) => i !== pair).map((i) => range(other, theirs, i))];
-    /** @param {(Range | null)[]} rs @param {string} cls */
-    const mark = (rs, cls) => {
-      for (const r of rs) {
-        const sub = r && /** @type {HTMLElement | null} */ ((r.startContainer.parentElement)?.closest('.tr-sub'));
-        if (sub) (sub.classList.add(cls), termSubs.push(sub));
-      }
-      return /** @type {Range[]} */ (rs.filter(Boolean));
-    };
-    setRanges('term-cur', mark(cur, 'term-cur'), 3);
-    setRanges('term-other', mark(others, 'term-other'), 3);
-    // the counterpart out of view (no English under the text, or folded to a line): its name in a tip
-    const pr = cur[1], el = textElement(root, c.ref, other);
-    const pRect = pr?.getBoundingClientRect(), eRect = el?.getBoundingClientRect();
-    const seen = !!(pRect && eRect && pRect.width && pRect.top >= eRect.top - 1 && pRect.bottom <= eRect.bottom + 1);
-    const name = terms.names.get(id);
-    const r = cur[0]?.getBoundingClientRect();
-    termTip = !seen && name && r ? { x: r.left + r.width / 2, y: r.top, text: name[other === 'en' ? 0 : 1], lang: other } : null;
-  }
-
-  /** Text element and character offset under the pointer. @param {number} x @param {number} y */
-  function caretAt(x, y) {
-    /** @type {{ offsetNode: Node, offset: number } | null} */
-    let pos = null;
-    if (document.caretPositionFromPoint) pos = document.caretPositionFromPoint(x, y);
-    else {
-      const r = document.caretRangeFromPoint?.(x, y);
-      if (r) pos = { offsetNode: r.startContainer, offset: r.startOffset };
-    }
-    const el = textElOf(pos?.offsetNode ?? null);
-    if (!pos || !el) return null;
-    return { el, ref: /** @type {string} */ (el.dataset.ref), lang: el.dataset.lang, off: textOffset(el, pos.offsetNode, pos.offset) };
-  }
 
   /** The smallest note under the mouse pointer. @param {number} x @param {number} y */
   function noteAt(x, y) {
@@ -861,8 +707,8 @@
           class:tr-tint={settings.trTint}
           bind:this={article}
           onmouseup={onPointerUp}
-          onmousemove={onTermMove}
-          onmouseleave={clearTerm}
+          onmousemove={termPairs.move}
+          onmouseleave={termPairs.clear}
           onkeyup={(e) => e.shiftKey && onPointerUp(e)}
           onclick={onArticleClick}
         >
@@ -975,7 +821,7 @@
             {#if data.next !== null}<a href="/{data.next}" onclick={linkClick}>{paperLabel(data.next)} →</a>{/if}
           </nav>
         </article>
-        {#if termTip}<div class="term-tip" lang={termTip.lang} style:left="{termTip.x}px" style:top="{termTip.y}px">{termTip.text}</div>{/if}
+        {#if termPairs.tip}<div class="term-tip" lang={termPairs.tip.lang} style:left="{termPairs.tip.x}px" style:top="{termPairs.tip.y}px">{termPairs.tip.text}</div>{/if}
         {#if showRail && article}
           <MarginRail {article} items={railItems} />
         {/if}

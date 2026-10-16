@@ -36,6 +36,24 @@ export function textOffset(el, node, offset) {
   return r.toString().length;
 }
 
+/** The paragraph's text element (one language: data-ref, data-lang) a node is in. @param {Node | null} node @returns {HTMLElement | null} */
+export const textElOf = (node) =>
+  (node?.nodeType === Node.TEXT_NODE ? node.parentElement : /** @type {HTMLElement | null} */ (node))?.closest('[data-lang]') ?? null;
+
+/** The text element and the character offset under a point of the screen (null — not over the text). @param {number} x @param {number} y */
+export function caretAt(x, y) {
+  /** @type {{ offsetNode: Node, offset: number } | null} */
+  let pos = null;
+  if (document.caretPositionFromPoint) pos = document.caretPositionFromPoint(x, y);
+  else {
+    const r = document.caretRangeFromPoint?.(x, y);
+    if (r) pos = { offsetNode: r.startContainer, offset: r.startOffset };
+  }
+  const el = textElOf(pos?.offsetNode ?? null);
+  if (!pos || !el) return null;
+  return { el, ref: /** @type {string} */ (el.dataset.ref), lang: el.dataset.lang, off: textOffset(el, pos.offsetNode, pos.offset) };
+}
+
 /** The text element of one language in one paragraph. @param {ParentNode} root @param {string} ref @param {'ru' | 'en'} lang */
 export function textElement(root, ref, lang) {
   return root.querySelector(`[data-ref="${ref}"][data-lang="${lang}"]`);

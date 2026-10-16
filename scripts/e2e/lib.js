@@ -77,6 +77,20 @@ export async function phone(browser, token, opts = {}) {
   return { ctx, page, errors };
 }
 
+/**
+ * A computer-sized page (a mouse, no touch) signed in on the copy.
+ * @param {any} browser @param {string} token
+ */
+export async function computer(browser, token) {
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 860 }, bypassCSP: true });
+  await ctx.addCookies([{ name: 'ub_session', value: token, url: BASE }]);
+  const page = await ctx.newPage();
+  /** @type {string[]} */
+  const errors = [];
+  page.on('pageerror', (/** @type {Error} */ e) => errors.push(String(e)));
+  return { ctx, page, errors };
+}
+
 /** Opens a path under the service worker (the second load is controlled by it). @param {any} page @param {string} path */
 export async function openControlled(page, path) {
   await page.goto(BASE + path, { waitUntil: 'load' });
