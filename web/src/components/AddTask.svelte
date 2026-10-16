@@ -5,9 +5,10 @@
 
   /**
    * "Задача" on the selection toolbar: a personal task tied to this place in the book.
-   * @type {{ link: () => { ref: string, annotationId?: number | null }, suggest: string, ondone?: () => void, label?: boolean }}
+   * `order`: its place in the phone's panel (lib/text-actions.js).
+   * @type {{ link: () => { ref: string, annotationId?: number | null }, suggest: string, ondone?: () => void, label?: boolean, order?: number }}
    */
-  let { link, suggest, ondone, label = true } = $props();
+  let { link, suggest, ondone, label = true, order } = $props();
 
   let open = $state(false);
   let title = $state('');
@@ -30,7 +31,7 @@
   }
 </script>
 
-<span class="add-coll add-task">
+<span class="add-coll add-task" style:order={order}>
   <button class="tb-btn" class:on={open} onclick={toggle} title="Задача к этому месту" aria-haspopup="dialog" aria-expanded={open}>
     <Icon name="check-square" size={16} />{#if label}<span>Задача</span>{/if}
   </button>

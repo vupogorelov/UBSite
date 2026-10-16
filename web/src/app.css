@@ -6006,14 +6006,7 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.docked .tb-comment { order: 1; }
-.docked .tb-discuss { order: 2; }
-.docked .tb-translate { order: 3; }
-.docked .tb-copy { order: 4; }
-.docked .tb-bookmark { order: 5; }
-.docked .tb-tags { order: 6; }
-.docked .add-collection { order: 7; }
-.docked .add-task { order: 8; }
+/* (the actions' order on a phone: lib/text-actions.js, `dock`; the bin — the panel's own — last) */
 .docked .tb-delete { order: 40; align-self: center; }
 .docked .add-coll {
   flex: none;

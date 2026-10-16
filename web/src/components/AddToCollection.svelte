@@ -4,9 +4,10 @@
 
   /**
    * "В подборку": a menu of the workspace's collections (the last used first) and a new one.
-   * @type {{ item: () => import('../lib/api.js').NewCollectionItem, ondone?: () => void, label?: boolean }}
+   * `order`: its place in the phone's panel (lib/text-actions.js).
+   * @type {{ item: () => import('../lib/api.js').NewCollectionItem, ondone?: () => void, label?: boolean, order?: number }}
    */
-  let { item, ondone, label = true } = $props();
+  let { item, ondone, label = true, order } = $props();
 
   let open = $state(false);
   let title = $state('');
@@ -29,7 +30,7 @@
   }
 </script>
 
-<span class="add-coll add-collection">
+<span class="add-coll add-collection" style:order={order}>
   <button class="tb-btn" class:on={open} onclick={toggle} title="Добавить в подборку" aria-haspopup="menu" aria-expanded={open}>
     <Icon name="layers" size={16} />{#if label}<span>В подборку</span>{/if}
   </button>
