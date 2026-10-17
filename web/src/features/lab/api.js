@@ -3,7 +3,7 @@
 import { request } from '../../lib/api.js';
 
 /**
- * @typedef {{ id: string, title: string, size: string, downloaded: boolean, done: number, total: number, running: boolean, rate: number, error: string | null }} Model
+ * @typedef {{ id: string, title: string, size: string, downloaded: boolean, done: number, total: number, running: boolean, queued: boolean, rate: number, error: string | null }} Model
  * @typedef {{ id: number, text: string, createdAt: string, good: number, bad: number, open: number }} Question
  * good, bad, open: of the paragraphs its columns answered — judged answering, not, not yet judged
  * @typedef {{ col: string, asked: number, good: number, bad: number, open: number, top3: number, answered: number }} Score

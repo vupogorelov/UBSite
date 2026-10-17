@@ -13,8 +13,8 @@ const fakeEngine = () => ({
   installed: () => true,
   running: () => false,
   stop() {},
-  /** @param {string} _model @param {string} _kind @param {string[]} texts */
-  async embed(_model, _kind, texts) {
+  /** @param {unknown} _spec @param {string[]} texts */
+  async embed(_spec, texts) {
     const words = ['смерт', 'дет', 'люцифер'];
     const vectors = new Float32Array(texts.length * 3);
     texts.forEach((t, i) => {
@@ -67,6 +67,13 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
     const todo = lab.todo().find((t) => t.question === 'что с детьми после смерти');
     assert.deepEqual(todo?.items.map((x) => x.ref), ['47:2.8'], 'left to judge: each paragraph once, the judged ones not');
     assert.ok((todo?.items[0].by.length ?? 0) >= 2, 'found by several columns — shown once, with each place');
+
+    // models asked for while another works: in turn
+    lab.run('granite');
+    lab.run('gemma');
+    assert.equal(lab.status().models.find((m) => m.id === 'gemma')?.queued, true);
+    for (let i = 0; i < 200 && lab.status().models.find((m) => m.id === 'gemma')?.done !== 6; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual(lab.status().models.filter((m) => m.done === 6).map((m) => m.id), ['e5-base', 'granite', 'gemma'], 'each worked out in turn');
 
     const kept = new DatabaseSync(join(dir, 'lab.db'), { readOnly: true });
     assert.deepEqual(kept.prepare("SELECT ref, good FROM judged WHERE question = 'дети'").all().map((r) => ({ ...r })), [{ ref: '47:2.7', good: 1 }], 'the old marks: only where the columns agreed');

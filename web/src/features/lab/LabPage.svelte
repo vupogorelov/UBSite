@@ -21,7 +21,7 @@
   load();
   // while a model works: its progress every few seconds
   $effect(() => {
-    if (!status?.models.some((m) => m.running)) return;
+    if (!status?.models.some((m) => m.running || m.queued)) return;
     const t = setInterval(load, 3000);
     return () => clearInterval(t);
   });
@@ -145,11 +145,13 @@
             <span class="lab-model-text">
               <b>{m.title} <span class="muted lab-size">{m.size}{m.downloaded ? '' : ' · скачается при запуске'}</span></b>
               <span class="lab-bar" aria-hidden="true"><span style:width="{m.total ? (m.done / m.total) * 100 : 0}%"></span></span>
-              <span class="muted small">{m.done || m.running ? progress(m) : 'Ещё не считали'}{m.running ? ' · считается' : ''}</span>
+              <span class="muted small">{m.done || m.running ? progress(m) : 'Ещё не считали'}{m.running ? ' · считается' : m.queued ? ' · в очереди' : ''}</span>
               {#if m.error}<span class="lab-error small">{m.error}</span>{/if}
             </span>
             {#if m.running}
               <button class="ui-chip" onclick={() => act(labApi.pause)}><Icon name="pause" size={14} />Пауза</button>
+            {:else if m.queued}
+              <button class="ui-chip" disabled>В очереди</button>
             {:else if m.done < m.total}
               <button class="ui-chip" onclick={() => act(() => labApi.run(m.id))} disabled={!status.installed}><Icon name="play" size={14} />{m.done ? 'Дальше' : 'Посчитать'}</button>
             {/if}

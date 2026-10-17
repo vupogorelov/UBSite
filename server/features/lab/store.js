@@ -16,16 +16,37 @@ import { HttpError } from '../../http.js';
 import { transaction } from '../../db.js';
 
 /**
- * The models to try. `prefix`: the e5 models read a question and a text each with its own mark; `pooling`:
- * how a text's pieces make one vector (bge: by the first, the text's own mark); `mix`: the model of the
- * mixed search. Tried and dropped (2026-10-17, ten questions judged): e5-small — e5-base better in every
- * question; bge-m3 — as good as e5-base (a draw on ten questions) at twice the size, six times the time,
- * three times the memory.
- * @type {{ id: string, name: string, title: string, size: string, prefix: boolean, pooling?: 'mean' | 'cls', mix?: boolean }[]}
+ * The models to try, each as its card says: `query` and `passage` — how it wants a question and a text
+ * marked ({} — the text); `spec` — for the engine (engine/embed.js): which file, how the pieces make one
+ * vector; `mix`: the model of the mixed search.
+ * Tried and dropped (2026-10-17, ten questions judged): e5-small — e5-base better in every question;
+ * bge-m3 — as good as e5-base (a draw) at twice the size, six times the time, three times the memory.
+ * @typedef {import('./engine-client.js').Spec} Spec
+ * @type {{ id: string, title: string, size: string, query: string, passage: string, spec: Spec, mix?: boolean }[]}
  */
 export const MODELS = [
-  { id: 'e5-base', name: 'Xenova/multilingual-e5-base', title: 'multilingual-e5-base', size: '≈280 МБ', prefix: true, mix: true },
+  {
+    id: 'e5-base', title: 'multilingual-e5-base (Microsoft)', size: '≈280 МБ', query: 'query: {}', passage: 'passage: {}', mix: true,
+    spec: { name: 'Xenova/multilingual-e5-base', pooling: 'mean' },
+  },
+  {
+    // IBM, 2026, Apache 2.0; Russian among its 52 best-served languages; no marks; by the first piece
+    id: 'granite', title: 'granite-embedding-311m-multilingual-r2 (IBM)', size: '≈310 МБ', query: '{}', passage: '{}',
+    spec: { name: 'ibm-granite/granite-embedding-311m-multilingual-r2', dtype: 'fp32', file: 'model_quint8_avx2', pooling: 'cls' },
+  },
+  {
+    // Google, 2025, the Gemma terms; the model makes the sentence's vector itself
+    id: 'gemma', title: 'embeddinggemma-300m (Google)', size: '≈310 МБ', query: 'task: search result | query: {}', passage: 'title: none | text: {}',
+    spec: { name: 'onnx-community/embeddinggemma-300m-ONNX', external: true, pooling: 'sentence' },
+  },
+  {
+    // Alibaba, 2025, Apache 2.0; twice the size; a question with an instruction; by the last piece
+    id: 'qwen', title: 'Qwen3-Embedding-0.6B (Alibaba)', size: '≈610 МБ', query: 'Instruct: Given a question, retrieve passages of a book that answer it\nQuery:{}', passage: '{}',
+    spec: { name: 'onnx-community/Qwen3-Embedding-0.6B-ONNX', pooling: 'last_token' },
+  },
 ];
+/** A text marked as the model wants it. @param {string} template @param {string} text */
+const marked = (template, text) => template.replace('{}', () => text);
 
 /**
  * The mixed search: the model's first two stay where they are (it finds what is meant); after them its
@@ -105,7 +126,8 @@ export function createLab(db, engine, where) {
   /** Each model's vectors in memory (made when first asked; grown as more are worked out). @type {Map<string, Row[]>} */
   const loaded = new Map();
   /** The work in the background: one model at a time (the engine holds one). */
-  const job = { model: /** @type {string | null} */ (null), stop: false, error: /** @type {Record<string, string>} */ ({}), rate: 0 };
+  /** The work in the background: one model at a time (the others asked for wait in `queue`, in turn). */
+  const job = { model: /** @type {string | null} */ (null), queue: /** @type {string[]} */ ([]), stop: false, error: /** @type {Record<string, string>} */ ({}), rate: 0 };
 
   /** @param {string} id */
   const modelOf = (id) => {
@@ -135,7 +157,7 @@ export function createLab(db, engine, where) {
     const started = Date.now();
     for (let i = 0; i < todo.length && !job.stop; i += BATCH) {
       const part = todo.slice(i, i + BATCH);
-      const { vectors, dims } = await engine.embed(m.name, 'passage', part.map((x) => x.text), m.prefix, m.pooling);
+      const { vectors, dims } = await engine.embed(m.spec, part.map((x) => marked(m.passage, x.text)));
       part.forEach((x, k) => {
         const vec = vectors.slice(k * dims, (k + 1) * dims);
         q.put.run(m.id, x.ref, x.lang, new Uint8Array(vec.buffer));
@@ -151,7 +173,7 @@ export function createLab(db, engine, where) {
    * @param {typeof MODELS[number]} m @param {string} text @param {number} n
    */
   async function closest(m, text, n) {
-    const { vectors } = await engine.embed(m.name, 'query', [text], m.prefix, m.pooling);
+    const { vectors } = await engine.embed(m.spec, [marked(m.query, text)]);
     /** @type {Map<string, { score: number, lang: 'ru' | 'en' }>} */
     const best = new Map();
     for (const r of rows(m.id)) {
@@ -211,9 +233,9 @@ export function createLab(db, engine, where) {
         engineRunning: engine.running(),
         models: MODELS.map((m) => ({
           id: m.id, title: m.title, size: m.size,
-          downloaded: existsSync(`${where.models}/${m.name}`),
+          downloaded: existsSync(`${where.models}/${m.spec.name}`),
           done: /** @type {{ n: number }} */ (q.done.get(m.id)).n, total,
-          running: job.model === m.id, rate: job.model === m.id ? job.rate : 0, error: job.error[m.id] ?? null,
+          running: job.model === m.id, queued: job.queue.includes(m.id), rate: job.model === m.id ? job.rate : 0, error: job.error[m.id] ?? null,
         })),
         ...judgement(),
       };
@@ -236,30 +258,35 @@ export function createLab(db, engine, where) {
 
     /** Starts working out a model's vectors (another model's work stops first). @param {string} id */
     run(id) {
-      const m = modelOf(id);
+      modelOf(id);
       if (!engine.installed()) throw new HttpError(503, 'Движок модели не установлен (server/features/lab/engine: npm install)');
       if (job.model === id) return void (job.stop = false); // (paused, its batch not yet done: goes on)
-      job.stop = true;
-      const go = async () => {
-        while (job.model) await new Promise((r) => setTimeout(r, 100)); // (the other one finishes its batch)
-        job.model = id;
-        job.stop = false;
-        job.rate = 0;
-        delete job.error[id];
-        try {
-          await work(m);
-        } catch (err) {
-          job.error[id] = /** @type {Error} */ (err).message;
-        } finally {
-          job.model = null;
+      if (!job.queue.includes(id)) job.queue.push(id);
+      if (job.model) return; // (in turn, after the one at work)
+      const next = async () => {
+        while (job.queue.length) {
+          const m = modelOf(/** @type {string} */ (job.queue.shift()));
+          job.model = m.id;
+          job.stop = false;
+          job.rate = 0;
+          delete job.error[m.id];
+          try {
+            await work(m);
+          } catch (err) {
+            job.error[m.id] = /** @type {Error} */ (err).message;
+          } finally {
+            job.model = null;
+          }
+          if (job.stop) break; // (paused: the queue waits)
         }
       };
-      void go();
+      void next();
     },
 
-    /** Stops the work after its batch. */
+    /** Stops the work after its batch; the models waiting in turn wait no more. */
     pause() {
       job.stop = true;
+      job.queue = [];
     },
 
     /**

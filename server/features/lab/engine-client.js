@@ -11,6 +11,12 @@ const SCRIPT = fileURLToPath(new URL('./engine/embed.js', import.meta.url));
 const INSTALLED = fileURLToPath(new URL('./engine/node_modules/@huggingface/transformers', import.meta.url));
 const IDLE = 10 * 60_000;
 
+/**
+ * A model for the engine: its name; which of its files (`dtype`, `file`; `external` — weights in a file
+ * beside); how the pieces of a text make one vector (engine/embed.js).
+ * @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence' }} Spec
+ */
+
 /** @param {string} models where the models are kept (data/models) */
 export function createEngine(models) {
   /** @type {import('node:child_process').ChildProcess | null} */
@@ -25,7 +31,7 @@ export function createEngine(models) {
     if (child) return child;
     const c = fork(SCRIPT, {
       serialization: 'advanced', // (the vectors pass as they are, not as text)
-      env: { ...process.env, LAB_MODELS: models, LAB_THREADS: '2' },
+      env: { ...process.env, LAB_MODELS: models, LAB_THREADS: '4' },
       stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
     });
     try {
@@ -52,19 +58,18 @@ export function createEngine(models) {
     /** Whether its process runs now (a model in memory). */
     running: () => !!child,
     /**
-     * Vectors of texts (n × dims, one after another; each of length 1).
-     * @param {string} model @param {'query' | 'passage'} kind @param {string[]} texts @param {boolean} prefix the e5 marks
-     * @param {'mean' | 'cls'} [pooling] how the pieces make one vector
+     * Vectors of texts, marked as the model wants (n × dims, one after another; each of length 1).
+     * @param {Spec} spec @param {string[]} texts
      * @returns {Promise<{ vectors: Float32Array, dims: number }>}
      */
-    embed(model, kind, texts, prefix, pooling) {
+    embed(spec, texts) {
       clearTimeout(idle);
       idle = setTimeout(() => child?.kill(), IDLE);
       idle.unref();
       const id = ++seq;
       return new Promise((resolve, reject) => {
         waiting.set(id, { resolve, reject });
-        start().send({ id, model, kind, texts, prefix, pooling });
+        start().send({ id, spec, texts });
       });
     },
     stop() {
