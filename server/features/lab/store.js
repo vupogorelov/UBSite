@@ -18,13 +18,30 @@ import { transaction } from '../../db.js';
 /**
  * The models to try. `prefix`: the e5 models read a question and a text each with its own mark; `pooling`:
  * how a text's pieces make one vector (bge: by the first, the text's own mark); `mix`: the model of the
- * mixed search. (e5-small was tried and dropped: e5-base was better in every question.)
+ * mixed search. Tried and dropped (2026-10-17, ten questions judged): e5-small — e5-base better in every
+ * question; bge-m3 — as good as e5-base (a draw on ten questions) at twice the size, six times the time,
+ * three times the memory.
  * @type {{ id: string, name: string, title: string, size: string, prefix: boolean, pooling?: 'mean' | 'cls', mix?: boolean }[]}
  */
 export const MODELS = [
   { id: 'e5-base', name: 'Xenova/multilingual-e5-base', title: 'multilingual-e5-base', size: '≈280 МБ', prefix: true, mix: true },
-  { id: 'bge-m3', name: 'Xenova/bge-m3', title: 'bge-m3', size: '≈560 МБ', prefix: false, pooling: 'cls' },
 ];
+
+/**
+ * The mixed search: the model's first two stay where they are (it finds what is meant); after them its
+ * list and the words' are merged by reciprocal rank fusion — the words add what the model missed (events,
+ * rare words: «менялы»), not taking its first places. Of the ways tried on the judged questions, the
+ * one as good as the model at the top (8 of 10 in the first three) that finds the most (29 hits).
+ * @param {string[]} model the model's closest, best first @param {string[]} words the word search's
+ * @returns {string[]}
+ */
+export function mix(model, words) {
+  const head = model.slice(0, 2);
+  /** @type {Map<string, number>} */
+  const weight = new Map();
+  for (const list of [model, words]) list.forEach((ref, i) => weight.set(ref, (weight.get(ref) ?? 0) + 1 / (RRF + i + 1)));
+  return [...head, ...[...weight].sort((a, b) => b[1] - a[1]).map(([ref]) => ref).filter((ref) => !head.includes(ref))];
+}
 const BATCH = 8;
 const PAUSE = 30;
 const TOP = 10;
@@ -271,14 +288,11 @@ export function createLab(db, engine, where) {
         }
       }
       const words = byWords(text, DEEP).map((p) => p.ref);
-      // the mixed: the words and its model, by reciprocal rank fusion
+      // the mixed: its model leads, the words add what it missed (mix)
       const best = MODELS.find((m) => m.mix && deep.has(m.id));
       if (best) {
-        /** @type {Map<string, number>} */
-        const weight = new Map();
-        for (const list of [words, /** @type {string[]} */ (deep.get(best.id))]) list.forEach((ref, i) => weight.set(ref, (weight.get(ref) ?? 0) + 1 / (RRF + i + 1)));
-        const mixed = [...weight].sort((a, b) => b[1] - a[1]).slice(0, TOP).map(([ref]) => para(ref));
-        columns.push({ id: 'mix', title: `Смешанный: слова + ${best.title}`, found: mixed });
+        const found = mix(/** @type {string[]} */ (deep.get(best.id)), words).slice(0, TOP).map(para);
+        columns.push({ id: 'mix', title: `Смешанный: ${best.id} + слова`, found });
       }
       columns.push({ id: 'words', title: 'По словам («Я и Книга»)', found: words.slice(0, TOP).map(para) });
       transaction(lab, () => {

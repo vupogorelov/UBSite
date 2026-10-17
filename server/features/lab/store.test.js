@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../../db.js';
-import { createLab } from './store.js';
+import { createLab, mix } from './store.js';
 
 /** A model of its own: the meaning is which of three words a text has (a vector of three numbers). */
 const fakeEngine = () => ({
@@ -75,4 +75,14 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test("the mixed search: the model's first two stay; the words add what it missed, not taking its places", async () => {
+  const model = ['a', 'b', 'c', 'd', 'e'];
+  const words = ['x', 'c', 'y'];
+  const out = mix(model, words);
+  assert.deepEqual(out.slice(0, 2), ['a', 'b'], "the model's first two");
+  assert.equal(out[2], 'c', 'found by both — next');
+  assert.ok(out.includes('x') && out.includes('y'), 'the words add theirs');
+  assert.equal(new Set(out).size, out.length, 'each once');
 });
