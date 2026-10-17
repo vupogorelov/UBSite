@@ -15,10 +15,15 @@ import { existsSync } from 'node:fs';
 import { HttpError } from '../../http.js';
 import { transaction } from '../../db.js';
 
-/** The models to try. `prefix`: the e5 models read a question and a text each with its own mark. */
+/**
+ * The models to try. `prefix`: the e5 models read a question and a text each with its own mark; `pooling`:
+ * how a text's pieces make one vector (bge: by the first, the text's own mark); `mix`: the model of the
+ * mixed search. (e5-small was tried and dropped: e5-base was better in every question.)
+ * @type {{ id: string, name: string, title: string, size: string, prefix: boolean, pooling?: 'mean' | 'cls', mix?: boolean }[]}
+ */
 export const MODELS = [
-  { id: 'e5-small', name: 'Xenova/multilingual-e5-small', title: 'multilingual-e5-small', size: '≈130 МБ', prefix: true },
-  { id: 'e5-base', name: 'Xenova/multilingual-e5-base', title: 'multilingual-e5-base', size: '≈280 МБ', prefix: true },
+  { id: 'e5-base', name: 'Xenova/multilingual-e5-base', title: 'multilingual-e5-base', size: '≈280 МБ', prefix: true, mix: true },
+  { id: 'bge-m3', name: 'Xenova/bge-m3', title: 'bge-m3', size: '≈560 МБ', prefix: false, pooling: 'cls' },
 ];
 const BATCH = 8;
 const PAUSE = 30;
@@ -50,6 +55,9 @@ export function createLab(db, engine, where) {
     CREATE TABLE IF NOT EXISTS answers (question TEXT NOT NULL, col TEXT NOT NULL, rank INTEGER NOT NULL, ref TEXT NOT NULL,
       PRIMARY KEY (question, col, rank)) WITHOUT ROWID;
   `);
+  // (a model dropped from the list: its vectors and answers go — the judgements stay, they are the reader's)
+  const kept = MODELS.map((m) => `'${m.id}'`).join(', ');
+  lab.exec(`DELETE FROM vectors WHERE model NOT IN (${kept}); DELETE FROM answers WHERE col NOT IN (${kept}, 'mix', 'words');`);
   // (the first marks were per column: one judgement where they agree; where they differ — left to judge again)
   if (lab.prepare("SELECT 1 FROM sqlite_master WHERE name = 'marks'").get()) {
     lab.exec(`
@@ -110,7 +118,7 @@ export function createLab(db, engine, where) {
     const started = Date.now();
     for (let i = 0; i < todo.length && !job.stop; i += BATCH) {
       const part = todo.slice(i, i + BATCH);
-      const { vectors, dims } = await engine.embed(m.name, 'passage', part.map((x) => x.text), m.prefix);
+      const { vectors, dims } = await engine.embed(m.name, 'passage', part.map((x) => x.text), m.prefix, m.pooling);
       part.forEach((x, k) => {
         const vec = vectors.slice(k * dims, (k + 1) * dims);
         q.put.run(m.id, x.ref, x.lang, new Uint8Array(vec.buffer));
@@ -126,7 +134,7 @@ export function createLab(db, engine, where) {
    * @param {typeof MODELS[number]} m @param {string} text @param {number} n
    */
   async function closest(m, text, n) {
-    const { vectors } = await engine.embed(m.name, 'query', [text], m.prefix);
+    const { vectors } = await engine.embed(m.name, 'query', [text], m.prefix, m.pooling);
     /** @type {Map<string, { score: number, lang: 'ru' | 'en' }>} */
     const best = new Map();
     for (const r of rows(m.id)) {
@@ -173,7 +181,7 @@ export function createLab(db, engine, where) {
       const js = [...(found.get(x.text) ?? [])].map((r) => judged.get(`${x.text}\n${r}`));
       return { ...x, good: js.filter((j) => j === true).length, bad: js.filter((j) => j === false).length, open: js.filter((j) => j === undefined).length };
     });
-    const order = ['e5-small', 'e5-base', 'mix', 'words'];
+    const order = [...MODELS.map((m) => m.id), 'mix', 'words'];
     return { questions, score: [...score.values()].sort((a, b) => order.indexOf(a.col) - order.indexOf(b.col)) };
   }
 
@@ -263,8 +271,8 @@ export function createLab(db, engine, where) {
         }
       }
       const words = byWords(text, DEEP).map((p) => p.ref);
-      // the mixed: the words and the last (larger) counted model, by reciprocal rank fusion
-      const best = [...MODELS].reverse().find((m) => deep.has(m.id));
+      // the mixed: the words and its model, by reciprocal rank fusion
+      const best = MODELS.find((m) => m.mix && deep.has(m.id));
       if (best) {
         /** @type {Map<string, number>} */
         const weight = new Map();

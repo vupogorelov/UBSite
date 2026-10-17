@@ -42,26 +42,26 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
     const old = new DatabaseSync(join(dir, 'lab.db'));
     old.exec(`CREATE TABLE marks (question TEXT NOT NULL, model TEXT NOT NULL, ref TEXT NOT NULL, good INTEGER NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (question, model, ref)) WITHOUT ROWID;
-      INSERT INTO marks (question, model, ref, good) VALUES ('дети', 'e5-small', '47:2.7', 1), ('дети', 'words', '47:2.7', 1),
-        ('дети', 'e5-small', '47:2.8', 1), ('дети', 'words', '47:2.8', 0);`);
+      INSERT INTO marks (question, model, ref, good) VALUES ('дети', 'e5-base', '47:2.7', 1), ('дети', 'words', '47:2.7', 1),
+        ('дети', 'e5-base', '47:2.8', 1), ('дети', 'words', '47:2.8', 0);`);
     old.close();
 
     const lab = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir });
-    lab.run('e5-small');
+    lab.run('e5-base');
     for (let i = 0; i < 100 && lab.status().models[0].done < 6; i++) await new Promise((r) => setTimeout(r, 20));
     assert.equal(lab.status().models[0].done, 6, 'both languages of the three paragraphs');
 
     const a = await lab.ask('что с детьми после смерти', () => [{ ref: '47:2.8' }, { ref: '47:2.9' }]);
-    assert.deepEqual(a.columns.map((c) => c.id), ['e5-small', 'mix', 'words']);
+    assert.deepEqual(a.columns.map((c) => c.id), ['e5-base', 'mix', 'words']);
     const found = (/** @type {string} */ id) => /** @type {any} */ (a.columns.find((c) => c.id === id)).found.map((/** @type {any} */ f) => f.ref);
-    assert.equal(found('e5-small')[0], '47:2.7', 'the closest by meaning first');
+    assert.equal(found('e5-base')[0], '47:2.7', 'the closest by meaning first');
     assert.deepEqual(new Set(found('mix')), new Set(['47:2.7', '47:2.8', '47:2.9']), 'the mixed: both lists');
 
     lab.judge({ question: 'что с детьми после смерти', ref: '47:2.7', good: true });
     lab.judge({ question: 'что с детьми после смерти', ref: '47:2.9', good: false });
     const s = lab.status();
     const of = (/** @type {string} */ col) => s.score.find((x) => x.col === col);
-    assert.deepEqual([of('e5-small')?.top3, of('e5-small')?.good, of('e5-small')?.bad], [1, 1, 1]);
+    assert.deepEqual([of('e5-base')?.top3, of('e5-base')?.good, of('e5-base')?.bad], [1, 1, 1]);
     assert.deepEqual([of('words')?.answered, of('words')?.bad, of('words')?.open], [0, 1, 1], 'the word search missed it');
     assert.equal(s.questions.find((x) => x.text === 'что с детьми после смерти')?.good, 1);
 

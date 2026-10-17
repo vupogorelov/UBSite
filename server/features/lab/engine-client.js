@@ -54,16 +54,17 @@ export function createEngine(models) {
     /**
      * Vectors of texts (n × dims, one after another; each of length 1).
      * @param {string} model @param {'query' | 'passage'} kind @param {string[]} texts @param {boolean} prefix the e5 marks
+     * @param {'mean' | 'cls'} [pooling] how the pieces make one vector
      * @returns {Promise<{ vectors: Float32Array, dims: number }>}
      */
-    embed(model, kind, texts, prefix) {
+    embed(model, kind, texts, prefix, pooling) {
       clearTimeout(idle);
       idle = setTimeout(() => child?.kill(), IDLE);
       idle.unref();
       const id = ++seq;
       return new Promise((resolve, reject) => {
         waiting.set(id, { resolve, reject });
-        start().send({ id, model, kind, texts, prefix });
+        start().send({ id, model, kind, texts, prefix, pooling });
       });
     },
     stop() {

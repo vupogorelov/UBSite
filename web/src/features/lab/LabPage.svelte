@@ -98,7 +98,7 @@
   }
   /** The score's name of a column. @param {string} id */
   const titleOf = (id) =>
-    id === 'words' ? 'По словам' : id === 'mix' ? 'Смешанный' : id; // (the models by their short names: e5-small, e5-base)
+    id === 'words' ? 'По словам' : id === 'mix' ? 'Смешанный' : id; // (the models by their short names: e5-base, bge-m3)
 </script>
 
 <div class="lab-page">
