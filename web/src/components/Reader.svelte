@@ -17,6 +17,8 @@
   import { NOTE_COLORS } from '../../../shared/settings.js';
   import { setHighlights, clearHighlights, setRanges, anchorRange, textElement, textOffset, textElOf, caretAt } from '../lib/highlight.js';
   import { createTermPairs } from '../lib/termpairs.svelte.js';
+  import { createDictHints } from '../features/dictionary/hints.svelte.js';
+  import HintLayer from '../features/dictionary/HintLayer.svelte';
   import Icon from './Icon.svelte';
   import MarginRail from './MarginRail.svelte';
   import NoteCard from './NoteCard.svelte';
@@ -531,18 +533,34 @@
   });
 
   // ---- Pairs of terms (a computer): a glossary term under the mouse lit with its counterpart (lib/termpairs.svelte.js) ----
+  // ---- and the dictionary's hints: its articles' words marked, their cards (features/dictionary/hints.svelte.js) ----
   const termPairs = createTermPairs(() => article);
+  /** @type {HTMLElement | null} */
+  let hintLayer = $state(null);
+  const dictHints = createDictHints(() => article, () => hintLayer);
   $effect(() => {
     const id = data?.paper.id;
+    const pairs = settings.termPairs && !device.touch, hints = settings.dictHints, lang = main;
     termPairs.set(null);
-    if (id === undefined || !settings.termPairs || device.touch || !session.user) return;
+    void dictHints.set(null, lang);
+    if (id === undefined || !(pairs || hints) || !session.user) return;
     let live = true;
-    api.paperTerms(id).then((r) => live && termPairs.set(r)).catch(() => {});
+    api.paperTerms(id).then((r) => {
+      if (!live) return;
+      if (pairs) termPairs.set(r);
+      if (hints) void tick().then(() => void (live && dictHints.set(r, lang)));
+    }).catch(() => {});
     return () => {
       live = false;
       termPairs.clear();
+      dictHints.clear();
     };
   });
+  /** @param {MouseEvent} e */
+  function onTextMove(e) {
+    termPairs.move(e);
+    if (!device.touch) dictHints.move(e); // (a tap moves "the mouse" too: there the sheet opens instead)
+  }
 
   /** The smallest note under the mouse pointer. @param {number} x @param {number} y */
   function noteAt(x, y) {
@@ -624,6 +642,8 @@
     // Ctrl+click (or a tap on touch screens) on a translated fragment shows its variants.
     if (trShown && (e.ctrlKey || e.metaKey || touch) && openPopover(e)) return;
     pop = null;
+    // a word the dictionary marked: its article's card
+    if (dictHints.tap(e, device.touch)) return void (tb = null);
     const n = settings.showNotes ? noteAt(e.clientX, e.clientY) : null;
     if (n) {
       notes.activeId = n.id;
@@ -708,11 +728,12 @@
           class:tr-tint={settings.trTint}
           bind:this={article}
           onmouseup={onPointerUp}
-          onmousemove={termPairs.move}
-          onmouseleave={termPairs.clear}
+          onmousemove={onTextMove}
+          onmouseleave={() => (termPairs.clear(), dictHints.leave())}
           onkeyup={(e) => e.shiftKey && onPointerUp(e)}
           onclick={onArticleClick}
         >
+          {#if settings.dictHints && !isGuest}<HintLayer hints={dictHints} mark={settings.dictMark} {article} bind:layer={hintLayer} />{/if}
           {#each groups as s (s.num)}
             {#if s.num === 0}
               {#if paper.partStart}

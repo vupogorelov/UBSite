@@ -73,11 +73,14 @@ import { log } from './log.js';
  *   post?: { ref: string, ru: string, en: string, pageRef: string, paperId: number, paperTitle: string, paperTitleEn?: string } | null
  * }} PublicMessage
  * @typedef {{
- *   key: string, kind: 'para' | 'chan' | 'ws' | 'dm', title: string, subtitle: string | null, members?: number,
- *   last: PublicMessage | null, unread: number, mentions: number, pinned: number | null, muted?: boolean, voice?: boolean
+ *   key: string, kind: 'para' | 'chan' | 'ws' | 'dm' | string, title: string, subtitle: string | null, members?: number,
+ *   last: PublicMessage | null, unread: number, mentions: number, pinned: number | null, muted?: boolean, voice?: boolean,
+ *   link?: string, linkLabel?: string
  * }} ChatSummary
+ * kind: also a feature's kind of chat ("dict": an article's discussion), with `link` — the way to its subject
  * @typedef {{
- *   key: string, kind: 'para' | 'chan' | 'ws' | 'note' | 'dm', title: string, subtitle: string | null, members?: number, archived?: boolean, text?: string,
+ *   key: string, kind: 'para' | 'chan' | 'ws' | 'note' | 'dm' | string, title: string, subtitle: string | null, members?: number, archived?: boolean, text?: string,
+ *   link?: string, linkLabel?: string,
  *   post?: { ru: string, en: string, pageRef: string, paperId: number, paperTitle: string, paperTitleEn?: string } | null,
  *   pinned: PinnedMessage | null, canPin: boolean, following?: boolean, voice?: boolean, discussion?: string | null
  * }} ChatInfo

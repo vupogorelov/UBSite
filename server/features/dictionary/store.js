@@ -58,6 +58,7 @@ export function createDictionary(db, glossary, terms) {
     addPlace: db.prepare('INSERT INTO dict_places (article_id, ref, note, pos) VALUES (?, ?, ?, ?)'),
     clearLinks: db.prepare('DELETE FROM dict_links WHERE from_id = ?'),
     addLink: db.prepare('INSERT INTO dict_links (from_id, to_id, kind) VALUES (?, ?, ?)'),
+    messages: db.prepare("SELECT count(*) AS n FROM public_messages WHERE ref = ? AND kind = 'message' AND hidden_at IS NULL"),
   };
 
   // ---- Where each term stands in the book (made in the background) ----
@@ -152,7 +153,8 @@ export function createDictionary(db, glossary, terms) {
         .filter((a) => a.status === 'published' || drafts)
         .map(({ bodyRu, bodyEn, ...a }) => {
           const ids = (names.get(a.id) ?? []).map((n) => n.id);
-          return { ...a, paragraphs: paragraphsOf(ix, ids).length };
+          // `names`: its glossary entries — by them the reader marks the article's words in the text
+          return { ...a, names: ids, paragraphs: paragraphsOf(ix, ids).length };
         });
     },
 
@@ -332,6 +334,25 @@ export function createDictionary(db, glossary, terms) {
         }
         q.touch.run(user.id, id);
       });
+    },
+
+    /**
+     * An article's discussion — a chat of its own ("dict:12"), open as a paragraph's thread: to everyone
+     * signed in, while the article is published (a draft — to the coordinators).
+     * @type {import('../../chat.js').ChatKind}
+     */
+    chat: {
+      access: (id, user) => void article(id, user),
+      header: (id, user) => {
+        const a = article(id, user);
+        return { title: a.nameRu, subtitle: 'Статья словаря', link: `/d/${id}`, linkLabel: 'Открыть статью' };
+      },
+    },
+
+    /** How many messages its discussion has. @param {number} id @param {User | null} user */
+    discussion(id, user) {
+      article(id, user);
+      return { messages: /** @type {{ n: number }} */ (q.messages.get(`dict:${id}`)).n };
     },
 
     /** The published articles' addresses (the book's copy on a device: read without a network). */

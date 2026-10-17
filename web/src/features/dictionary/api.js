@@ -6,11 +6,12 @@ import { request } from '../../lib/api.js';
 /**
  * @typedef {{
  *   id: number, kind: Kind, nameRu: string, nameEn: string, briefRu: string, briefEn: string,
- *   status: 'draft' | 'published', updatedAt: string, paragraphs: number,
+ *   status: 'draft' | 'published', updatedAt: string, paragraphs: number, names: number[],
  * }} ArticleItem
+ * names: its glossary entries (by them its words are marked in the text)
  */
 /**
- * @typedef {ArticleItem & {
+ * @typedef {Omit<ArticleItem, 'names'> & {
  *   bodyRu: string, bodyEn: string,
  *   names: { id: number, ru: string, en: string }[],
  *   places: { ref: string, note: string, ru: string, en: string, paperTitle: string }[],
@@ -33,6 +34,8 @@ export const dictApi = {
   lookup: (text, lang) => request('GET', `/api/dict/lookup?${new URLSearchParams({ text, lang })}`),
   /** @param {number} id @returns {Promise<Hint[]>} */
   hints: (id) => request('GET', `/api/dict/${id}/hints`),
+  /** How many messages the article's discussion (the chat "dict:12") has. @param {number} id @returns {Promise<{ messages: number }>} */
+  discussion: (id) => request('GET', `/api/dict/${id}/discussion`),
   /** @param {{ nameRu: string, nameEn?: string, kind?: Kind, glossaryIds?: number[] }} b @returns {Promise<{ id: number }>} */
   create: (b) => request('POST', '/api/dict', b),
   /** @param {number} id @param {Partial<Pick<Article, 'kind' | 'nameRu' | 'nameEn' | 'briefRu' | 'briefEn' | 'bodyRu' | 'bodyEn' | 'status'>>} b @returns {Promise<Article>} */

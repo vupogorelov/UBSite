@@ -43,6 +43,7 @@ export default {
     r.on('GET', '/api/dict/lookup', ({ url, user }) => dict.lookup(url.searchParams.get('text') ?? '', url.searchParams.get('lang') === 'en' ? 'en' : 'ru', user));
     r.on('GET', '/api/dict/:id', ({ params, url, user }) => dict.get(idOf(params), withDrafts(url, user)));
     r.on('GET', '/api/dict/:id/hints', ({ params, user }) => dict.hints(idOf(params), requireCoordinator(user)));
+    r.on('GET', '/api/dict/:id/discussion', ({ params, user }) => dict.discussion(idOf(params), user));
     // { nameRu, nameEn?, kind?, glossaryIds? }
     r.on('POST', '/api/dict', change(async ({ req, user }) => ({ id: dict.create(await body(req), requireCoordinator(user)) })));
     // { kind?, nameRu?, nameEn?, briefRu?, briefEn?, bodyRu?, bodyEn?, status? }
@@ -69,7 +70,10 @@ export default {
       return dict.get(id, true);
     }));
 
-    core.guest(/^\/api\/dict(\/\d+|\/lookup)?$/);
+    // an article's discussion: a chat "dict:12" (server/chat.js)
+    core.chat.kind('dict', dict.chat);
+
+    core.guest(/^\/api\/dict(\/\d+|\/lookup|\/\d+\/discussion)?$/);
     core.offline(dict.offlineUrls);
     core.on('bookChanged', dict.forget);
   },

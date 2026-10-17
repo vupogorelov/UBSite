@@ -6,6 +6,8 @@
   import { renderBody } from '../../lib/markup.js';
   import { showToast } from '../../lib/toast.svelte.js';
   import { api } from '../../lib/api.js';
+  import { discussInChat } from '../../lib/chat.svelte.js';
+  import { askLogin } from '../../lib/guest.svelte.js';
   import { dictApi, KINDS, kindName } from './api.js';
   import Icon from '../../components/Icon.svelte';
 
@@ -38,6 +40,18 @@
       (e) => (error = e.message),
     );
   });
+
+  /** How many messages its discussion has (null — not known). */
+  let messages = $state(/** @type {number | null} */ (null));
+  $effect(() => {
+    const current = id;
+    messages = null;
+    dictApi.discussion(current).then((r) => id === current && (messages = r.messages), () => {});
+  });
+  function discuss() {
+    if (!session.user) return askLogin('обсуждение');
+    discussInChat(`dict:${id}`);
+  }
 
   const en = $derived(book.main === 'en');
   const name = $derived(a ? (en && a.nameEn ? a.nameEn : a.nameRu) : '');
@@ -243,6 +257,17 @@
             {/each}
           </div>
         {/if}
+
+        <!-- its discussion: a chat of its own, as a paragraph's -->
+        <div class="ui-label">Обсуждение</div>
+        <button class="ui-card art-discuss" onclick={discuss}>
+          <span class="ui-tile"><Icon name="discuss" size={18} /></span>
+          <span class="art-discuss-text">
+            <b>{messages ? `${messages} ${plural(messages, 'сообщение', 'сообщения', 'сообщений')}` : 'Обсудить статью'}</b>
+            <span class="muted small">{messages ? 'Вопросы, мысли и уточнения читателей' : 'Вопрос, мысль, уточнение — видят все участники'}</span>
+          </span>
+          <Icon name="chevron" size={16} />
+        </button>
       {/if}
 
       <div class="ui-label">В тексте книги</div>
@@ -328,6 +353,19 @@
   .art-place {
     display: grid;
     gap: 6px;
+  }
+  .art-discuss {
+    width: 100%;
+    align-items: center;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .art-discuss-text {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    gap: 2px;
   }
   .art-place-head {
     display: flex;

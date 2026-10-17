@@ -25,6 +25,11 @@ export async function openWhatIs(text, lang) {
   }
 }
 
+/** An article already known (a marked word tapped in the text). @param {import('./api.js').Found} found */
+export function showWhatIs(found) {
+  Object.assign(whatIs, { open: true, loading: false, text: found.nameRu, found, error: '' });
+}
+
 export function closeWhatIs() {
   whatIs.open = false;
 }

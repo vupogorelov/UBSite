@@ -82,3 +82,25 @@ test('a name belongs to one article; related articles, a draft one hidden from a
   assert.deepEqual((await dict.get(m, false)).links, [], 'Авраам is still a draft');
   assert.deepEqual((await dict.candidates()).map((c) => c.ru), ['Урантия'], 'the names no article has, the most named first');
 });
+
+test("an article's discussion: a chat of its own while it is published; in the list of one who wrote there", async () => {
+  const { db, dict, coord, reader } = setup();
+  const { createChat } = await import('../../chat.js');
+  const { createAuth } = await import('../../auth.js');
+  const chat = createChat(db, createAuth(db));
+  chat.kind('dict', dict.chat);
+  assert.throws(() => chat.kind('dict', dict.chat), /taken/);
+  const id = dict.create({ nameRu: 'Мелхиседек', glossaryIds: [1] }, coord);
+  assert.deepEqual((await dict.list(true))[0].names, [1], "the list carries the article's glossary entries");
+  assert.throws(() => chat.post(`dict:${id}`, reader, { body: 'Вопрос' }), /нет в словаре/, 'a draft: not for a reader');
+  chat.post(`dict:${id}`, coord, { body: 'Проверим места' });
+  dict.update(id, { status: 'published' }, coord);
+  chat.post(`dict:${id}`, reader, { body: 'А кто такой Амдон?' });
+  assert.deepEqual(dict.discussion(id, null), { messages: 2 });
+  const mine = chat.list(reader).find((c) => c.key === `dict:${id}`);
+  assert.equal(mine?.title, 'Мелхиседек');
+  assert.equal(mine?.link, `/d/${id}`);
+  assert.equal(/** @type {any} */ (chat.info(`dict:${id}`, reader)).linkLabel, 'Открыть статью');
+  assert.throws(() => chat.page('dict:999', reader), /нет в словаре/);
+  assert.throws(() => chat.page('word:1', reader), /Чат не найден/, 'a kind nobody added');
+});

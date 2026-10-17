@@ -15,6 +15,6 @@
 </script>
 
 <span class="tg-chat-avatar" data-kind={chat?.voice || chat?.kind === 'dm' ? 'voice' : chat?.kind}>
-  {#if chat?.voice || chat?.kind === 'dm'}<Icon name="book-open" size={20} />{:else}{text}{/if}
+  {#if chat?.voice || chat?.kind === 'dm'}<Icon name="book-open" size={20} />{:else if chat?.kind === 'dict'}<Icon name="dictionary" size={20} />{:else}{text}{/if}
   {#if vis}<span class="tg-vis-badge" title={vis.full} role="img" aria-label={vis.full}><Icon name={vis.icon} size={11} /></span>{/if}
 </span>

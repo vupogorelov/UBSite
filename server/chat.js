@@ -9,7 +9,16 @@ import { transaction } from './db.js';
 
 /** @typedef {import('node:sqlite').DatabaseSync} DatabaseSync */
 /** @typedef {import('./auth.js').User} User */
-/** @typedef {{ kind: 'para' | 'chan' | 'ws' | 'note' | 'dm', id: string | number, key: string }} Chat */
+/** @typedef {{ kind: 'para' | 'chan' | 'ws' | 'note' | 'dm' | string, id: string | number, key: string }} Chat */
+/**
+ * A kind of chat a feature adds (its keys "name:12"): open to every signed-in user, as a paragraph's thread.
+ * `access` throws when there is no such thing (or it is not this user's to read / write); `header` — its
+ * title, subtitle and the way to it (`link`: a path in the app, `linkLabel`).
+ * @typedef {{
+ *   access: (id: number, user: User, write: boolean) => void,
+ *   header: (id: number, user: User) => { title: string, subtitle: string | null, link?: string, linkLabel?: string },
+ * }} ChatKind
+ */
 
 const MAX_BODY = 20_000;
 
@@ -33,20 +42,23 @@ const MENTION = /(^|[^\p{L}\p{N}_])@([\p{L}\p{N}_.-]{2,40})/gu;
 /** An administrator's marks on messages: taken — in work — done. */
 export const MARKS = ['take', 'work', 'done'];
 
-/** @param {string} key @returns {Chat} */
-export function parseKey(key) {
+const OWN_KINDS = ['chan', 'ws', 'note', 'dm'];
+
+/** @param {string} key @param {Map<string, ChatKind>} [more] the kinds features added @returns {Chat} */
+export function parseKey(key, more) {
   if (PARA.test(key)) return { kind: 'para', id: key, key };
-  const m = key.match(/^(chan|ws|note|dm):(\d+)$/);
-  if (!m) throw new HttpError(404, 'Чат не найден');
-  return { kind: /** @type {'chan' | 'ws' | 'note' | 'dm'} */ (m[1]), id: Number(m[2]), key };
+  const m = key.match(/^([a-z]+):(\d+)$/);
+  if (!m || !(OWN_KINDS.includes(m[1]) || more?.has(m[1]))) throw new HttpError(404, 'Чат не найден');
+  return { kind: m[1], id: Number(m[2]), key };
 }
 
 /**
  * Live updates: one SSE connection per open tab; events go to everyone who may see the chat.
  * @param {ReturnType<typeof import('./auth.js').createAuth>} auth
  * @param {(chat: Chat) => number | null} workspaceOf the workspace whose members alone see the chat
+ * @param {(key: string) => Chat} parseKey
  */
-function createHub(auth, workspaceOf) {
+function createHub(auth, workspaceOf, parseKey) {
   /** @type {Map<import('node:http').ServerResponse, number>} */
   const clients = new Map();
   setInterval(() => {
@@ -95,7 +107,11 @@ function createHub(auth, workspaceOf) {
  * @param {ReturnType<typeof import('./auth.js').createAuth>} auth
  */
 export function createChat(db, auth) {
-  const hub = createHub(auth, (c) => workspaceOf(c));
+  /** The kinds of chat features added (`kind`). @type {Map<string, ChatKind>} */
+  const kinds = new Map();
+  /** @param {string} key */
+  const keyOf = (key) => parseKey(key, kinds);
+  const hub = createHub(auth, (c) => workspaceOf(c), keyOf);
   /** Called inside a mark's transaction (server/marktasks.js: the marker's task follows the mark). @type {((msg: any, userId: number, mark: string | null) => void) | null} */
   let markHook = null;
   const MESSAGE = `
@@ -143,6 +159,8 @@ export function createChat(db, auth) {
       JOIN paragraphs pa ON pa.ref = t.ref JOIN papers pp ON pp.id = pa.paper_id
       WHERE t.ref NOT IN (SELECT ref FROM thread_follows WHERE user_id = :user AND follow = 0)
       GROUP BY t.ref`),
+    // the chats of features' kinds one wrote in ("dict:12")
+    written: db.prepare("SELECT ref AS chat, min(created_at) AS since FROM public_messages WHERE author_id = ? AND kind = 'message' AND ref GLOB '[a-z]*:[0-9]*' AND ref NOT GLOB 'chan:*' AND ref NOT GLOB 'ws:*' AND ref NOT GLOB 'note:*' AND ref NOT GLOB 'dm:*' GROUP BY ref"),
     last: db.prepare(`${MESSAGE} WHERE m.ref = ? AND m.hidden_at IS NULL ORDER BY m.id DESC LIMIT 1`),
     read: db.prepare('SELECT last_read_id AS id FROM chat_reads WHERE user_id = ? AND chat = ?'),
     setRead: db.prepare(`INSERT INTO chat_reads (user_id, chat, last_read_id) VALUES (?, ?, ?)
@@ -197,8 +215,9 @@ export function createChat(db, auth) {
    * @param {string} key @param {User} user @param {boolean} write
    */
   function access(key, user, write) {
-    const c = parseKey(key);
+    const c = keyOf(key);
     if (c.kind === 'para' && !q.paragraph.get(c.id)) throw new HttpError(404, `Абзац ${c.id} не найден`);
+    kinds.get(c.kind)?.access(Number(c.id), user, write);
     if (c.kind === 'chan') {
       const ch = /** @type {any} */ (q.channel.get(c.id));
       if (!ch) throw new HttpError(404, 'Канал не найден');
@@ -262,7 +281,7 @@ export function createChat(db, auth) {
    */
   function saveMentions(id, body, key) {
     q.clearMentions.run(id);
-    const ws = workspaceOf(parseKey(key));
+    const ws = workspaceOf(keyOf(key));
     for (const m of body.matchAll(MENTION)) {
       const u = /** @type {{ id: number } | undefined} */ (q.userByName.get(m[2].toLowerCase()));
       if (u && (ws === null || auth.role(ws, u.id))) q.addMention.run(id, u.id);
@@ -304,11 +323,17 @@ export function createChat(db, auth) {
     access,
     present,
     fetchOne,
-    workspaceOf: (/** @type {string} */ key) => workspaceOf(parseKey(key)),
+    workspaceOf: (/** @type {string} */ key) => workspaceOf(keyOf(key)),
+
+    /** A feature's kind of chat (its keys "name:12"). @param {string} name @param {ChatKind} def */
+    kind(name, def) {
+      if (!/^[a-z]+$/.test(name) || OWN_KINDS.includes(name) || kinds.has(name)) throw new Error(`Chat kind taken: ${name}`);
+      kinds.set(name, def);
+    },
 
     /** The owner of a members-only chat's workspace may delete others' messages there. @param {string} key @param {User} user */
     ownsChat(key, user) {
-      const ws = workspaceOf(parseKey(key));
+      const ws = workspaceOf(keyOf(key));
       return ws !== null && auth.role(ws, user.id) === 'owner';
     },
 
@@ -488,7 +513,18 @@ export function createChat(db, auth) {
       for (const t of /** @type {any[]} */ (q.followedRefs.all({ user: user.id }))) {
         add(t.ref, { kind: 'para', title: `Абзац ${t.ref}`, subtitle: t.paperTitle }, t.since);
       }
+      // a feature's chats: those one wrote in, and the pinned ones
+      /** @param {string} key @param {string} [since] */
+      const addMore = (key, since) => {
+        try {
+          const c = keyOf(key);
+          const more = kinds.get(c.kind);
+          if (more && !out.some((x) => x.key === key)) (access(key, user, false), add(key, { kind: c.kind, ...more.header(Number(c.id), user) }, since));
+        } catch {} // (gone, or not this user's any more)
+      };
+      for (const t of /** @type {{ chat: string, since: string }[]} */ (q.written.all(user.id))) addMore(t.chat, t.since);
       for (const key of pinned) {
+        addMore(key);
         if (!PARA.test(key) || out.some((c) => c.key === key) || !q.paragraph.get(key)) continue;
         const p = /** @type {any} */ (q.paraInfo.get(key));
         add(key, { kind: 'para', title: `Абзац ${key}`, subtitle: p?.paperTitle ?? null });
@@ -506,7 +542,7 @@ export function createChat(db, auth) {
       const list = [...new Set(/** @type {string[]} */ (keys))];
       if (list.length > MAX_PINNED) throw new HttpError(400, `Закрепить можно до ${MAX_PINNED} чатов`);
       for (const k of list) {
-        const c = parseKey(k);
+        const c = keyOf(k);
         if (c.kind === 'note') throw new HttpError(400, 'Обсуждения заметок не закрепляются в списке');
         access(k, user, false);
       }
@@ -562,7 +598,7 @@ export function createChat(db, auth) {
 
     /** One chat's header info, with its pinned message and whether the user may pin. @param {string} key @param {User} user */
     info(key, user) {
-      return { ...this.header(key, user), pinned: pinnedOf(key, user), canPin: canPin(parseKey(key), user) };
+      return { ...this.header(key, user), pinned: pinnedOf(key, user), canPin: canPin(keyOf(key), user) };
     },
 
     /** @param {string} key @param {User} user */
@@ -576,6 +612,8 @@ export function createChat(db, auth) {
         const w = /** @type {any} */ (q.workspace.get(c.id));
         return { key, kind: 'ws', title: w.name, subtitle: 'Рабочее пространство', members: w.members };
       }
+      const more = kinds.get(c.kind);
+      if (more) return { key, kind: c.kind, ...more.header(Number(c.id), user) };
       if (c.kind === 'dm') return { key, kind: 'dm', title: 'Я и Книга', subtitle: 'Спросите — Книга ответит своими словами', private: true };
       if (c.kind === 'note') {
         const n = /** @type {any} */ (q.note.get(c.id));

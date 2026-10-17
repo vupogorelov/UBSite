@@ -30,6 +30,8 @@
  *   showPageRefs: boolean,
  *   altNames: boolean,
  *   termPairs: boolean,
+ *   dictHints: boolean,
+ *   dictMark: 'dot' | 'line',
  *   showNotes: boolean,
  *   showRail: boolean,
  *   showResolved: boolean,
@@ -149,6 +151,15 @@ export const SETTINGS_GROUPS = [
       {
         key: 'termPairs', label: 'Пары терминов при наведении', type: 'toggle', default: true,
         hint: 'На компьютере: наведите мышь на имя или термин из глоссария — он и его пара в другом языке подсветятся оранжевым, другие упоминания в абзаце — голубым. Если английский скрыт или свёрнут, пара появится подсказкой.',
+      },
+      {
+        key: 'dictHints', label: 'Подсказки словаря', type: 'toggle', default: false,
+        hint: 'Имя или понятие, о котором есть статья в словаре книги, отмечено при первом упоминании в каждом разделе. Наведите на него мышь или коснитесь пальцем — откроется карточка: что это, коротко, и путь к статье.',
+      },
+      {
+        key: 'dictMark', label: 'Вид отметки', type: 'choice', default: 'dot',
+        options: [['dot', 'Точка над словом'], ['line', 'Тонкая линия']],
+        when: { key: 'dictHints', values: [true] }, whenHint: 'Действует, когда включены подсказки словаря.',
       },
       {
         key: 'altNames', label: 'Названия по смыслу', type: 'toggle', default: false,

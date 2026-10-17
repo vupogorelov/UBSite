@@ -39,6 +39,7 @@ GET /api/collections/:cid last
 GET /api/collections/shared last
 GET /api/dict book
 GET /api/dict/:id book
+GET /api/dict/:id/discussion last
 GET /api/dict/:id/hints last
 GET /api/dict/candidates last
 GET /api/dict/lookup last

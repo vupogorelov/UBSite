@@ -55,7 +55,8 @@ export function createNotifications(db, tr) {
              EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND user_id = :user) AS mention,
              CASE WHEN m.ref LIKE 'chan:%' THEN (SELECT '# ' || title FROM channels WHERE id = CAST(substr(m.ref, 6) AS INTEGER))
                   WHEN m.ref LIKE 'ws:%' THEN (SELECT name FROM workspaces WHERE id = CAST(substr(m.ref, 4) AS INTEGER))
-                  WHEN m.ref LIKE 'note:%' THEN (SELECT 'Заметка · ' || a.ref FROM annotations a WHERE a.id = CAST(substr(m.ref, 6) AS INTEGER)) END AS chatTitle,
+                  WHEN m.ref LIKE 'note:%' THEN (SELECT 'Заметка · ' || a.ref FROM annotations a WHERE a.id = CAST(substr(m.ref, 6) AS INTEGER))
+                  WHEN m.ref LIKE 'dict:%' THEN (SELECT 'Словарь · ' || d.name_ru FROM dict_articles d WHERE d.id = CAST(substr(m.ref, 6) AS INTEGER)) END AS chatTitle,
              na.ref AS noteRef, na.workspace_id AS noteWorkspace, nw.name AS noteWorkspaceName, nw.kind AS noteWorkspaceKind,
              mm.id AS markedId, mm.body AS markedBody
       ${NEWS.replace('FROM public_messages m', `FROM public_messages m

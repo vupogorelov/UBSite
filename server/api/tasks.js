@@ -28,6 +28,7 @@ export function registerTaskRoutes(router, db, auth, chat) {
            CASE WHEN t.message_chat LIKE 'chan:%' THEN (SELECT title FROM channels WHERE id = CAST(substr(t.message_chat, 6) AS INTEGER))
                 WHEN t.message_chat LIKE 'ws:%' THEN (SELECT name FROM workspaces WHERE id = CAST(substr(t.message_chat, 4) AS INTEGER))
                 WHEN t.message_chat LIKE 'note:%' THEN 'заметка'
+                WHEN t.message_chat LIKE 'dict:%' THEN (SELECT 'словарь · ' || name_ru FROM dict_articles WHERE id = CAST(substr(t.message_chat, 6) AS INTEGER))
                 WHEN t.message_chat IS NOT NULL THEN 'абзац ' || t.message_chat END AS messageChatTitle
     FROM tasks t
     LEFT JOIN collections c ON c.id = t.collection_id

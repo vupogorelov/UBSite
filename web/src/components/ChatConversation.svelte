@@ -479,6 +479,10 @@
         <Icon name={info.following ? 'eye' : 'eye-off'} />
       </button>
       <button class="btn" onclick={() => navigate(`/${key}`)}><Icon name="book-open" size={16} />Открыть в книге</button>
+    {:else if info?.link}
+      <!-- a feature's chat (an article's discussion): the way to what it is about -->
+      {@const link = info.link}
+      <button class="btn" onclick={() => navigate(link)}><Icon name="dictionary" size={16} />{info.linkLabel ?? 'Открыть'}</button>
     {/if}
   </header>
   {/if}
