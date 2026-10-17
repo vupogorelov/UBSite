@@ -31,7 +31,7 @@ export function createEngine(models) {
     if (child) return child;
     const c = fork(SCRIPT, {
       serialization: 'advanced', // (the vectors pass as they are, not as text)
-      env: { ...process.env, LAB_MODELS: models, LAB_THREADS: '4' },
+      env: { ...process.env, LAB_MODELS: models, LAB_THREADS: '8' },
       stdio: ['ignore', 'ignore', 'inherit', 'ipc'],
     });
     try {
