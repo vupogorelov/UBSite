@@ -1,6 +1,7 @@
 <script>
   import { applySettings } from '../lib/settings.svelte.js';
-  import { view } from '../lib/router.svelte.js';
+  import { view, route } from '../lib/router.svelte.js';
+  import { pageOf } from '../lib/pages.js';
   import { paperLabel } from '../lib/format.js';
   import { device } from '../lib/mobile.svelte.js';
   import { guest, openLogin } from '../lib/guest.svelte.js';
@@ -13,17 +14,22 @@
    * after signing in the same place opens in the full app.
    */
   $effect(applySettings);
+  /** A page a guest may read in place of the book (null — the book). */
+  const page = $derived(((p) => (p?.guest ? p : null))(pageOf(route.path)));
 </script>
 
 <div class="guest-app" class:mobile={device.mobile}>
   <header class="guest-bar">
     <span class="guest-where">
       <span class="guest-kicker">Книга Урантии</span>
-      <b>{view.paper !== null ? paperLabel(view.paper) : ''}</b>
+      <b>{page ? page.title : view.paper !== null ? paperLabel(view.paper) : ''}</b>
     </span>
     <button class="ui-btn primary guest-login" onclick={openLogin}>Войти</button>
   </header>
-  <main class="guest-main"><Reader /></main>
+  <!-- the book, or a page a guest may read (an article of the dictionary: lib/pages.js, `guest`) -->
+  <main class="guest-main">
+    {#if page}{#key page.id}{#await page.load() then m}<m.default {...page.props?.(route.path)} />{/await}{/key}{:else}<Reader />{/if}
+  </main>
 </div>
 
 {#if guest.ask}

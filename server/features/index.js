@@ -34,6 +34,7 @@ import { registerLogRoutes } from '../api/log.js';
 import { createLive } from '../live.js';
 import { lastBackup } from '../backup.js';
 import support from './support.js';
+import dictionary from './dictionary/index.js';
 
 const MINUTE = 60_000;
 
@@ -70,7 +71,7 @@ export const FEATURES = [
     },
   },
   { name: 'analytics', setup: (c) => registerAnalyticsRoutes(c.router, createAnalytics(c.db)) },
-  { name: 'glossary', setup: (c) => registerGlossaryRoutes(c.router, c.db, c.glossary) },
+  { name: 'glossary', setup: (c) => registerGlossaryRoutes(c.router, c.db, c.glossary, c.terms) },
   { name: 'pronunciations', setup: (c) => registerPronunciationRoutes(c.router, c.db) },
   { name: 'export', setup: (c) => registerExportRoutes(c.router, c.db, c.translation, createExport(c.db, c.translation)) },
   { name: 'notifications', setup: (c) => registerNotificationRoutes(c.router, c.translation, c.notifications) },
@@ -104,10 +105,11 @@ export const FEATURES = [
     // the book for reading without a network; its text served from the answers made for it
     name: 'offline',
     setup(c) {
-      const offline = createOffline(c.router, c.db);
+      const offline = createOffline(c.router, c.db, c.offlineUrls); // (the features' own addresses too: core.offline)
       registerOfflineRoutes(c.router, offline);
       c.intercept(storedAnswers(offline));
       c.on('bookChanged', offline.invalidate);
+      c.on('offlineChanged', offline.refresh); // (a feature's own part of the copy changed: core.offline)
     },
   },
   { name: 'log', setup: (c) => registerLogRoutes(c.router, createClientLog(c.db)) },
@@ -117,6 +119,7 @@ export const FEATURES = [
     setup: (c) => void createLive(c.db, c.chat.hub, c.auth).start(),
   },
   support,
+  dictionary,
   {
     // is it alive: the process answers and the database reads (503 — it does not); when the last copy
     // was made. For restart.ps1 and an outside watcher; nothing personal in it.

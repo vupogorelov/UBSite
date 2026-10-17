@@ -5,8 +5,10 @@
 //   every(ms, name, fn)   a job done now and then (its failure written down, the next run still comes);
 //   guest(re)             GET paths read without signing in (a shared link: server/main.js lets them in);
 //   intercept(fn)         a look at a request before its route (an answer made in advance: offline.js);
-//   on(event, fn)/emit()  a word between features ("bookChanged": the book's text changed);
-//   allowFrame(origin)    a page of another site shown inside ours (the security policy's frame-src).
+//   on(event, fn)/emit()  a word between features ("bookChanged": the book's text changed;
+//                         "offlineChanged": a feature's part of the copy on the devices changed);
+//   allowFrame(origin)    a page of another site shown inside ours (the security policy's frame-src);
+//   offline(fn)           more addresses in the book's copy on the device (read without a network).
 // A feature is { name, setup(core) }: it registers its routes and the rest, it imports nothing of the
 // others but what the core gives.
 import { createRouter } from './http.js';
@@ -15,6 +17,7 @@ import { createTagStore } from './tags.js';
 import { createTranslation } from './translation.js';
 import { createNotifications } from './notifications.js';
 import { createGlossary } from './glossary.js';
+import { createTermIndex } from './terms.js';
 import { createChat } from './chat.js';
 import { createBookVoice } from './bookvoice.js';
 import { createMailer } from './mail.js';
@@ -29,6 +32,7 @@ export function createCore(db) {
   const auth = createAuth(db);
   const translation = createTranslation(db);
   const chat = createChat(db, auth);
+  const glossary = createGlossary(db);
 
   /** @type {{ ms: number, name: string, fn: () => unknown }[]} */
   const jobs = [];
@@ -40,6 +44,8 @@ export function createCore(db) {
   const listeners = new Map();
   /** @type {Set<string>} */
   const frames = new Set();
+  /** @type {(() => string[])[]} */
+  const offlineSources = [];
 
   return {
     db,
@@ -49,7 +55,9 @@ export function createCore(db) {
     chat,
     translation,
     notifications: createNotifications(db, translation),
-    glossary: createGlossary(db),
+    glossary,
+    /** Where the glossary's terms stand in the text (per paper; the reader's term pairs, the dictionary). */
+    terms: createTermIndex(db, glossary),
     tags: createTagStore(db),
     voice: createBookVoice(db, auth, chat),
     mailer: createMailer(),
@@ -75,6 +83,10 @@ export function createCore(db) {
     emit(event) {
       for (const fn of listeners.get(event) ?? []) fn();
     },
+    /** More addresses for the book's copy on the device (server/offline.js): read without a network. @param {() => string[]} fn */
+    offline(fn) {
+      offlineSources.push(fn);
+    },
     /** A site whose pages may be shown inside ours (an https origin). @param {string} origin */
     allowFrame(origin) {
       if (!/^https:\/\/[a-z0-9.-]+$/i.test(origin)) throw new Error(`Not an https origin: ${origin}`);
@@ -84,6 +96,8 @@ export function createCore(db) {
     // ---- for server/main.js ----
     /** @param {string} path */
     isGuestPath: (path) => guestPaths.some((re) => re.test(path)),
+    /** The features' addresses for the copy on the device. */
+    offlineUrls: () => offlineSources.flatMap((fn) => fn()),
     /** The sites allowed in frames (the security policy's frame-src, after 'self'). */
     frameSources: () => [...frames],
     /** @type {Interceptor} */

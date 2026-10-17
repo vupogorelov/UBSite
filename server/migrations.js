@@ -773,4 +773,44 @@ export const MIGRATIONS = [
   `
   ALTER TABLE activity_minutes ADD COLUMN os TEXT NOT NULL DEFAULT '';
   `,
+  // 37: the dictionary of the book (server/features/dictionary/): an article on a person, a place, a
+  // concept… — its names (the glossary's entries: where the name stands in the text is found by them), a
+  // short and a full description in each language, the main places chosen by a coordinator, the related
+  // articles. A draft is seen by the coordinators only.
+  `
+  CREATE TABLE dict_articles (
+    id         INTEGER PRIMARY KEY,
+    kind       TEXT NOT NULL DEFAULT 'concept' CHECK (kind IN ('person', 'being', 'place', 'concept', 'event')),
+    name_ru    TEXT NOT NULL,
+    name_en    TEXT NOT NULL DEFAULT '',
+    brief_ru   TEXT NOT NULL DEFAULT '',
+    brief_en   TEXT NOT NULL DEFAULT '',
+    body_ru    TEXT NOT NULL DEFAULT '',
+    body_en    TEXT NOT NULL DEFAULT '',
+    status     TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE TABLE dict_names (
+    article_id  INTEGER NOT NULL REFERENCES dict_articles(id) ON DELETE CASCADE,
+    glossary_id INTEGER NOT NULL UNIQUE REFERENCES glossary(id) ON DELETE CASCADE,
+    PRIMARY KEY (article_id, glossary_id)
+  );
+  CREATE TABLE dict_places (
+    article_id INTEGER NOT NULL REFERENCES dict_articles(id) ON DELETE CASCADE,
+    ref        TEXT NOT NULL,
+    note       TEXT NOT NULL DEFAULT '',
+    pos        INTEGER NOT NULL,
+    PRIMARY KEY (article_id, ref)
+  );
+  CREATE TABLE dict_links (
+    from_id INTEGER NOT NULL REFERENCES dict_articles(id) ON DELETE CASCADE,
+    to_id   INTEGER NOT NULL REFERENCES dict_articles(id) ON DELETE CASCADE,
+    kind    TEXT NOT NULL DEFAULT 'related' CHECK (kind IN ('part', 'belongs', 'related')),
+    PRIMARY KEY (from_id, to_id),
+    CHECK (from_id != to_id)
+  );
+  `,
 ];

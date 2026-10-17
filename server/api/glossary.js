@@ -1,14 +1,14 @@
 // @ts-check
 // The translation glossary (everyone reads, coordinators edit) and hints for the translation editor.
 import { HttpError, readJson } from '../http.js';
-import { createTermIndex } from '../terms.js';
 
 /**
  * @param {ReturnType<typeof import('../http.js').createRouter>} router
  * @param {import('node:sqlite').DatabaseSync} db
  * @param {ReturnType<typeof import('../glossary.js').createGlossary>} glossary
+ * @param {ReturnType<typeof import('../terms.js').createTermIndex>} termIndex where the terms stand in the text
  */
-export function registerGlossaryRoutes(router, db, glossary) {
+export function registerGlossaryRoutes(router, db, glossary, termIndex) {
   const paragraph = db.prepare('SELECT plain_ru, plain_en FROM paragraphs WHERE ref = ?');
   /** @param {import('../auth.js').User} user */
   const requireCoordinator = (user) => {
@@ -20,7 +20,6 @@ export function registerGlossaryRoutes(router, db, glossary) {
   router.on('GET', '/api/glossary', () => glossary.list());
 
   // The reader's pairs of terms: where the glossary's terms stand in a paper's paragraphs, in both languages
-  const termIndex = createTermIndex(db, glossary);
   router.on('GET', '/api/papers/:id/terms', ({ params }) => termIndex.paper(Number(params.id)));
 
   router.on('POST', '/api/glossary', async ({ req, user }) => {

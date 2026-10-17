@@ -160,10 +160,11 @@ outboxHooks.unauthorized = () => hooks.unauthorized();
 
 /**
  * Every exchange with the server. A change that can wait goes to the device's queue (outbox.svelte.js:
- * sent in order, with or without a network now, never twice); the others are sent directly.
+ * sent in order, with or without a network now, never twice); the others are sent directly. A feature
+ * in a folder of its own (web/src/features/) calls it from its own api.js.
  * @param {string} method @param {string} url @param {unknown} [body]
  */
-async function request(method, url, body) {
+export async function request(method, url, body) {
   const policy = method === 'GET' ? null : policyFor(method, url);
   if (policy?.mode === 'queue') return enqueue(method, url, body, policy);
   const path = `${method} ${url.split('?')[0]}`; // (for the journal: no query — searches stay private)

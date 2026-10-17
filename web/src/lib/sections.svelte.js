@@ -4,6 +4,7 @@
 // the chips of the notes screen, or the "Ещё" sheet. A new section = a new item here.
 import { notify } from './notify.svelte.js';
 import { search } from './search.svelte.js';
+import { section as dictionary } from '../features/dictionary/index.js';
 
 /**
  * `tab`: a tab of the sidebar next to the book; `path`: a page of its own in place of the book.
@@ -26,6 +27,7 @@ export const SECTIONS = [
   { id: 'translate', label: 'Перевод', icon: 'translate', group: 'book', phone: 'more', tab: 'translate', badge: () => notify.queue },
   { id: 'chat', label: 'Чат', icon: 'discuss', group: 'apps', phone: 'nav', path: '/chat', badge: () => notify.chatUnread },
   { id: 'tasks', label: 'Мои задачи', icon: 'check-square', group: 'apps', phone: 'more', path: '/tasks' },
+  dictionary, // (web/src/features/dictionary/)
   { id: 'about', label: 'О приложении', icon: 'info', group: 'meta', phone: 'more', path: '/about' },
 ];
 

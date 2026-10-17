@@ -25,6 +25,8 @@ const READS = [
   // the book
   ['text', /^\/api\/(toc|papers\/\d+)$/, 'book'],
   ['book', /^\/api\/(glossary|pronunciations|stem-aliases|papers\/\d+\/terms)$/, 'book'],
+  // the dictionary: its published articles are in the book's copy (server/features/dictionary/)
+  ['book', /^\/api\/dict(\/\d+)?$/, 'dictionary'],
   ['live', /^\/api\/offline\//, 'offline'],
   ['live', /^\/api\/audio\//, 'audio'],
   ['live', /^\/api\/export/, 'export'],

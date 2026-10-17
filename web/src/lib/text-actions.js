@@ -13,6 +13,7 @@ import { book } from './lang.svelte.js';
 import { can, session } from './session.svelte.js';
 import AddToCollection from '../components/AddToCollection.svelte';
 import AddTask from '../components/AddTask.svelte';
+import { whatIsAction } from '../features/dictionary/actions.js';
 
 /**
  * @typedef {{
@@ -71,10 +72,11 @@ export const TEXT_ACTIONS = [
       c.close();
     },
   },
+  whatIsAction, // «Что это?» — the dictionary of the book (web/src/features/dictionary/)
   {
     // a bookmark: its name (by default the first words of its sentence, set by the server) and, for a
     // fragment of text, its color — yellow at first, can be changed or removed (the panel, below its row)
-    id: 'bookmark', icon: 'bookmark', dock: 5, fill: true,
+    id: 'bookmark', icon: 'bookmark', dock: 6, fill: true,
     when: () => can.edit,
     label: () => 'Закладка', title: (c) => (c.note?.bookmark ? 'Убрать закладку' : 'Закладка'), short: () => true,
     on: (c) => !!c.note?.bookmark,
@@ -95,7 +97,7 @@ export const TEXT_ACTIONS = [
     },
   },
   {
-    id: 'tags', icon: 'tag', dock: 6,
+    id: 'tags', icon: 'tag', dock: 7,
     when: () => can.edit,
     label: () => 'Метки', title: () => 'Теги', short: () => true,
     on: (c) => c.panel.tagging || (c.note?.tags.length ?? 0) > 0,
@@ -104,7 +106,7 @@ export const TEXT_ACTIONS = [
   },
   {
     // the paragraph, the note, or the paragraph pointing at the selected fragment
-    id: 'collection', dock: 7,
+    id: 'collection', dock: 8,
     when: () => can.edit,
     component: AddToCollection,
     props: (c) => ({
@@ -121,7 +123,7 @@ export const TEXT_ACTIONS = [
   },
   {
     // a task tied to the paragraph, or to the note when there is one
-    id: 'task', dock: 8,
+    id: 'task', dock: 9,
     when: () => !!session.user,
     component: AddTask,
     props: (c) => ({
@@ -133,7 +135,7 @@ export const TEXT_ACTIONS = [
   },
   {
     // the public link to the quote (or the paragraph) — anyone opens it, signed in or not (lib/share.js)
-    id: 'copy', icon: 'link', dock: 4,
+    id: 'copy', icon: 'link', dock: 5,
     when: () => true,
     label: () => 'Ссылка',
     title: (c) => (para(c) ? 'Ссылка на абзац — откроется у любого' : 'Цитата со ссылкой — откроется у любого'),
@@ -161,7 +163,7 @@ export const TEXT_ACTIONS = [
   },
   {
     // a variant of translation: the public layer, about the Russian text
-    id: 'translate', icon: 'translate', dock: 3, publicLayer: true,
+    id: 'translate', icon: 'translate', dock: 4, publicLayer: true,
     when: (c) => !!session.user && ((para(c) && book.main === 'ru') || c.tb.anchor.lang === 'ru'),
     label: (c) => (para(c) ? 'Перевести абзац' : 'Перевести'),
     title: () => 'Предложить свой вариант перевода — публичный слой',
@@ -169,7 +171,7 @@ export const TEXT_ACTIONS = [
   },
   {
     // the paragraph's thread in the chat; a selected fragment goes into the input as a quote
-    id: 'discuss', icon: 'discuss', dock: 2,
+    id: 'discuss', icon: 'discuss', dock: 3,
     when: () => true,
     label: () => 'Обсудить',
     title: (c) => (para(c) ? 'Обсудить абзац в чате' : 'Обсудить фрагмент в чате абзаца'),

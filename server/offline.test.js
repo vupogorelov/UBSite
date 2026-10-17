@@ -8,6 +8,7 @@ import { registerBookRoutes } from './api/book.js';
 import { registerGlossaryRoutes } from './api/glossary.js';
 import { registerPronunciationRoutes } from './api/pronunciations.js';
 import { createGlossary } from './glossary.js';
+import { createTermIndex } from './terms.js';
 import { createOffline } from './offline.js';
 import { createTextSync } from './textsync.js';
 
@@ -22,7 +23,8 @@ test("the book's stored answers: the route's own bytes; the book changed — not
   `);
   const router = createRouter();
   const book = registerBookRoutes(router, db);
-  registerGlossaryRoutes(router, db, createGlossary(db));
+  const glossary = createGlossary(db);
+  registerGlossaryRoutes(router, db, glossary, createTermIndex(db, glossary));
   registerPronunciationRoutes(router, db);
   const offline = createOffline(router, db);
   /** @param {string} path */

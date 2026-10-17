@@ -1,6 +1,7 @@
 DELETE /api/aliases/:id direct
 DELETE /api/collections/:cid direct
 DELETE /api/collections/:cid/items/:iid direct
+DELETE /api/dict/:id direct
 DELETE /api/glossary/:id direct
 DELETE /api/pronunciations/:id direct
 DELETE /api/public/messages/:mid direct
@@ -36,6 +37,11 @@ GET /api/chat/users last
 GET /api/chat/voice last
 GET /api/collections/:cid last
 GET /api/collections/shared last
+GET /api/dict book
+GET /api/dict/:id book
+GET /api/dict/:id/hints last
+GET /api/dict/candidates last
+GET /api/dict/lookup last
 GET /api/export live
 GET /api/glossary book
 GET /api/goto last
@@ -77,6 +83,7 @@ PATCH /api/aliases/:id direct
 PATCH /api/chat/channels/:id direct
 PATCH /api/collections/:cid direct
 PATCH /api/collections/:cid/items/:iid direct
+PATCH /api/dict/:id direct
 PATCH /api/glossary/:id direct
 PATCH /api/pronunciations/:id direct
 PATCH /api/public/messages/:mid direct
@@ -108,6 +115,7 @@ POST /api/chat/voice/post direct
 POST /api/collections/:cid/copy direct
 POST /api/collections/:cid/items direct
 POST /api/collections/:cid/subscribe direct
+POST /api/dict direct
 POST /api/glossary direct
 POST /api/integrations/en/run direct
 POST /api/log direct
@@ -144,6 +152,9 @@ PUT /api/chat/messages/:mid/mark queue mark (replace)
 PUT /api/chat/pinned queue pinned (replace)
 PUT /api/chat/voice direct
 PUT /api/collections/:cid/order direct
+PUT /api/dict/:id/links direct
+PUT /api/dict/:id/names direct
+PUT /api/dict/:id/places direct
 PUT /api/integrations/en direct
 PUT /api/places/:kind direct
 PUT /api/tasks/order queue task

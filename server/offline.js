@@ -18,8 +18,9 @@ const FRESH_MS = 5 * 60_000;
 /**
  * @param {ReturnType<typeof import('./http.js').createRouter>} router
  * @param {import('node:sqlite').DatabaseSync} db
+ * @param {() => string[]} [more] the features' own addresses for the copy (core.offline: the dictionary…)
  */
-export function createOffline(router, db) {
+export function createOffline(router, db, more = () => /** @type {string[]} */ ([])) {
   const paperIds = db.prepare('SELECT id FROM papers ORDER BY id');
   /** Gzipped answers by hash (kept across rebuilds while still listed). @type {Map<string, Buffer>} */
   let files = new Map();
@@ -32,7 +33,7 @@ export function createOffline(router, db) {
   /** The book's URLs, in the order a device downloads them (the contents first). */
   function urls() {
     const ids = /** @type {{ id: number }[]} */ (paperIds.all()).map((r) => r.id);
-    return ['/api/toc', '/api/glossary', '/api/pronunciations', '/api/stem-aliases', ...ids.map((id) => `/api/papers/${id}`), ...ids.map((id) => `/api/papers/${id}/terms`)];
+    return ['/api/toc', '/api/glossary', '/api/pronunciations', '/api/stem-aliases', ...ids.map((id) => `/api/papers/${id}`), ...ids.map((id) => `/api/papers/${id}/terms`), ...more()];
   }
 
   /** A route's answer as sendJson writes it. @param {string} url */
@@ -96,6 +97,10 @@ export function createOffline(router, db) {
       const f = byUrl.get(url);
       const gz = f && files.get(f.hash);
       return f && gz ? { hash: f.hash, gz } : null;
+    },
+    /** What the copy holds changed (an article of the dictionary…): its list is made again at the next look. */
+    refresh() {
+      builtAt = 0;
     },
     /** The book changed (the English text from its source): the answers are made again. */
     invalidate() {
