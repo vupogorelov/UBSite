@@ -60,6 +60,7 @@
   const current = $derived(
     route.path.startsWith('/chat') ? 'chat'
     : route.path.startsWith('/tasks') ? 'tasks'
+    : route.path === '/d' || route.path.startsWith('/d/') || route.path.startsWith('/d?') ? 'dictionary'
     : route.path.startsWith('/about') ? 'about'
     : route.path === '/support' ? 'support'
     : ui.sidebarOpen && ui.tab === 'translate' ? 'translate'
@@ -116,6 +117,7 @@
     else if (id === 'chat') ((ui.sidebarOpen = false), navigate('/chat'));
     else if (id === 'translate') openTab('translate');
     else if (id === 'tasks') ((ui.sidebarOpen = false), navigate('/tasks'));
+    else if (id === 'dictionary') ((ui.sidebarOpen = false), navigate('/d'));
   }
   /** @param {() => void} fn */
   const fromMore = (fn) => () => {

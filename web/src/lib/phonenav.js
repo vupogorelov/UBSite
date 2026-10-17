@@ -3,7 +3,7 @@
 // always first, «Ещё» always last, between them up to four sections in the chosen order. A section
 // not in the bar is in the "Ещё" sheet — nothing becomes unreachable.
 
-/** @typedef {'search' | 'notes' | 'listen' | 'chat' | 'translate' | 'tasks'} NavId */
+/** @typedef {'search' | 'notes' | 'listen' | 'chat' | 'translate' | 'tasks' | 'dictionary'} NavId */
 
 /** The sections that can stand in the bar (in the "Ещё" sheet — in this order). */
 export const NAV_POOL = /** @type {const} */ ([
@@ -13,6 +13,7 @@ export const NAV_POOL = /** @type {const} */ ([
   { id: 'chat', label: 'Чат', icon: 'discuss' },
   { id: 'translate', label: 'Перевод', icon: 'translate' },
   { id: 'tasks', label: 'Задачи', icon: 'check-square' },
+  { id: 'dictionary', label: 'Словарь', icon: 'dictionary' },
 ]);
 
 /** Places between «Книга» and «Ещё» (six buttons in all: each stays wide enough for a thumb and its label). */
