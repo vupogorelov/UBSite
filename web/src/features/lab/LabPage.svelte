@@ -61,27 +61,44 @@
     }
     return s;
   }
-  const columns = $derived(
-    !answer || !status ? [] : [
-      ...status.models.filter((m) => answer?.models[m.id]).map((m) => ({ id: m.id, title: m.title, result: /** @type {NonNullable<typeof answer>} */ (answer).models[m.id] })),
-      { id: 'words', title: 'По словам («Я и Книга»)', result: { ms: 0, found: answer.words } },
-    ],
-  );
   const snippet = (/** @type {string} */ s) => (s.length > 260 ? `${s.slice(0, 260)}…` : s);
 
-  /** Hit / missed on a found paragraph; the same again — unmarked. @param {string} model @param {string} ref @param {boolean} good */
-  async function mark(model, ref, good) {
+  /**
+   * The paragraph answers the question (or not) — in every column at once; the same again: not judged.
+   * @param {string} ref @param {boolean} good
+   */
+  async function judge(ref, good) {
     if (!answer) return;
-    const was = answer.marks[model]?.[ref];
-    const next = was === good ? null : good;
-    const marks = { ...answer.marks, [model]: { ...answer.marks[model] } };
-    if (next === null) delete marks[model][ref];
-    else marks[model][ref] = next;
-    answer.marks = marks;
-    await act(() => labApi.mark({ question: /** @type {NonNullable<typeof answer>} */ (answer).text, model, ref, good: next }));
+    const next = answer.judged[ref] === good ? null : good;
+    const judged = { ...answer.judged };
+    if (next === null) delete judged[ref];
+    else judged[ref] = next;
+    answer.judged = judged;
+    await act(() => labApi.judge({ question: /** @type {NonNullable<typeof answer>} */ (answer).text, ref, good: next }));
   }
-  /** The score's name of a model. @param {string} id */
-  const titleOf = (id) => (id === 'words' ? 'По словам' : status?.models.find((m) => m.id === id)?.title ?? id);
+
+  /** Every saved question asked again (a new model, the mixed one: their answers into the score). */
+  let again = $state(/** @type {{ done: number, of: number } | null} */ (null));
+  async function askAll() {
+    if (!status || again) return;
+    const list = [...status.questions].reverse();
+    again = { done: 0, of: list.length };
+    try {
+      for (const q of list) {
+        await labApi.ask(q.text);
+        again = { done: again.done + 1, of: list.length };
+      }
+    } catch (e) {
+      showToast(/** @type {Error} */ (e).message);
+    } finally {
+      again = null;
+      await load();
+      if (answer) await ask(answer.text);
+    }
+  }
+  /** The score's name of a column. @param {string} id */
+  const titleOf = (id) =>
+    id === 'words' ? 'По словам' : id === 'mix' ? 'Смешанный' : id; // (the models by their short names: e5-small, e5-base)
 </script>
 
 <div class="lab-page">
@@ -128,48 +145,65 @@
         <div class="ui-chips lab-questions">
           {#each status.questions as q (q.id)}
             <span class="ui-chip lab-q">
-              <button class="lab-q-text" onclick={() => ask(q.text)}>{q.text}{#if q.good || q.bad}<span class="lab-q-n">
-                {#if q.good}<span class="lab-good">✓{q.good}</span>{/if}{#if q.bad}<span class="lab-bad">✗{q.bad}</span>{/if}</span>{/if}</button>
+              <button class="lab-q-text" onclick={() => ask(q.text)} title={q.open ? `Не отмечено: ${q.open}` : 'Все ответы отмечены'}>{q.text}{#if q.good || q.bad || q.open}<span class="lab-q-n">
+                {#if q.good}<span class="lab-good">✓{q.good}</span>{/if}{#if q.bad}<span class="lab-bad">✗{q.bad}</span>{/if}{#if q.open}<span class="muted">·{q.open}</span>{/if}</span>{/if}</button>
               <button class="lab-q-x" aria-label="Убрать вопрос" onclick={() => act(() => labApi.removeQuestion(q.id))}><Icon name="close" size={12} /></button>
             </span>
           {/each}
         </div>
+        <button class="ui-chip lab-again" onclick={askAll} disabled={!!again}>
+          <Icon name="reset" size={14} />{again ? `Задаю ${again.done} из ${again.of}…` : 'Задать все вопросы заново'}</button>
       {/if}
       {#if status.score.length}
-        <!-- the score of the marks: who finds what the reader meant -->
+        <!-- the score: who finds what the reader meant; what matters most — a hit among the first three («Я и Книга» answers with three) -->
         <div class="ui-label">Счёт по отметкам</div>
-        <ul class="lab-score-list">
-          {#each status.score as s (s.model)}
-            <li><b>{titleOf(s.model)}</b><span class="lab-good">✓ {s.good}</span><span class="lab-bad">✗ {s.bad}</span>
-              <span class="muted small">попала хотя бы раз в {s.answered} {plural(s.answered, 'вопросе', 'вопросах', 'вопросах')}</span></li>
+        <div class="lab-table" role="table" aria-label="Счёт по отметкам">
+          <div class="lab-tr lab-th" role="row">
+            <span role="columnheader">Поиск</span>
+            <span role="columnheader" title="Хотя бы одно попадание среди первых трёх абзацев">Первые 3</span>
+            <span role="columnheader" title="Хотя бы одно попадание среди всех десяти">Хоть раз</span>
+            <span role="columnheader" class="lab-good">✓</span>
+            <span role="columnheader" class="lab-bad">✗</span>
+            <span role="columnheader" title="Ещё не отмечено">?</span>
+          </div>
+          {#each status.score as s (s.col)}
+            <div class="lab-tr" role="row">
+              <b role="cell">{titleOf(s.col)}</b>
+              <span role="cell">{s.top3} из {s.asked}</span>
+              <span role="cell">{s.answered} из {s.asked}</span>
+              <span role="cell" class="lab-good">{s.good}</span>
+              <span role="cell" class="lab-bad">{s.bad}</span>
+              <span role="cell" class="muted">{s.open}</span>
+            </div>
           {/each}
-        </ul>
+        </div>
+        <p class="muted small lab-note">«Из N» — сколько вопросов задано этому поиску. «?» — найденные абзацы без отметки: отметьте их, и счёт станет точнее.</p>
       {/if}
       {#if answer && !status.models.some((m) => m.done)}<p class="muted">Ни одна модель ещё не посчитана — пока только поиск по словам.</p>{/if}
     {/if}
   </div>
 
-  {#if columns.length}
-    <!-- the answers side by side: each model, and the word search -->
-    <div class="lab-columns" style:--cols={columns.length}>
-      {#each columns as c (c.id)}
+  {#if answer?.columns.length}
+    <!-- the answers side by side: each model, the mixed one, the word search; a judgement shows in all of them -->
+    <div class="lab-columns" style:--cols={answer.columns.length}>
+      {#each answer.columns as c (c.id)}
         <section class="lab-col">
-          <h2 class="lab-col-h">{c.title}{#if 'ms' in c.result && c.result.ms}<span class="muted small"> · {c.result.ms} мс</span>{/if}</h2>
-          {#if 'error' in c.result}
-            <p class="lab-error small">{c.result.error}</p>
-          {:else if !c.result.found.length}
+          <h2 class="lab-col-h">{c.title}{#if 'ms' in c && c.ms}<span class="muted small"> · {c.ms} мс</span>{/if}</h2>
+          {#if 'error' in c}
+            <p class="lab-error small">{c.error}</p>
+          {:else if !c.found.length}
             <p class="muted small">Ничего не найдено.</p>
           {:else}
             <ol class="lab-found">
-              {#each c.result.found as f, i (f.ref)}
-                {@const m = answer?.marks[c.id]?.[f.ref]}
+              {#each c.found as f, i (f.ref)}
+                {@const m = answer.judged[f.ref]}
                 <li class="lab-item" class:good={m === true} class:bad={m === false}>
-                  <!-- hit / missed: kept with the question (the score above) -->
+                  <!-- answers the question / not: one judgement for the paragraph, in every column -->
                   <span class="lab-marks">
                     <button class="lab-mark lab-mark-good" class:on={m === true} aria-pressed={m === true} title="Попал: этот абзац отвечает на вопрос"
-                      aria-label="Попал: {f.ref}" onclick={() => mark(c.id, f.ref, true)}><Icon name="check" size={16} /></button>
+                      aria-label="Попал: {f.ref}" onclick={() => judge(f.ref, true)}><Icon name="check" size={16} /></button>
                     <button class="lab-mark lab-mark-bad" class:on={m === false} aria-pressed={m === false} title="Мимо: не об этом"
-                      aria-label="Мимо: {f.ref}" onclick={() => mark(c.id, f.ref, false)}><Icon name="close" size={16} /></button>
+                      aria-label="Мимо: {f.ref}" onclick={() => judge(f.ref, false)}><Icon name="close" size={16} /></button>
                   </span>
                   <a class="lab-hit" href="/{f.ref}" onclick={(e) => (e.preventDefault(), navigate(`/${f.ref}`))}>
                     <span class="lab-hit-head">
@@ -187,7 +221,7 @@
         </section>
       {/each}
     </div>
-    <p class="muted small lab-foot">{columns.length - 1 ? `${columns.length - 1} ${plural(columns.length - 1, 'модель', 'модели', 'моделей')} и поиск по словам` : 'Поиск по словам'} · абзац откроется в книге</p>
+    <p class="muted small lab-foot">Отметка относится к абзацу и видна во всех колонках · абзац откроется в книге</p>
   {/if}
 </div>
 
@@ -195,6 +229,7 @@
   .lab-page {
     height: 100%;
     overflow: auto;
+    overflow-x: hidden;
     background: var(--bg);
     padding-bottom: var(--space-16);
   }
@@ -254,7 +289,14 @@
   }
   .lab-q {
     gap: 2px;
+    max-width: 100%;
+    height: auto;
+    min-height: 36px;
     padding-right: 4px;
+    white-space: normal;
+  }
+  .lab-q-text {
+    text-align: left;
   }
   .lab-q-text,
   .lab-q-x {
@@ -349,18 +391,39 @@
     margin-left: 6px;
     font-size: 12px;
   }
-  .lab-score-list {
-    display: grid;
-    gap: 6px;
-    margin: 0;
-    padding: 0;
-    list-style: none;
+  .lab-again {
+    justify-self: start;
   }
-  .lab-score-list li {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--space-3);
+  .lab-table {
+    display: grid;
+    border: 1px solid var(--ui-line);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .lab-tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1.6fr) repeat(2, minmax(0, 1fr)) repeat(3, 36px);
+    gap: var(--space-2);
     align-items: baseline;
+    padding: 8px 12px;
+    font: 14px/20px var(--sans);
+    font-variant-numeric: tabular-nums;
+  }
+  .lab-tr + .lab-tr {
+    border-top: 1px solid var(--ui-line);
+  }
+  .lab-th {
+    background: var(--ui-fill);
+    color: var(--muted);
+    font-size: 12px;
+  }
+  .lab-tr b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .lab-note {
+    margin: 0;
   }
   .lab-hit {
     display: grid;

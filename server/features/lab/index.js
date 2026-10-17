@@ -46,10 +46,10 @@ export default {
       open().addQuestion(/** @type {any} */ ((await readJson(req)) ?? {}).text);
       return open().status();
     });
-    // { question, model ('words' — the word search), ref, good: true | false | null }
-    r.on('POST', '/api/lab/marks', async ({ req, user }) => {
+    // { question, ref, good: true | false | null } — the paragraph answers the question, in every column
+    r.on('POST', '/api/lab/judged', async ({ req, user }) => {
       requireAdmin(user);
-      open().mark(/** @type {any} */ ((await readJson(req)) ?? {}));
+      open().judge(/** @type {any} */ ((await readJson(req)) ?? {}));
       return open().status();
     });
     r.on('DELETE', '/api/lab/questions/:id', ({ params, user }) => (requireAdmin(user), open().removeQuestion(Number(params.id)), open().status()));

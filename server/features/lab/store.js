@@ -6,9 +6,14 @@
 // The vectors are worked out in the background (`run`): a few paragraphs at a time, with a pause between,
 // in the book's order — the first papers can be asked about while the rest are still being done. A question
 // is compared with every vector (a few milliseconds for the whole book): the closest paragraphs.
+//
+// The answers are compared by the administrator's judgement: a paragraph answers a question or not, whoever
+// found it — one mark per question and paragraph, seen in every column. Each column's answer (the models,
+// the word search, the mixed one) is kept with its places, so the score knows what came first.
 import { DatabaseSync } from 'node:sqlite';
 import { existsSync } from 'node:fs';
 import { HttpError } from '../../http.js';
+import { transaction } from '../../db.js';
 
 /** The models to try. `prefix`: the e5 models read a question and a text each with its own mark. */
 export const MODELS = [
@@ -18,8 +23,13 @@ export const MODELS = [
 const BATCH = 8;
 const PAUSE = 30;
 const TOP = 10;
+/** How deep the mixed search looks into each of its two lists. */
+const DEEP = 50;
+/** Reciprocal rank fusion: a place's weight 1 / (K + place) — the usual K. */
+const RRF = 60;
 
 /** @typedef {{ ref: string, lang: 'ru' | 'en', vec: Float32Array }} Row */
+/** @typedef {{ id: string, title: string, ms?: number, found: any[] } | { id: string, title: string, error: string }} Col */
 
 /**
  * @param {DatabaseSync} db the platform's database (the paragraphs are read from it)
@@ -33,11 +43,20 @@ export function createLab(db, engine, where) {
     CREATE TABLE IF NOT EXISTS vectors (model TEXT NOT NULL, ref TEXT NOT NULL, lang TEXT NOT NULL, vec BLOB NOT NULL,
       PRIMARY KEY (model, ref, lang)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY, text TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now')));
-    -- the administrator's marks on the answers: a paragraph a model (or the word search, 'words') found
-    -- for a question — it hit (1) or missed (0)
-    CREATE TABLE IF NOT EXISTS marks (question TEXT NOT NULL, model TEXT NOT NULL, ref TEXT NOT NULL, good INTEGER NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (question, model, ref)) WITHOUT ROWID;
+    -- the administrator's judgement: the paragraph answers the question (1) or not (0), whoever found it
+    CREATE TABLE IF NOT EXISTS judged (question TEXT NOT NULL, ref TEXT NOT NULL, good INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (question, ref)) WITHOUT ROWID;
+    -- what each column answered a question, in its order (the last time it was asked)
+    CREATE TABLE IF NOT EXISTS answers (question TEXT NOT NULL, col TEXT NOT NULL, rank INTEGER NOT NULL, ref TEXT NOT NULL,
+      PRIMARY KEY (question, col, rank)) WITHOUT ROWID;
   `);
+  // (the first marks were per column: one judgement where they agree; where they differ — left to judge again)
+  if (lab.prepare("SELECT 1 FROM sqlite_master WHERE name = 'marks'").get()) {
+    lab.exec(`
+      INSERT OR IGNORE INTO judged (question, ref, good, created_at)
+        SELECT question, ref, max(good), min(created_at) FROM marks GROUP BY question, ref HAVING min(good) = max(good);
+      DROP TABLE marks;`);
+  }
   const q = {
     paragraphs: db.prepare('SELECT ref, plain_ru AS ru, plain_en AS en FROM paragraphs ORDER BY seq'),
     total: db.prepare("SELECT (SELECT count(*) FROM paragraphs WHERE plain_ru <> '') + (SELECT count(*) FROM paragraphs WHERE plain_en <> '') AS n"),
@@ -49,12 +68,13 @@ export function createLab(db, engine, where) {
     questions: lab.prepare('SELECT id, text, created_at AS createdAt FROM questions ORDER BY id DESC'),
     addQuestion: lab.prepare('INSERT OR IGNORE INTO questions (text) VALUES (?)'),
     removeQuestion: lab.prepare('DELETE FROM questions WHERE id = ?'),
-    marksOf: lab.prepare('SELECT model, ref, good FROM marks WHERE question = ?'),
-    mark: lab.prepare('INSERT OR REPLACE INTO marks (question, model, ref, good) VALUES (?, ?, ?, ?)'),
-    unmark: lab.prepare('DELETE FROM marks WHERE question = ? AND model = ? AND ref = ?'),
-    // the score: per model, its hits and misses; how many questions have a hit among its answers
-    score: lab.prepare('SELECT model, sum(good) AS good, sum(1 - good) AS bad, count(DISTINCT CASE WHEN good = 1 THEN question END) AS answered FROM marks GROUP BY model'),
-    marked: lab.prepare('SELECT question, sum(good) AS good, sum(1 - good) AS bad FROM marks GROUP BY question'),
+    judgedOf: lab.prepare('SELECT ref, good FROM judged WHERE question = ?'),
+    judge: lab.prepare('INSERT OR REPLACE INTO judged (question, ref, good) VALUES (?, ?, ?)'),
+    unjudge: lab.prepare('DELETE FROM judged WHERE question = ? AND ref = ?'),
+    judgedAll: lab.prepare('SELECT question, ref, good FROM judged'),
+    answersAll: lab.prepare('SELECT question, col, rank, ref FROM answers ORDER BY question, col, rank'),
+    clearAnswer: lab.prepare('DELETE FROM answers WHERE question = ? AND col = ?'),
+    putAnswer: lab.prepare('INSERT INTO answers (question, col, rank, ref) VALUES (?, ?, ?, ?)'),
   };
 
   /** Each model's vectors in memory (made when first asked; grown as more are worked out). @type {Map<string, Row[]>} */
@@ -101,6 +121,62 @@ export function createLab(db, engine, where) {
     }
   }
 
+  /**
+   * The model's closest paragraphs to a text (each paragraph by its closer language).
+   * @param {typeof MODELS[number]} m @param {string} text @param {number} n
+   */
+  async function closest(m, text, n) {
+    const { vectors } = await engine.embed(m.name, 'query', [text], m.prefix);
+    /** @type {Map<string, { score: number, lang: 'ru' | 'en' }>} */
+    const best = new Map();
+    for (const r of rows(m.id)) {
+      let s = 0;
+      for (let k = 0; k < r.vec.length; k++) s += r.vec[k] * vectors[k];
+      const b = best.get(r.ref);
+      if (!b || s > b.score) best.set(r.ref, { score: s, lang: r.lang });
+    }
+    return [...best].sort((a, b) => b[1].score - a[1].score).slice(0, n).map(([ref, b]) => ({ ref, score: Math.round(b.score * 1000) / 1000, lang: b.lang }));
+  }
+
+  /**
+   * The questions with how much of their answers is judged, and each column's score: of the paragraphs it
+   * answered — hits, misses, not judged; in how many questions a hit is among its first three, and at all.
+   */
+  function judgement() {
+    /** @type {Map<string, boolean>} "question\nref" → hit */
+    const judged = new Map(/** @type {any[]} */ (q.judgedAll.all()).map((j) => [`${j.question}\n${j.ref}`, !!j.good]));
+    /** @type {Map<string, { col: string, asked: number, good: number, bad: number, open: number, top3: number, answered: number }>} */
+    const score = new Map();
+    /** @type {Map<string, Set<string>>} question → every paragraph its columns answered */
+    const found = new Map();
+    for (const [key, list] of Map.groupBy(/** @type {any[]} */ (q.answersAll.all()), (a) => `${a.question}\n${a.col}`)) {
+      const [question, col] = key.split('\n');
+      const sc = score.get(col) ?? { col, asked: 0, good: 0, bad: 0, open: 0, top3: 0, answered: 0 };
+      score.set(col, sc);
+      sc.asked++;
+      let hit = false, early = false;
+      for (const a of list) {
+        if (!found.has(question)) found.set(question, new Set());
+        found.get(question)?.add(a.ref);
+        const j = judged.get(`${question}\n${a.ref}`);
+        if (j === undefined) sc.open++;
+        else if (j) {
+          sc.good++;
+          hit = true;
+          if (a.rank <= 3) early = true;
+        } else sc.bad++;
+      }
+      if (hit) sc.answered++;
+      if (early) sc.top3++;
+    }
+    const questions = /** @type {any[]} */ (q.questions.all()).map((x) => {
+      const js = [...(found.get(x.text) ?? [])].map((r) => judged.get(`${x.text}\n${r}`));
+      return { ...x, good: js.filter((j) => j === true).length, bad: js.filter((j) => j === false).length, open: js.filter((j) => j === undefined).length };
+    });
+    const order = ['e5-small', 'e5-base', 'mix', 'words'];
+    return { questions, score: [...score.values()].sort((a, b) => order.indexOf(a.col) - order.indexOf(b.col)) };
+  }
+
   return {
     /** What there is: the engine, each model (downloaded, how much is worked out, working now), the questions. */
     status() {
@@ -114,26 +190,21 @@ export function createLab(db, engine, where) {
           done: /** @type {{ n: number }} */ (q.done.get(m.id)).n, total,
           running: job.model === m.id, rate: job.model === m.id ? job.rate : 0, error: job.error[m.id] ?? null,
         })),
-        questions: (() => {
-          const marked = new Map(/** @type {any[]} */ (q.marked.all()).map((m) => [m.question, m]));
-          return /** @type {any[]} */ (q.questions.all()).map((x) => ({ ...x, good: marked.get(x.text)?.good ?? 0, bad: marked.get(x.text)?.bad ?? 0 }));
-        })(),
-        score: q.score.all(),
+        ...judgement(),
       };
     },
 
     /**
-     * Marks a paragraph a model found for a question: hit (true), missed (false), unmarked (null). The
-     * question joins the set to try again. @param {Record<string, unknown>} b
+     * Judges a paragraph for a question: it answers it (true), not (false), not judged (null) — in every
+     * column at once. The question joins the set to try again. @param {Record<string, unknown>} b
      */
-    mark(b) {
+    judge(b) {
       const question = typeof b.question === 'string' ? b.question.trim() : '';
       if (!question || question.length > 500) throw new HttpError(400, 'Вопрос — до 500 знаков');
-      if (typeof b.model !== 'string' || !(b.model === 'words' || MODELS.some((m) => m.id === b.model))) throw new HttpError(400, 'Нет такой модели');
       if (typeof b.ref !== 'string' || !q.paragraph.get(b.ref)) throw new HttpError(400, 'Нет такого абзаца');
-      if (b.good === null) q.unmark.run(question, b.model, b.ref);
+      if (b.good === null) q.unjudge.run(question, b.ref);
       else {
-        q.mark.run(question, b.model, b.ref, b.good ? 1 : 0);
+        q.judge.run(question, b.ref, b.good ? 1 : 0);
         q.addQuestion.run(question);
       }
     },
@@ -167,39 +238,52 @@ export function createLab(db, engine, where) {
     },
 
     /**
-     * A question to every model that has vectors, and to the word search ("Я и Книга"'s): the closest
-     * paragraphs of each, with the paragraph's text.
+     * A question to every model that has vectors, to the word search ("Я и Книга"'s) and to the mixed one:
+     * the closest paragraphs of each column, with the paragraph's text; the judgements given before. Each
+     * column's answer is kept (the score).
      * @param {string} text @param {(text: string, limit: number) => { ref: string }[]} byWords
      */
     async ask(text, byWords) {
       text = text.trim();
       if (!text || text.length > 500) throw new HttpError(400, 'Вопрос — до 500 знаков');
       const para = (/** @type {string} */ ref) => /** @type {any} */ (q.paragraph.get(ref));
-      /** @type {Record<string, { ms: number, found: any[] } | { error: string }>} */
-      const models = {};
+      /** @type {Col[]} */
+      const columns = [];
+      /** The models' long lists (for the mixed one). @type {Map<string, string[]>} */
+      const deep = new Map();
       for (const m of MODELS) {
         if (!/** @type {{ n: number }} */ (q.done.get(m.id)).n) continue;
         const t = Date.now();
         try {
-          const { vectors } = await engine.embed(m.name, 'query', [text], m.prefix);
-          /** @type {Map<string, { score: number, lang: string }>} */
-          const best = new Map();
-          for (const r of rows(m.id)) {
-            let s = 0;
-            for (let k = 0; k < r.vec.length; k++) s += r.vec[k] * vectors[k];
-            const b = best.get(r.ref);
-            if (!b || s > b.score) best.set(r.ref, { score: s, lang: r.lang });
-          }
-          const top = [...best].sort((a, b) => b[1].score - a[1].score).slice(0, TOP);
-          models[m.id] = { ms: Date.now() - t, found: top.map(([ref, b]) => ({ ...para(ref), score: Math.round(b.score * 1000) / 1000, lang: b.lang })) };
+          const top = await closest(m, text, DEEP);
+          deep.set(m.id, top.map((x) => x.ref));
+          columns.push({ id: m.id, title: m.title, ms: Date.now() - t, found: top.slice(0, TOP).map((x) => ({ ...para(x.ref), score: x.score, lang: x.lang })) });
         } catch (err) {
-          models[m.id] = { error: /** @type {Error} */ (err).message };
+          columns.push({ id: m.id, title: m.title, error: /** @type {Error} */ (err).message });
         }
       }
-      /** @type {Record<string, Record<string, boolean>>} the marks given before: model → ref → hit */
-      const marks = {};
-      for (const m of /** @type {any[]} */ (q.marksOf.all(text))) (marks[m.model] ??= {})[m.ref] = !!m.good;
-      return { text, models, words: byWords(text, TOP).map((p) => para(p.ref)), marks };
+      const words = byWords(text, DEEP).map((p) => p.ref);
+      // the mixed: the words and the last (larger) counted model, by reciprocal rank fusion
+      const best = [...MODELS].reverse().find((m) => deep.has(m.id));
+      if (best) {
+        /** @type {Map<string, number>} */
+        const weight = new Map();
+        for (const list of [words, /** @type {string[]} */ (deep.get(best.id))]) list.forEach((ref, i) => weight.set(ref, (weight.get(ref) ?? 0) + 1 / (RRF + i + 1)));
+        const mixed = [...weight].sort((a, b) => b[1] - a[1]).slice(0, TOP).map(([ref]) => para(ref));
+        columns.push({ id: 'mix', title: `Смешанный: слова + ${best.title}`, found: mixed });
+      }
+      columns.push({ id: 'words', title: 'По словам («Я и Книга»)', found: words.slice(0, TOP).map(para) });
+      transaction(lab, () => {
+        for (const c of columns) {
+          if (!('found' in c)) continue;
+          q.clearAnswer.run(text, c.id);
+          c.found.forEach((x, i) => q.putAnswer.run(text, c.id, i + 1, x.ref));
+        }
+      });
+      /** @type {Record<string, boolean>} */
+      const judged = {};
+      for (const j of /** @type {any[]} */ (q.judgedOf.all(text))) judged[j.ref] = !!j.good;
+      return { text, columns, judged };
     },
 
     /** @param {unknown} text */
