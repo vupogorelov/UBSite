@@ -50,7 +50,7 @@ export const dictApi = {
 /** The kinds, as people name them. @type {[Kind, string, string][]} [kind, one, many] */
 export const KINDS = [
   ['person', 'Личность', 'Личности'],
-  ['being', 'Существа', 'Существа'],
+  ['being', 'Существо', 'Существа'],
   ['place', 'Место', 'Места'],
   ['concept', 'Понятие', 'Понятия'],
   ['event', 'Событие', 'События'],

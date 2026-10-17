@@ -126,7 +126,7 @@
       <p class="muted">Загрузка…</p>
     {:else}
       <header class="art-head">
-        <span class="art-kind">{kindName(a.kind)}{#if a.status === 'draft'} · <span class="art-draft">черновик</span>{/if}</span>
+        <span class="art-kind">{kindName(a.kind)}{#if a.status === 'draft'}{' · '}<span class="art-draft">черновик</span>{/if}</span>
         <h1 class="art-name">{name}</h1>
         {#if a.nameEn && !en}<span class="muted art-en" lang="en">{a.nameEn}</span>{/if}
         {#if coordinator && !editing}
