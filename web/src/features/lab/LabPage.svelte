@@ -96,6 +96,31 @@
       if (answer) await ask(answer.text);
     }
   }
+  // ---- What is left to judge: every paragraph once, per question (whichever columns found it) ----
+  let todo = $state(/** @type {import('./api.js').Todo[] | null} */ (null));
+  /** Judged here (kept on screen to change one's mind): "question\nref" → hit. @type {Record<string, boolean>} */
+  let done = $state({});
+  const openTotal = $derived(status?.questions.reduce((n, q) => n + q.open, 0) ?? 0);
+  async function toggleTodo() {
+    if (todo) return void (todo = null);
+    try {
+      done = {};
+      todo = await labApi.todo();
+    } catch (e) {
+      showToast(/** @type {Error} */ (e).message);
+    }
+  }
+  /** @param {string} question @param {string} ref @param {boolean} good */
+  async function judgeOpen(question, ref, good) {
+    const key = `${question}\n${ref}`;
+    const next = done[key] === good ? null : good;
+    const d = { ...done };
+    if (next === null) delete d[key];
+    else d[key] = next;
+    done = d;
+    await act(() => labApi.judge({ question, ref, good: next }));
+  }
+
   /** The score's name of a column. @param {string} id */
   const titleOf = (id) =>
     id === 'words' ? 'По словам' : id === 'mix' ? 'Смешанный' : id; // (the models by their short names: e5-base, bge-m3)
@@ -169,15 +194,47 @@
           {#each status.score as s (s.col)}
             <div class="lab-tr" role="row">
               <b role="cell">{titleOf(s.col)}</b>
-              <span role="cell">{s.top3} из {s.asked}</span>
-              <span role="cell">{s.answered} из {s.asked}</span>
+              <span role="cell">{s.top3}/{s.asked}</span>
+              <span role="cell">{s.answered}/{s.asked}</span>
               <span role="cell" class="lab-good">{s.good}</span>
               <span role="cell" class="lab-bad">{s.bad}</span>
               <span role="cell" class="muted">{s.open}</span>
             </div>
           {/each}
         </div>
-        <p class="muted small lab-note">«Из N» — сколько вопросов задано этому поиску. «?» — найденные абзацы без отметки: отметьте их, и счёт станет точнее.</p>
+        <p class="muted small lab-note">«3/10» — в трёх вопросах из десяти, заданных этому поиску. «?» — найденные абзацы без отметки: отметьте их, и счёт станет точнее.</p>
+      {/if}
+      {#if openTotal || todo}
+        <!-- what is left to judge: every paragraph once, whichever columns found it -->
+        <button class="ui-chip on lab-todo-btn" onclick={toggleTodo}>
+          {todo ? 'Скрыть список' : `Отметить абзацы без отметки (${openTotal})`}</button>
+      {/if}
+      {#if todo}
+        {#if !todo.length}<p class="muted">Всё отмечено.</p>{/if}
+        {#each todo as t (t.question)}
+          {@const left = t.items.filter((x) => done[`${t.question}\n${x.ref}`] === undefined).length}
+          <section class="lab-todo">
+            <h2 class="lab-todo-q">{t.question} <span class="muted small">· осталось {left} из {t.items.length}</span></h2>
+            <ol class="lab-found">
+              {#each t.items as f (f.ref)}
+                {@const m = done[`${t.question}\n${f.ref}`]}
+                <li class="lab-item" class:good={m === true} class:bad={m === false}>
+                  <span class="lab-marks">
+                    <button class="lab-mark lab-mark-good" class:on={m === true} aria-pressed={m === true} title="Попал: этот абзац отвечает на вопрос"
+                      aria-label="Попал: {f.ref}" onclick={() => judgeOpen(t.question, f.ref, true)}><Icon name="check" size={16} /></button>
+                    <button class="lab-mark lab-mark-bad" class:on={m === false} aria-pressed={m === false} title="Мимо: не об этом"
+                      aria-label="Мимо: {f.ref}" onclick={() => judgeOpen(t.question, f.ref, false)}><Icon name="close" size={16} /></button>
+                  </span>
+                  <a class="lab-hit" href="/{f.ref}" onclick={(e) => (e.preventDefault(), navigate(`/${f.ref}`))}>
+                    <span class="lab-hit-head"><b>{f.ref}</b><span class="muted ellipsis">{f.paperTitle}</span></span>
+                    <span class="muted small">нашли: {f.by.map((b) => `${titleOf(b.col)} — ${b.rank}-м`).join(', ')}</span>
+                    <span class="lab-hit-text">{f.ru}</span>
+                  </a>
+                </li>
+              {/each}
+            </ol>
+          </section>
+        {/each}
       {/if}
       {#if answer && !status.models.some((m) => m.done)}<p class="muted">Ни одна модель ещё не посчитана — пока только поиск по словам.</p>{/if}
     {/if}
@@ -424,6 +481,18 @@
   }
   .lab-note {
     margin: 0;
+  }
+  .lab-todo-btn {
+    justify-self: start;
+  }
+  .lab-todo {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+  }
+  .lab-todo-q {
+    margin: 0;
+    font: 600 16px/22px var(--sans);
   }
   .lab-hit {
     display: grid;

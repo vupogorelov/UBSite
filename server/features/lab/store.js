@@ -294,6 +294,30 @@ export function createLab(db, engine, where) {
       return { text, columns, judged };
     },
 
+    /**
+     * What is left to judge: per saved question, the paragraphs its columns answered and nobody judged yet —
+     * each once, with its text and who found it at which place (the best place first).
+     */
+    todo() {
+      const judged = new Set(/** @type {any[]} */ (q.judgedAll.all()).map((j) => `${j.question}\n${j.ref}`));
+      const saved = new Set(/** @type {any[]} */ (q.questions.all()).map((x) => x.text));
+      /** @type {Map<string, Map<string, { col: string, rank: number }[]>>} question → ref → found by */
+      const open = new Map();
+      for (const a of /** @type {any[]} */ (q.answersAll.all())) {
+        if (!saved.has(a.question) || judged.has(`${a.question}\n${a.ref}`)) continue;
+        const refs = open.get(a.question) ?? open.set(a.question, new Map()).get(a.question);
+        const by = refs?.get(a.ref) ?? [];
+        by.push({ col: a.col, rank: a.rank });
+        refs?.set(a.ref, by);
+      }
+      return [...open].map(([question, refs]) => ({
+        question,
+        items: [...refs]
+          .map(([ref, by]) => ({ ...(/** @type {any} */ (q.paragraph.get(ref))), by: by.sort((x, y) => x.rank - y.rank) }))
+          .sort((x, y) => x.by[0].rank - y.by[0].rank),
+      }));
+    },
+
     /** @param {unknown} text */
     addQuestion(text) {
       if (typeof text !== 'string' || !text.trim() || text.length > 500) throw new HttpError(400, 'Вопрос — до 500 знаков');

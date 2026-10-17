@@ -64,6 +64,9 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
     assert.deepEqual([of('e5-base')?.top3, of('e5-base')?.good, of('e5-base')?.bad], [1, 1, 1]);
     assert.deepEqual([of('words')?.answered, of('words')?.bad, of('words')?.open], [0, 1, 1], 'the word search missed it');
     assert.equal(s.questions.find((x) => x.text === 'что с детьми после смерти')?.good, 1);
+    const todo = lab.todo().find((t) => t.question === 'что с детьми после смерти');
+    assert.deepEqual(todo?.items.map((x) => x.ref), ['47:2.8'], 'left to judge: each paragraph once, the judged ones not');
+    assert.ok((todo?.items[0].by.length ?? 0) >= 2, 'found by several columns — shown once, with each place');
 
     const kept = new DatabaseSync(join(dir, 'lab.db'), { readOnly: true });
     assert.deepEqual(kept.prepare("SELECT ref, good FROM judged WHERE question = 'дети'").all().map((r) => ({ ...r })), [{ ref: '47:2.7', good: 1 }], 'the old marks: only where the columns agreed');

@@ -33,6 +33,8 @@ export default {
 
     const r = core.router;
     r.on('GET', '/api/lab', ({ user }) => (requireAdmin(user), open().status()));
+    // the paragraphs left to judge, per question
+    r.on('GET', '/api/lab/todo', ({ user }) => (requireAdmin(user), open().todo()));
     r.on('POST', '/api/lab/models/:id/run', ({ params, user }) => (requireAdmin(user), open().run(params.id), open().status()));
     r.on('POST', '/api/lab/pause', ({ user }) => (requireAdmin(user), open().pause(), open().status()));
     // { text } — the closest paragraphs of each model, and of the word search

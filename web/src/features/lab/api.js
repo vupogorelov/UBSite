@@ -12,6 +12,8 @@ import { request } from '../../lib/api.js';
  * @typedef {{ ref: string, ru: string, en: string, paperTitle: string, score?: number, lang?: 'ru' | 'en' }} Found
  * @typedef {{ id: string, title: string, ms?: number, found: Found[] } | { id: string, title: string, error: string }} Column
  * @typedef {{ text: string, columns: Column[], judged: Record<string, boolean> }} Answer
+ * @typedef {{ question: string, items: (Found & { by: { col: string, rank: number }[] })[] }} Todo
+ * a question's paragraphs nobody judged yet: each once, who found it at which place
  */
 
 export const labApi = {
@@ -27,6 +29,8 @@ export const labApi = {
   addQuestion: (text) => request('POST', '/api/lab/questions', { text }),
   /** A paragraph answers the question (true), not (false), not judged (null) — in every column. @param {{ question: string, ref: string, good: boolean | null }} b @returns {Promise<Status>} */
   judge: (b) => request('POST', '/api/lab/judged', b),
+  /** @returns {Promise<Todo[]>} */
+  todo: () => request('GET', '/api/lab/todo'),
   /** @param {number} id @returns {Promise<Status>} */
   removeQuestion: (id) => request('DELETE', `/api/lab/questions/${id}`),
 };

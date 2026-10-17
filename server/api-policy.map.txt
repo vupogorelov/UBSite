@@ -51,6 +51,7 @@ GET /api/guest/paper/:id last
 GET /api/health live
 GET /api/integrations/en last
 GET /api/lab last
+GET /api/lab/todo last
 GET /api/notifications last
 GET /api/notifications/count last
 GET /api/offline/file/:hash live
