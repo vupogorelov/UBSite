@@ -122,6 +122,7 @@ POST /api/dict direct
 POST /api/glossary direct
 POST /api/integrations/en/run direct
 POST /api/lab/ask direct
+POST /api/lab/marks direct
 POST /api/lab/models/:id/run direct
 POST /api/lab/pause direct
 POST /api/lab/questions direct

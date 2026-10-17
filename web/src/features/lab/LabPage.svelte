@@ -68,6 +68,20 @@
     ],
   );
   const snippet = (/** @type {string} */ s) => (s.length > 260 ? `${s.slice(0, 260)}…` : s);
+
+  /** Hit / missed on a found paragraph; the same again — unmarked. @param {string} model @param {string} ref @param {boolean} good */
+  async function mark(model, ref, good) {
+    if (!answer) return;
+    const was = answer.marks[model]?.[ref];
+    const next = was === good ? null : good;
+    const marks = { ...answer.marks, [model]: { ...answer.marks[model] } };
+    if (next === null) delete marks[model][ref];
+    else marks[model][ref] = next;
+    answer.marks = marks;
+    await act(() => labApi.mark({ question: /** @type {NonNullable<typeof answer>} */ (answer).text, model, ref, good: next }));
+  }
+  /** The score's name of a model. @param {string} id */
+  const titleOf = (id) => (id === 'words' ? 'По словам' : status?.models.find((m) => m.id === id)?.title ?? id);
 </script>
 
 <div class="lab-page">
@@ -114,11 +128,22 @@
         <div class="ui-chips lab-questions">
           {#each status.questions as q (q.id)}
             <span class="ui-chip lab-q">
-              <button class="lab-q-text" onclick={() => ask(q.text)}>{q.text}</button>
+              <button class="lab-q-text" onclick={() => ask(q.text)}>{q.text}{#if q.good || q.bad}<span class="lab-q-n">
+                {#if q.good}<span class="lab-good">✓{q.good}</span>{/if}{#if q.bad}<span class="lab-bad">✗{q.bad}</span>{/if}</span>{/if}</button>
               <button class="lab-q-x" aria-label="Убрать вопрос" onclick={() => act(() => labApi.removeQuestion(q.id))}><Icon name="close" size={12} /></button>
             </span>
           {/each}
         </div>
+      {/if}
+      {#if status.score.length}
+        <!-- the score of the marks: who finds what the reader meant -->
+        <div class="ui-label">Счёт по отметкам</div>
+        <ul class="lab-score-list">
+          {#each status.score as s (s.model)}
+            <li><b>{titleOf(s.model)}</b><span class="lab-good">✓ {s.good}</span><span class="lab-bad">✗ {s.bad}</span>
+              <span class="muted small">попала хотя бы раз в {s.answered} {plural(s.answered, 'вопросе', 'вопросах', 'вопросах')}</span></li>
+          {/each}
+        </ul>
       {/if}
       {#if answer && !status.models.some((m) => m.done)}<p class="muted">Ни одна модель ещё не посчитана — пока только поиск по словам.</p>{/if}
     {/if}
@@ -137,7 +162,15 @@
           {:else}
             <ol class="lab-found">
               {#each c.result.found as f, i (f.ref)}
-                <li>
+                {@const m = answer?.marks[c.id]?.[f.ref]}
+                <li class="lab-item" class:good={m === true} class:bad={m === false}>
+                  <!-- hit / missed: kept with the question (the score above) -->
+                  <span class="lab-marks">
+                    <button class="lab-mark lab-mark-good" class:on={m === true} aria-pressed={m === true} title="Попал: этот абзац отвечает на вопрос"
+                      aria-label="Попал: {f.ref}" onclick={() => mark(c.id, f.ref, true)}><Icon name="check" size={16} /></button>
+                    <button class="lab-mark lab-mark-bad" class:on={m === false} aria-pressed={m === false} title="Мимо: не об этом"
+                      aria-label="Мимо: {f.ref}" onclick={() => mark(c.id, f.ref, false)}><Icon name="close" size={16} /></button>
+                  </span>
                   <a class="lab-hit" href="/{f.ref}" onclick={(e) => (e.preventDefault(), navigate(`/${f.ref}`))}>
                     <span class="lab-hit-head">
                       <b>{i + 1}. {f.ref}</b>
@@ -266,6 +299,69 @@
     padding: 0;
     list-style: none;
   }
+  .lab-item {
+    position: relative;
+  }
+  /* the marks: at the card's top right corner, a thumb's size */
+  .lab-marks {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: flex;
+    gap: 4px;
+  }
+  .lab-mark {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--ui-line);
+    border-radius: 50%;
+    background: var(--bg);
+    color: var(--muted);
+    cursor: pointer;
+  }
+  .lab-mark-good.on {
+    border-color: #15803d;
+    background: #15803d;
+    color: #fff;
+  }
+  .lab-mark-bad.on {
+    border-color: #b42318;
+    background: #b42318;
+    color: #fff;
+  }
+  .lab-item.good .lab-hit {
+    border-color: color-mix(in srgb, #15803d 55%, transparent);
+  }
+  .lab-item.bad .lab-hit {
+    opacity: 0.6;
+  }
+  .lab-good {
+    color: #15803d;
+  }
+  .lab-bad {
+    color: #b42318;
+  }
+  .lab-q-n {
+    display: inline-flex;
+    gap: 4px;
+    margin-left: 6px;
+    font-size: 12px;
+  }
+  .lab-score-list {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .lab-score-list li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-3);
+    align-items: baseline;
+  }
   .lab-hit {
     display: grid;
     gap: 4px;
@@ -280,11 +376,19 @@
     border-color: color-mix(in srgb, var(--text) 25%, transparent);
   }
   .lab-hit-head {
+    /* (room for the marks at the right) */
+    min-height: 30px;
+    padding-right: 84px;
     display: flex;
     gap: var(--space-2);
     align-items: baseline;
     min-width: 0;
     font: 13px/18px var(--sans);
+  }
+  .lab-hit-head b,
+  .lab-score {
+    flex: none;
+    white-space: nowrap;
   }
   .lab-score {
     font-variant-numeric: tabular-nums;

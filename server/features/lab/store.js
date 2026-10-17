@@ -33,6 +33,10 @@ export function createLab(db, engine, where) {
     CREATE TABLE IF NOT EXISTS vectors (model TEXT NOT NULL, ref TEXT NOT NULL, lang TEXT NOT NULL, vec BLOB NOT NULL,
       PRIMARY KEY (model, ref, lang)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS questions (id INTEGER PRIMARY KEY, text TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL DEFAULT (datetime('now')));
+    -- the administrator's marks on the answers: a paragraph a model (or the word search, 'words') found
+    -- for a question — it hit (1) or missed (0)
+    CREATE TABLE IF NOT EXISTS marks (question TEXT NOT NULL, model TEXT NOT NULL, ref TEXT NOT NULL, good INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')), PRIMARY KEY (question, model, ref)) WITHOUT ROWID;
   `);
   const q = {
     paragraphs: db.prepare('SELECT ref, plain_ru AS ru, plain_en AS en FROM paragraphs ORDER BY seq'),
@@ -45,6 +49,12 @@ export function createLab(db, engine, where) {
     questions: lab.prepare('SELECT id, text, created_at AS createdAt FROM questions ORDER BY id DESC'),
     addQuestion: lab.prepare('INSERT OR IGNORE INTO questions (text) VALUES (?)'),
     removeQuestion: lab.prepare('DELETE FROM questions WHERE id = ?'),
+    marksOf: lab.prepare('SELECT model, ref, good FROM marks WHERE question = ?'),
+    mark: lab.prepare('INSERT OR REPLACE INTO marks (question, model, ref, good) VALUES (?, ?, ?, ?)'),
+    unmark: lab.prepare('DELETE FROM marks WHERE question = ? AND model = ? AND ref = ?'),
+    // the score: per model, its hits and misses; how many questions have a hit among its answers
+    score: lab.prepare('SELECT model, sum(good) AS good, sum(1 - good) AS bad, count(DISTINCT CASE WHEN good = 1 THEN question END) AS answered FROM marks GROUP BY model'),
+    marked: lab.prepare('SELECT question, sum(good) AS good, sum(1 - good) AS bad FROM marks GROUP BY question'),
   };
 
   /** Each model's vectors in memory (made when first asked; grown as more are worked out). @type {Map<string, Row[]>} */
@@ -104,8 +114,28 @@ export function createLab(db, engine, where) {
           done: /** @type {{ n: number }} */ (q.done.get(m.id)).n, total,
           running: job.model === m.id, rate: job.model === m.id ? job.rate : 0, error: job.error[m.id] ?? null,
         })),
-        questions: q.questions.all(),
+        questions: (() => {
+          const marked = new Map(/** @type {any[]} */ (q.marked.all()).map((m) => [m.question, m]));
+          return /** @type {any[]} */ (q.questions.all()).map((x) => ({ ...x, good: marked.get(x.text)?.good ?? 0, bad: marked.get(x.text)?.bad ?? 0 }));
+        })(),
+        score: q.score.all(),
       };
+    },
+
+    /**
+     * Marks a paragraph a model found for a question: hit (true), missed (false), unmarked (null). The
+     * question joins the set to try again. @param {Record<string, unknown>} b
+     */
+    mark(b) {
+      const question = typeof b.question === 'string' ? b.question.trim() : '';
+      if (!question || question.length > 500) throw new HttpError(400, 'Вопрос — до 500 знаков');
+      if (typeof b.model !== 'string' || !(b.model === 'words' || MODELS.some((m) => m.id === b.model))) throw new HttpError(400, 'Нет такой модели');
+      if (typeof b.ref !== 'string' || !q.paragraph.get(b.ref)) throw new HttpError(400, 'Нет такого абзаца');
+      if (b.good === null) q.unmark.run(question, b.model, b.ref);
+      else {
+        q.mark.run(question, b.model, b.ref, b.good ? 1 : 0);
+        q.addQuestion.run(question);
+      }
     },
 
     /** Starts working out a model's vectors (another model's work stops first). @param {string} id */
@@ -166,7 +196,10 @@ export function createLab(db, engine, where) {
           models[m.id] = { error: /** @type {Error} */ (err).message };
         }
       }
-      return { text, models, words: byWords(text, TOP).map((p) => para(p.ref)) };
+      /** @type {Record<string, Record<string, boolean>>} the marks given before: model → ref → hit */
+      const marks = {};
+      for (const m of /** @type {any[]} */ (q.marksOf.all(text))) (marks[m.model] ??= {})[m.ref] = !!m.good;
+      return { text, models, words: byWords(text, TOP).map((p) => para(p.ref)), marks };
     },
 
     /** @param {unknown} text */
