@@ -2,6 +2,7 @@
   import { ui, setTab } from '../lib/ui.svelte.js';
   import { route, navigate, lastPath } from '../lib/router.svelte.js';
   import { SECTIONS, badgeText } from '../lib/sections.svelte.js';
+  import { session } from '../lib/session.svelte.js';
   import { tts, toggleDesktop } from '../lib/tts.svelte.js';
 
   /** ▶: reading aloud starts and the voice settings (with the pronunciation dictionary) open beside the
@@ -52,7 +53,7 @@
 <nav class="ribbon" aria-label="Разделы">
   {#each GROUPS as g, i (g)}
     {#if i}<span class="ribbon-sep" aria-hidden="true"></span>{/if}
-    {#each SECTIONS.filter((s) => s.group === g) as s (s.id)}{@render item(s)}{/each}
+    {#each SECTIONS.filter((s) => s.group === g && (!s.admin || session.user?.isAdmin)) as s (s.id)}{@render item(s)}{/each}
   {/each}
   <span class="ribbon-sep" aria-hidden="true"></span>
   <!-- Reading aloud (simplest form for now): from the first sentence on screen, with the voice settings; again — stop. -->

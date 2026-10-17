@@ -3,6 +3,7 @@ DELETE /api/collections/:cid direct
 DELETE /api/collections/:cid/items/:iid direct
 DELETE /api/dict/:id direct
 DELETE /api/glossary/:id direct
+DELETE /api/lab/questions/:id direct
 DELETE /api/pronunciations/:id direct
 DELETE /api/public/messages/:mid direct
 DELETE /api/public/proposals/:pid direct
@@ -49,6 +50,7 @@ GET /api/goto last
 GET /api/guest/paper/:id last
 GET /api/health live
 GET /api/integrations/en last
+GET /api/lab last
 GET /api/notifications last
 GET /api/notifications/count last
 GET /api/offline/file/:hash live
@@ -119,6 +121,10 @@ POST /api/collections/:cid/subscribe direct
 POST /api/dict direct
 POST /api/glossary direct
 POST /api/integrations/en/run direct
+POST /api/lab/ask direct
+POST /api/lab/models/:id/run direct
+POST /api/lab/pause direct
+POST /api/lab/questions direct
 POST /api/log direct
 POST /api/notifications/seen direct
 POST /api/pronunciations direct

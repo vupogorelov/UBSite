@@ -1,0 +1,9 @@
+{
+  "name": "ubsite-lab-engine",
+  "private": true,
+  "type": "module",
+  "description": "The Laboratory's model engine (server/features/lab/): kept apart, so the platform itself has no dependencies; removed with this folder.",
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.1"
+  }
+}

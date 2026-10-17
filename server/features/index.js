@@ -35,6 +35,7 @@ import { createLive } from '../live.js';
 import { lastBackup } from '../backup.js';
 import support from './support.js';
 import dictionary from './dictionary/index.js';
+import lab from './lab/index.js';
 
 const MINUTE = 60_000;
 
@@ -120,6 +121,7 @@ export const FEATURES = [
   },
   support,
   dictionary,
+  lab, // (the Laboratory: an administrator's experiment with the search by meaning)
   {
     // is it alive: the process answers and the database reads (503 — it does not); when the last copy
     // was made. For restart.ps1 and an outside watcher; nothing personal in it.

@@ -191,7 +191,8 @@
     <div class="ui-label more-label">Приложение</div>
     <div class="more-group">
       <button class="more-row" onclick={fromMore(() => onopen('settings'))}><Icon name="settings" size={20} /><span class="more-row-label">Настройки</span><Icon name="chevron" size={16} /></button>
-      {#if session.user?.isAdmin}<button class="more-row" onclick={fromMore(() => onopen('admin'))}><Icon name="lock" size={20} /><span class="more-row-label">Администрирование</span><Icon name="chevron" size={16} /></button>{/if}
+      {#if session.user?.isAdmin}<button class="more-row" onclick={fromMore(() => onopen('admin'))}><Icon name="lock" size={20} /><span class="more-row-label">Администрирование</span><Icon name="chevron" size={16} /></button>
+        <button class="more-row" onclick={fromMore(() => navigate('/lab'))}><Icon name="flask" size={20} /><span class="more-row-label">Лаборатория</span><Icon name="chevron" size={16} /></button>{/if}
       {#if native}
         <button class="more-row" onclick={fromMore(reinstall)}><Icon name="cloud-download" size={20} /><span class="more-row-label">Переустановить приложение</span>{#if versionText}<span class="more-row-value">{versionText}</span>{/if}</button>
       {/if}

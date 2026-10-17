@@ -93,7 +93,25 @@ export function createBookVoice(db, auth, chat) {
   if (aliases) setStemAliases(new Map(JSON.parse(aliases)));
   const relevant = db.prepare(`
     SELECT p.ref, p.plain_ru AS text FROM search_fts JOIN paragraphs p ON p.seq = search_fts.rowid
-    WHERE search_fts MATCH ? ORDER BY rank LIMIT ${ANSWERS}`);
+    WHERE search_fts MATCH ? ORDER BY rank LIMIT ?`);
+
+  /**
+   * The paragraphs that speak of a question most, by its words (the Book's answer; the Laboratory compares
+   * it with the search by meaning). @param {string} text @param {number} [limit]
+   * @returns {{ ref: string, text: string }[]}
+   */
+  function find(text, limit = ANSWERS) {
+    // the question's language chooses the text to look in: English words — the English original
+    const words = tokenize(text).filter((t) => t.script === 'ru' || t.script === 'en');
+    const lang = words.filter((t) => t.script === 'en').length > words.length / 2 ? 'en' : 'ru';
+    const stems = [...new Set(words.filter((t) => t.script === lang && t.norm.length > 2 && !STOP.has(t.norm)).map((t) => t.stem))];
+    if (!stems.length) return [];
+    try {
+      return /** @type {any[]} */ (relevant.all(`${lang}_stem : (${stems.map((s) => `"${s.replaceAll('"', '')}"`).join(' OR ')})`, limit));
+    } catch {
+      return [];
+    }
+  }
 
   /**
    * Answers a question in one's "Я и Книга": up to three paragraphs, the first as a reply to it; or
@@ -102,19 +120,7 @@ export function createBookVoice(db, auth, chat) {
    */
   function answer(key, question) {
     const book = bookUser();
-    // the question's language chooses the text to look in: English words — the English original
-    const words = tokenize(question.body).filter((t) => t.script === 'ru' || t.script === 'en');
-    const lang = words.filter((t) => t.script === 'en').length > words.length / 2 ? 'en' : 'ru';
-    const stems = [...new Set(words.filter((t) => t.script === lang && t.norm.length > 2 && !STOP.has(t.norm)).map((t) => t.stem))];
-    /** @type {{ ref: string, text: string }[]} */
-    let found = [];
-    if (stems.length) {
-      try {
-        found = /** @type {any[]} */ (relevant.all(`${lang}_stem : (${stems.map((s) => `"${s.replaceAll('"', '')}"`).join(' OR ')})`));
-      } catch {
-        found = [];
-      }
-    }
+    const found = find(question.body);
     if (!found.length) {
       chat.post(key, book, { body: NOTHING, replyTo: question.id });
       return [];
@@ -126,6 +132,7 @@ export function createBookVoice(db, auth, chat) {
   return {
     post,
     answer,
+    find,
 
     /** Live: "Книга Урантии печатает…", then the answer. @param {string} key @param {{ id: number, body: string }} question */
     answerSoon(key, question) {
