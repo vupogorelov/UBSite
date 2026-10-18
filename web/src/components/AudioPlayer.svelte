@@ -355,10 +355,13 @@
             <span class="tts-label">Скорость</span>
             <button class="tts-rate" onclick={nextRate} aria-label="Скорость {currentRate()}×, нажмите — быстрее" title="Нажмите — быстрее (после 2× — снова 0.6×)">{Number(currentRate().toFixed(2))}×</button>
             {#if !recording}
-              <span class="tts-label tts-tone-label">Тон</span>
-              <button class="ui-round small" onclick={() => stepPitch(-1)} disabled={v.pitch <= 0.5} aria-label="Тон ниже"><Icon name="minus" size={16} /></button>
-              <span class="tts-value tts-tone">{v.pitch.toFixed(1)}</span>
-              <button class="ui-round small" onclick={() => stepPitch(1)} disabled={v.pitch >= 2} aria-label="Тон выше"><Icon name="plus" size={16} /></button>
+              <!-- (one piece: with a large system font it goes to the next line whole) -->
+              <span class="tts-tone-group">
+                <span class="tts-label tts-tone-label">Тон</span>
+                <button class="ui-round small" onclick={() => stepPitch(-1)} disabled={v.pitch <= 0.5} aria-label="Тон ниже"><Icon name="minus" size={16} /></button>
+                <span class="tts-value tts-tone">{v.pitch.toFixed(1)}</span>
+                <button class="ui-round small" onclick={() => stepPitch(1)} disabled={v.pitch >= 2} aria-label="Тон выше"><Icon name="plus" size={16} /></button>
+              </span>
             {/if}
           </div>
           <!-- the sleep timer: reading stops by itself (the minutes left — by the progress line) -->
