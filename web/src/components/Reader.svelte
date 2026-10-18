@@ -566,9 +566,11 @@
   $effect(() => {
     /** @param {Event} e */
     const onHere = (e) => {
-      const first = article && scroller ? firstParagraph(article, scroller, device.mobile ? 64 : 8) : null;
-      if (!first) return;
-      const ref = first.ref;
+      // (the player names the paragraph it reads; the bottom bar — the one at the top of the screen)
+      const asked = /** @type {CustomEvent} */ (e).detail;
+      const first = asked.ref ? null : article && scroller ? firstParagraph(article, scroller, device.mobile ? 64 : 8) : null;
+      const ref = asked.ref ?? first?.ref;
+      if (!ref) return;
       const anchor = { ref, lang: null, start: null, end: null, quote: null };
       const had = paperNotes.find((n) => n.ref === ref && n.lang === null);
       flashRef = null;
@@ -576,7 +578,7 @@
         flashRef = ref; // (where it went)
         setTimeout(() => flashRef === ref && (flashRef = null), 2000);
       });
-      if (/** @type {CustomEvent} */ (e).detail === 'note') {
+      if (asked.what === 'note') {
         // as «Комментарий» in the paragraph's menu: its conversation, or a new note's first words
         notes.activeId = had?.id ?? null;
         if (!had?.comments.length) notes.draft = { ...anchor, noteId: had?.id ?? null };

@@ -84,8 +84,39 @@ export const tts = $state({
    * @type {{ paper: number, sections: number[], file: string, time: number, duration: number } | null}
    */
   track: null,
+  /**
+   * The sleep timer: reading stops at `until` (ms), or at the end of the paper (`paper`); none — both off.
+   * Checked by a timer and as each sentence starts (the app's events come with the screen off, when the
+   * page's timers may sleep).
+   */
+  sleep: { until: /** @type {number | null} */ (null), paper: false },
   ...readPrefs(),
 });
+
+/** @type {ReturnType<typeof setTimeout> | undefined} */
+let sleepTimer;
+/**
+ * Sets the sleep timer: minutes from now, 'paper' — to the end of the paper read, null — off.
+ * @param {number | 'paper' | null} choice
+ */
+export function setSleep(choice) {
+  clearTimeout(sleepTimer);
+  tts.sleep = { until: typeof choice === 'number' ? Date.now() + choice * 60_000 : null, paper: choice === 'paper' };
+  if (typeof choice === 'number') sleepTimer = setTimeout(sleepDue, choice * 60_000);
+}
+/** The paragraph being read now ("5:1.3"; null — none, or a heading). */
+export const readingRef = () => (pos && /^\d+:\d+\.\d+$/.test(pos.key) ? pos.key : null);
+
+/** The sleep timer's time is up: reading stops (true). */
+function sleepDue() {
+  if (tts.sleep.until === null || Date.now() < tts.sleep.until) return false;
+  setSleep(null);
+  if (tts.playing) {
+    log('tts', 'таймер сна', { at: pos?.key });
+    pause();
+  }
+  return true;
+}
 
 function loadVoices() {
   if (!synth) return;
@@ -370,6 +401,7 @@ function speak() {
       onlyKey = null;
       return pause();
     }
+    if (sleepDue()) return; // (the sleep timer: the sentence read to its end, then quiet)
     if (step(1)) speak();
     else endOfPaper();
   };
@@ -420,6 +452,7 @@ function speakAhead(c, my) {
     const u = utterance(applyDict(q.text, tts.lang));
     u.onstart = () => {
       if (my !== run) return;
+      if (sleepDue()) return; // (the sleep timer, with the screen off too: the app's event comes)
       pos = { key: q.key, s: q.s };
       showPosition();
     };
@@ -431,6 +464,11 @@ function speakAhead(c, my) {
 
 function endOfPaper() {
   log('tts', 'конец Текста', { paper: host?.paper(), hidden: document.visibilityState === 'hidden' });
+  if (tts.sleep.paper) {
+    // the sleep timer "to the end of the paper": here it is
+    setSleep(null);
+    return pause();
+  }
   if (host?.next()) continueNext = true;
   else {
     pause();

@@ -126,7 +126,7 @@
    */
   function here(what) {
     if (!bookRoute) return showToast('Откройте книгу — закладка и заметка ставятся к абзацу на экране');
-    window.dispatchEvent(new CustomEvent('ub-here', { detail: what }));
+    window.dispatchEvent(new CustomEvent('ub-here', { detail: { what } }));
   }
   /** @param {() => void} fn */
   const fromMore = (fn) => () => {

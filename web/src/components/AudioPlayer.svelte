@@ -2,6 +2,7 @@
   import { book } from '../lib/lang.svelte.js';
   import {
     tts, setLang, setVoice, voicesFor, toggle, sentence, paragraph, pause, playFromSessionStart, seek, seekBack, SKIP, seekTrack,
+    setSleep, readingRef,
   } from '../lib/tts.svelte.js';
   import { voiceChoice, voiceOptions, chooseVoice, currentRate, nextRate, stepPitch } from '../lib/voice-choice.js';
   import { locate } from '../lib/bookmap.svelte.js';
@@ -35,6 +36,34 @@
    * sections' buttons); the settings open by growing that form upwards, nothing slides.
    */
   const air = $derived(settings.navStyle === 'air');
+
+  // ---- A bookmark on the paragraph heard (or paused at; not yet read — the one at the top of the
+  // screen): the reader makes it, the same as «Книга» held ----
+  function bookmarkHere() {
+    window.dispatchEvent(new CustomEvent('ub-here', { detail: { what: 'bookmark', ref: readingRef() ?? undefined } }));
+  }
+
+  // ---- The sleep timer ----
+  const SLEEP = [
+    { value: '', label: 'Выключен' },
+    ...[15, 30, 45, 60].map((m) => ({ value: String(m), label: `${m} минут` })),
+    { value: 'paper', label: 'До конца Текста' },
+  ];
+  /** Now, to show the minutes left (a minute's tick while the timer is on). */
+  let now = $state(Date.now());
+  $effect(() => {
+    if (tts.sleep.until === null) return;
+    const t = setInterval(() => (now = Date.now()), 15_000);
+    return () => clearInterval(t);
+  });
+  const sleepLeft = $derived(tts.sleep.until === null ? null : Math.max(1, Math.ceil((tts.sleep.until - now) / 60_000)));
+  const sleepValue = $derived(tts.sleep.paper ? 'paper' : tts.sleep.until !== null ? 'on' : '');
+  /** @param {string} v */
+  function chooseSleep(v) {
+    if (v === 'on') return; // (the timer as it goes)
+    now = Date.now();
+    setSleep(v === 'paper' ? 'paper' : v ? Number(v) : null);
+  }
 
   // ---- The settings below the controls ----
   // They always hang under the controls; with the settings closed the whole player is shifted down by
@@ -288,11 +317,14 @@
     {#if drag !== null && trackMode && tts.track}
       <span class="tts-seek-tip" style:left="clamp(56px, {shown * 100}%, calc(100% - 96px))">{trackName} · {clock(shown * tts.track.duration)}</span>
     {:else if drag !== null && target}<span class="tts-seek-tip" style:left="clamp(56px, {shown * 100}%, calc(100% - 96px))">Текст {target.paper} · {pct(shown)}%</span>{/if}
+    {#if sleepValue}<span class="tts-sleep" title="Таймер сна">{sleepValue === 'paper' ? 'до конца' : `${sleepLeft} мин`}</span>{/if}
     {#if trackMode && tts.track}
       <span class="tts-pct tts-time">{clock(shown * tts.track.duration)} / {clock(tts.track.duration)}</span>
     {:else}
       <span class="tts-pct">{pct(shown)}%</span>
     {/if}
+    <!-- a bookmark on the paragraph heard now, in one tap -->
+    <button class="icon-btn small-btn tts-mark" onclick={bookmarkHere} aria-label="Закладка на абзац, который звучит" title="Закладка на абзац, который звучит"><Icon name="bookmark" size={16} /></button>
   </div>
   <!-- Language · ⏮ ⏪ ▶ ⏩ ⏭ · settings: the play button in the middle. -->
   <div class="tts-controls">
@@ -329,6 +361,10 @@
               <button class="ui-round small" onclick={() => stepPitch(1)} disabled={v.pitch >= 2} aria-label="Тон выше"><Icon name="plus" size={16} /></button>
             {/if}
           </div>
+          <!-- the sleep timer: reading stops by itself (the minutes left — by the progress line) -->
+          <UiSelect class="tts-list-row" label="Таймер сна" title="Таймер сна"
+            value={sleepValue} onchange={chooseSleep}
+            options={sleepValue === 'on' ? [{ value: 'on', label: `Осталось ${sleepLeft} мин` }, { value: '', label: 'Выключить' }, ...SLEEP.slice(1)] : SLEEP} />
           {#if recording}
             <button class="tts-list-row" onclick={() => (playlistOpen = true)}>
               <span class="tts-label">Плейлист</span>

@@ -6259,6 +6259,21 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
+/* the sleep timer's minutes left; the bookmark on the paragraph heard */
+.tts-sleep {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: var(--ui-fill-2);
+  color: var(--muted);
+  font: 500 11px/14px var(--sans);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.tts-mark {
+  flex: none;
+  margin: -6px -6px -6px 0;
+}
 .tts-seek-tip {
   position: absolute;
   bottom: calc(100% + 4px);
