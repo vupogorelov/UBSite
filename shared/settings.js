@@ -45,6 +45,7 @@
  *   colorPink: string,
  *   colorPurple: string,
  *   phoneNav: string,
+ *   whatsNewSeen: string,
  *   glassBars: boolean,
  *   navLabels: boolean,
  *   barsAutoHide: boolean,
@@ -241,6 +242,8 @@ export const SETTINGS_GROUPS = [
     scope: 'user',
     items: [
       { key: 'phoneNav', label: 'Разделы нижней панели', type: 'text', maxLength: 80, default: 'search,notes,listen,chat', hidden: true },
+      // «Что нового»: the date of the newest entry seen (the bell offers the newer ones; the same on every device)
+      { key: 'whatsNewSeen', label: 'Что нового: просмотрено по', type: 'text', maxLength: 10, default: '', hidden: true },
       // the tasks' kanban: its cards' size, changed by pinching two fingers over it (TasksPage)
       { key: 'kanbanFontSize', label: 'Размер карточек канбана', type: 'range', min: 10, max: 20, step: 1, unit: 'px', default: 14, hidden: true },
       // …and of the tasks' list

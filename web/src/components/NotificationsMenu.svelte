@@ -10,6 +10,7 @@
   import { markTitle } from '../lib/marks.js';
   import { plainBody } from '../lib/chat.svelte.js';
   import { version, restart } from '../lib/version.svelte.js';
+  import { whatsNew, loadWhatsNew, unseen, dateText } from '../features/whatsnew/whatsnew.svelte.js';
   import { device } from '../lib/mobile.svelte.js';
   import { portal } from '../lib/portal.js';
   import { swipeClose } from '../lib/swipe.js';
@@ -27,8 +28,15 @@
     : n.ref.startsWith('note:') ? 'comment'
     : n.kind === 'event' ? 'translate'
     : 'discuss';
-  /** The bell's number: the news, and a newer build of the app (until restarted). */
-  const count = $derived(notify.unread + (version.updated ? 1 : 0));
+  // «Что нового» (features/whatsnew): its newest entry not seen is the bell's news too
+  if (session.user) void loadWhatsNew();
+  const fresh = $derived(unseen() ? whatsNew.entries[0] : null);
+  function openWhatsNew() {
+    open = false;
+    navigate('/whatsnew');
+  }
+  /** The bell's number: the news, a newer build of the app (until restarted), what is new (until seen). */
+  const count = $derived(notify.unread + (version.updated ? 1 : 0) + (fresh ? 1 : 0));
   const label = $derived(count ? `Уведомления: ${count} новых` : 'Уведомления');
 
   function toggle() {
@@ -88,6 +96,17 @@
           <button class="ui-btn primary notif-restart" onclick={restart}>Перезапустить</button>
         </div>
       {/if}
+      {#if fresh}
+        <!-- what is new: the newest entry not seen, its points' first words -->
+        <button class="ui-card ui-card-btn notif-new" onclick={openWhatsNew}>
+          <span class="ui-tile notif-tile-accent"><Icon name="star" size={18} /></span>
+          <span class="ui-card-body">
+            <b class="ui-card-title">Что нового · {dateText(fresh.date)}</b>
+            <span class="ui-card-meta notif-new-points">{fresh.titles.slice(0, 4).join(' · ')}{fresh.titles.length > 4 ? ' …' : ''}</span>
+          </span>
+          <Icon name="chevron" size={16} />
+        </button>
+      {/if}
       {#if notify.queue}
         <button class="ui-card ui-card-btn notif-queue" onclick={showQueue}>
           <span class="ui-tile notif-tile-accent"><Icon name="translate" size={18} /></span>
@@ -101,7 +120,7 @@
       {#if notify.loading && !notify.items.length}
         <p class="ui-hint notif-pad">Загрузка…</p>
       {:else if !notify.items.length}
-        {#if !version.updated}
+        {#if !version.updated && !fresh}
           <div class="ui-empty">
             <span class="ui-tile big"><Icon name="bell" size={22} /></span>
             <b>Пока ничего</b>

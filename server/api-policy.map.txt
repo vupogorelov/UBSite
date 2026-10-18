@@ -72,6 +72,7 @@ GET /api/tasks last
 GET /api/tasks/changes live
 GET /api/tasks/count last
 GET /api/toc text
+GET /api/whatsnew last
 GET /api/workspaces last
 GET /api/workspaces/:id last
 GET /api/workspaces/:id/annotations last

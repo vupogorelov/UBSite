@@ -29,6 +29,7 @@
 import { page as supportPage } from '../features/support/index.js';
 import { pages as dictionaryPages } from '../features/dictionary/index.js';
 import { page as labPage } from '../features/lab/index.js';
+import { page as whatsNewPage } from '../features/whatsnew/index.js';
 
 /** "/x" or "/x?…". @param {string} base */
 const at = (base) => (/** @type {string} */ path) => path === base || path.startsWith(`${base}?`);
@@ -45,6 +46,7 @@ export const PAGES = [
   supportPage, // (a feature in a folder of its own: web/src/features/support/)
   ...dictionaryPages, // (web/src/features/dictionary/)
   labPage, // (web/src/features/lab/: an administrator's)
+  whatsNewPage, // (web/src/features/whatsnew/)
   {
     // /c/12 — a collection read in place of the book
     id: 'collection', match: (p) => /^\/c\/\d+\/?$/.test(p), title: 'Подборка', kind: 'collection',

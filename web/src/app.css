@@ -6570,6 +6570,19 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   margin-top: var(--space-12);
 }
 /* the sections fold: a heading row each, one open at a time */
+/* the way to «Что нового», under the opening words */
+.markdown-body .about-news {
+  align-items: center;
+  margin: var(--space-4) 0;
+  color: var(--text);
+  text-decoration: none;
+}
+.about-news-text {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
 .about-part:first-of-type {
   margin-top: var(--space-8);
 }
@@ -8081,8 +8094,10 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 .menu button.ui-card.notif,
 .menu button.ui-card.notif-queue,
+.menu button.ui-card.notif-new,
 .ui-card.notif,
-.ui-card.notif-queue {
+.ui-card.notif-queue,
+.ui-card.notif-new {
   position: relative;
   display: flex;
   gap: var(--space-3);
@@ -8097,8 +8112,23 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
   background: color-mix(in srgb, var(--accent) 6%, var(--ui-card));
 }
+/* «Что нового»: the newest entry not seen, at the top of the list */
+.ui-card.notif-new {
+  align-items: center;
+  margin-bottom: var(--space-2);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, var(--ui-card));
+  text-align: left;
+}
+.notif-new-points {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
 .notif .ui-tile,
 .notif-queue .ui-tile,
+.notif-new .ui-tile,
 .notif-update .ui-tile {
   width: 40px;
   height: 40px;

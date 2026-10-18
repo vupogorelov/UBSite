@@ -66,6 +66,12 @@
     <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
     <article class="markdown-body" onclick={onClick}>
       {@html intro}
+      <!-- the changes by date (features/whatsnew) -->
+      <a class="ui-card about-news" href="/whatsnew">
+        <span class="ui-tile"><Icon name="star" size={18} /></span>
+        <span class="about-news-text"><b>Что нового</b><span class="muted small">Изменения платформы по датам, свежие сверху</span></span>
+        <Icon name="chevron" size={16} />
+      </a>
       {#each parts as p, i (i)}
         <section class="about-part" class:open={open === i}>
           <h2 bind:this={heads[i]}>
