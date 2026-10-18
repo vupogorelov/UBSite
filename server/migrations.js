@@ -813,4 +813,10 @@ export const MIGRATIONS = [
     CHECK (from_id != to_id)
   );
   `,
+  // 38: a large number's groups of digits ("611 121") kept together in the shown Russian text: the space
+  // between them non-breaking (shared/typography.js; the importers do the same). The plain text (search,
+  // offsets) stays as it was: a character for a character.
+  `
+  UPDATE paragraphs SET html_ru = keep_numbers(html_ru) WHERE plain_ru GLOB '*[0-9] [0-9][0-9][0-9]*';
+  `,
 ];

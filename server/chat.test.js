@@ -37,8 +37,15 @@ test('chat: channels, workspace chats, replies, reactions, mentions and unread c
   assert.equal(aList.find((c) => c.key === 'chan:1').unread, 1);
   chat.markRead('chan:1', user(1), reply.id);
   assert.equal(chat.unreadTotal(user(1)).unread, 0);
-  // the mention reaches boris's bell
-  assert.ok(notes.list(user(2)).some((n) => n.id === hello.id && n.mention));
+  // the mention reaches boris's bell — not new: he read it in the chat (he answered there)
+  assert.ok(notes.list(user(2)).some((n) => n.id === hello.id && n.mention && !n.unread));
+  // read in its chat, a mention is not new in the bell any more
+  const call = chat.post('chan:1', user(1), { body: '@outsider, загляни' });
+  assert.equal(notes.list(user(3)).find((n) => n.id === call.id)?.unread, true);
+  assert.equal(notes.counts(user(3)).unread, 1);
+  chat.markRead('chan:1', user(3), call.id);
+  assert.equal(notes.list(user(3)).find((n) => n.id === call.id)?.unread, false);
+  assert.equal(notes.counts(user(3)).unread, 0);
 
   // reactions toggle
   assert.deepEqual(chat.react(hello.id, user(2), '👍').map((/** @type {any} */ r) => [r.emoji, r.n, r.mine]), [['👍', 1, true]]);

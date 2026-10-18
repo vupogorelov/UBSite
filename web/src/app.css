@@ -3436,7 +3436,21 @@ select.text-input:focus-visible {
   .toc-pane,
   .pane-resizer,
   .toc-scrim,
-  .no-print {
+  .no-print,
+  /* the phone's bars and whatever floats over the page: not on paper */
+  .bottom-nav,
+  .mini-player,
+  .tts-panel,
+  .toast,
+  .place-offer,
+  .sheet,
+  .sheet-scrim,
+  .drawer,
+  .drawer-scrim,
+  .sel-toolbar,
+  .edge-pull,
+  .exit-prompt,
+  .term-tip {
     display: none !important;
   }
   .layout,
@@ -9795,6 +9809,14 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .set-range {
   width: 100%;
   accent-color: var(--text);
+}
+/* a touch screen: the slider's ends kept away from the screen's edges, where Android's "back" gesture
+   starts — dragging the knob at its least or most does not take the app back */
+@media (pointer: coarse) {
+  .set-range {
+    width: calc(100% - 2 * var(--space-4));
+    margin-inline: var(--space-4);
+  }
 }
 .set-item .ui-input {
   background: var(--bg);

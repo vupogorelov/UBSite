@@ -4,6 +4,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MIGRATIONS } from './migrations.js';
+import { keepNumbers } from '../shared/typography.js';
 
 export const DEFAULT_DB_PATH =
   process.env.UB_DB ?? fileURLToPath(new URL('../data/ub.db', import.meta.url));
@@ -19,6 +20,8 @@ export function openDb(file = DEFAULT_DB_PATH) {
   // small, durability comes first. The log file is cut back to 32 MB after a checkpoint (without the
   // limit it keeps its largest size for good).
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA journal_size_limit = 33554432;');
+  // (for the migrations: a number's groups of digits kept together in the shown text — shared/typography.js)
+  db.function('keep_numbers', { deterministic: true }, (html) => keepNumbers(String(html)));
   migrate(db);
   return db;
 }

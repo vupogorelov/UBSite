@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseBook } from './lib/parse-book.js';
+import { keepNumbers } from '../shared/typography.js';
 import { openDb, transaction, DEFAULT_DB_PATH } from '../server/db.js';
 import { buildSearchIndex } from '../server/search/engine.js';
 
@@ -60,7 +61,7 @@ transaction(db, () => {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   for (const p of book.paragraphs) {
-    insPara.run(p.ref, p.seq, p.paperId, p.sectionNum, p.num, p.pageRef, p.htmlRu, p.htmlEn, p.plainRu, p.plainEn);
+    insPara.run(p.ref, p.seq, p.paperId, p.sectionNum, p.num, p.pageRef, keepNumbers(p.htmlRu), p.htmlEn, p.plainRu, p.plainEn);
   }
   buildSearchIndex(db);
 });

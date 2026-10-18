@@ -64,12 +64,14 @@ test("note comments: the note's conversation — members only, replies, mentions
   assert.equal(bell.counts(user(1)).unread, 1);
   assert.equal(bell.list(user(1))[0].noteRef, '5:1.1');
   assert.equal(bell.list(user(1))[0].chatTitle, 'Заметка · 5:1.1');
-  assert.equal(bell.counts(user(2)).unread, 1);
+  // (the mentioned member answered in the note's conversation: the mention is there, read)
+  assert.ok(bell.list(user(2)).some((n) => n.mention && !n.unread));
+  assert.equal(bell.counts(user(2)).unread, 0);
   assert.equal(bell.counts(user(3)).unread, 0);
 
   // a member removed from the workspace stops hearing it
   db.exec('DELETE FROM workspace_members WHERE workspace_id = 2 AND user_id = 2');
-  assert.equal(bell.counts(user(2)).unread, 0);
+  assert.equal(bell.list(user(2)).filter((n) => n.ref === key).length, 0);
 
   // deleting a comment keeps a note that still has others; the last one takes an empty note along
   const tmp = await call('POST', '/api/workspaces/2/annotations', 1, { ref: '5:1.1', comment: 'первый' });

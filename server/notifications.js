@@ -40,6 +40,11 @@ const NEWS = `
            ON wm.workspace_id = a.workspace_id AND wm.user_id = :user WHERE m.ref = 'note:' || a.id))
     AND (m.ref NOT LIKE 'ws:%' OR EXISTS (SELECT 1 FROM workspace_members wm
            WHERE wm.user_id = :user AND m.ref = 'ws:' || wm.workspace_id))`;
+/**
+ * Not new any more: seen in the bell (everything up to :seen), or read in its chat — the chat's read mark
+ * is past it (a reply read where it was written does not stay new in the bell).
+ */
+const NEW = `(m.id > :seen AND NOT EXISTS (SELECT 1 FROM chat_reads cr WHERE cr.user_id = :user AND cr.chat = m.ref AND cr.last_read_id >= m.id))`;
 
 /**
  * @param {DatabaseSync} db
@@ -51,7 +56,7 @@ export function createNotifications(db, tr) {
       WITH ${FOLLOWED}
       SELECT m.id, m.ref, m.kind, m.body, m.created_at AS createdAt, m.proposal_id AS proposalId,
              coalesce(u.display_name, u.username) AS authorName, pp.title_ru AS paperTitle,
-             p.original, v.text, m.id > :seen AS unread,
+             p.original, v.text, ${NEW} AS unread,
              EXISTS (SELECT 1 FROM mentions WHERE message_id = m.id AND user_id = :user) AS mention,
              CASE WHEN m.ref LIKE 'chan:%' THEN (SELECT '# ' || title FROM channels WHERE id = CAST(substr(m.ref, 6) AS INTEGER))
                   WHEN m.ref LIKE 'ws:%' THEN (SELECT name FROM workspaces WHERE id = CAST(substr(m.ref, 4) AS INTEGER))
@@ -69,7 +74,7 @@ export function createNotifications(db, tr) {
         LEFT JOIN paragraphs pa ON pa.ref = coalesce(na.ref, m.ref)
         LEFT JOIN papers pp ON pp.id = pa.paper_id`)}
       ORDER BY m.id DESC LIMIT ${LIMIT}`),
-    unread: db.prepare(`WITH ${FOLLOWED} SELECT count(*) AS n ${NEWS} AND m.id > :seen`),
+    unread: db.prepare(`WITH ${FOLLOWED} SELECT count(*) AS n ${NEWS} AND ${NEW}`),
     lastNews: db.prepare(`WITH ${FOLLOWED} SELECT coalesce(max(m.id), 0) AS id ${NEWS}`),
     seen: db.prepare('SELECT notif_seen_id AS seen FROM users WHERE id = ?'),
     setSeen: db.prepare('UPDATE users SET notif_seen_id = max(notif_seen_id, ?) WHERE id = ?'),

@@ -11,6 +11,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseRu } from './lib/parse-ru.js';
+import { keepNumbers } from '../shared/typography.js';
 import { openDb, transaction } from '../server/db.js';
 import { buildSearchIndex } from '../server/search/engine.js';
 
@@ -90,7 +91,7 @@ if (problems.length || empty.length || ru.issues.length) {
 
 transaction(db, () => {
   const upd = db.prepare('UPDATE paragraphs SET html_ru = ?, plain_ru = ?, page_ref = coalesce(?, page_ref) WHERE ref = ?');
-  for (const [ref, p] of matched) upd.run(p.html, p.plain, p.page, ref);
+  for (const [ref, p] of matched) upd.run(keepNumbers(p.html), p.plain, p.page, ref);
   // Corrected references, through temporary names (the new names are still taken by other rows).
   const ren = db.prepare('UPDATE paragraphs SET ref = ?, num = ? WHERE ref = ?');
   for (const [from] of renames) ren.run(`tmp:${from}`, 0, from);

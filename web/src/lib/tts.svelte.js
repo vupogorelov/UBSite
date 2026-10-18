@@ -195,6 +195,7 @@ setListenHandler((p) => {
 /** The reader registers itself while it is on screen. @param {NonNullable<typeof host>} h */
 export function registerReader(h) {
   host = h;
+  void loadDict(); // (ready before the first ▶: the voice waits for it)
   const box = h.scroller();
   const touched = () => (userAt = Date.now());
   box?.addEventListener('touchstart', touched, { passive: true });
@@ -531,7 +532,6 @@ let unlocked = false;
 function start() {
   if (!pos || !host) return;
   log('tts', 'чтение', { at: pos.key, lang: tts.lang, source: tts[tts.lang].source, voice: tts[tts.lang].voice || 'системный', app: !!native });
-  void loadDict();
   const paper = host.paper();
   if (!session && paper != null) session = { paper, key: pos.key, s: pos.s };
   tts.playing = true;
@@ -547,7 +547,9 @@ function start() {
   bgStart({ play, pause, next: () => paragraph(1), prev: () => paragraph(-1), close: stop, seek: rec ? (sec) => skip(sec) : undefined }, !rec);
   // a recording starts now, still within the tap (Safari lets a page play sound only then)
   if (rec) speak();
-  else speakSoon(0);
+  // the voice waits for the pronunciation dictionary (its first sentences, and those the app queues
+  // ahead, are spelled by it); not had — it reads on without it
+  else void loadDict().then(() => tts.playing && speakSoon(0));
 }
 
 /** ▶: what I see is what I hear — the paused sentence if it is on screen, else the screen's first sentence. */
