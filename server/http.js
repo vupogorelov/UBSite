@@ -126,6 +126,8 @@ const MIME = /** @type {Record<string, string>} */ ({
  */
 export function createStatic(dir) {
   const root = resolve(dir);
+  /** Files moved to a new name: the old address sends on to it (links given before keep working). */
+  const MOVED = /** @type {Record<string, string>} */ ({ '/app/ubsite.apk': '/app/upexplorer.apk' });
   /** The file's size and an ETag from its size and time of change (-1: no such file). @param {string} file */
   const fileInfo = (file) => {
     try {
@@ -137,6 +139,7 @@ export function createStatic(dir) {
   };
   /** @param {Req} req @param {Res} res @param {string} pathname */
   return (req, res, pathname) => {
+    if (MOVED[pathname]) return void res.writeHead(301, { Location: MOVED[pathname] }).end();
     let file = join(root, decodeURIComponent(pathname));
     if (!file.startsWith(root + sep) && file !== root) throw new HttpError(403, 'Forbidden');
     let info = fileInfo(file);

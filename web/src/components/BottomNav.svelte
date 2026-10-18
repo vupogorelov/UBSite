@@ -45,7 +45,7 @@
   });
   const versionText = $derived(installed && latest && latest !== installed ? `${installed} → ${latest}` : installed || (latest && !canDownload ? `есть ${latest}` : ''));
   function reinstall() {
-    if (canDownload) location.href = '/app/ubsite.apk';
+    if (canDownload) location.href = '/app/upexplorer.apk';
     else showToast('Один раз — через Chrome: Ещё → Android приложение');
   }
   $effect(() => {
@@ -200,7 +200,7 @@
       {/if}
       {#if androidBrowser}
         <!-- the Android app (android/): reading aloud goes on with the screen off -->
-        <button class="more-row" onclick={fromMore(() => (location.href = '/app/ubsite.apk'))}><Icon name="plus" size={20} /><span class="more-row-label">Android приложение</span></button>
+        <button class="more-row" onclick={fromMore(() => (location.href = '/app/upexplorer.apk'))}><Icon name="plus" size={20} /><span class="more-row-label">Android приложение</span></button>
       {/if}
       {#if pwa.canInstall}
         <button class="more-row" onclick={fromMore(install)}><Icon name="plus" size={20} /><span class="more-row-label">Установить приложение</span></button>

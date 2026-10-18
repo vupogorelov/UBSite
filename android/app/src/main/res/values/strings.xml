@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Urantia Papers</string>
+    <string name="app_name">Urantia Papers Explorer</string>
     <string name="server_title">Адрес сайта</string>
     <string name="server_short">Адрес сайта</string>
     <string name="server_hint">https://upexplorer.ddns.net</string>

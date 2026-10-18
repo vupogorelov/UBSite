@@ -1,5 +1,6 @@
 # Builds the Android app (the site in its own window, with reading aloud in the background) and puts
-# the APK where the site serves it: web/public/app/ubsite.apk -> https://<site>/app/ubsite.apk
+# the APK where the site serves it: web/public/app/upexplorer.apk -> https://<site>/app/upexplorer.apk
+# (the old name, ubsite.apk, is sent on to it by the server: links given before still work)
 # (after "npm run build" / deploy\restart.ps1 -Build).
 #
 #   powershell -ExecutionPolicy Bypass -File "<path>\android\build.ps1"
@@ -52,10 +53,10 @@ try {
 $apk = Join-Path $here 'app\build\outputs\apk\release\app-release.apk'
 $out = Join-Path $root 'web\public\app'
 New-Item -ItemType Directory -Force $out | Out-Null
-Copy-Item $apk (Join-Path $out 'ubsite.apk') -Force
+Copy-Item $apk (Join-Path $out 'upexplorer.apk') -Force
 # The version on the site: the app compares it with its own ("Переустановить приложение · 1.2 → 1.3").
 $gradle = Get-Content (Join-Path $here 'app\build.gradle') -Raw
 $name = [regex]::Match($gradle, "versionName = '([^']+)'").Groups[1].Value
 $code = [regex]::Match($gradle, 'versionCode = (\d+)').Groups[1].Value
 Set-Content (Join-Path $out 'version.json') ('{"code":' + $code + ',"name":"' + $name + '"}') -NoNewline
-Write-Host ("OK  web\public\app\ubsite.apk ({0:N0} KB)" -f ((Get-Item $apk).Length / 1KB)) -ForegroundColor Green
+Write-Host ("OK  web\public\app\upexplorer.apk ({0:N0} KB)" -f ((Get-Item $apk).Length / 1KB)) -ForegroundColor Green
