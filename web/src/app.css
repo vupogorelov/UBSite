@@ -12103,26 +12103,27 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .ui-picker-group:first-child {
   margin-top: 0;
 }
+/* the speed and the tone in one row, tight enough for a phone's larger system font */
 .tts-pace {
-  flex-wrap: wrap;
-  gap: var(--space-1) var(--space-2);
-  padding-block: 6px;
+  gap: var(--space-1);
   cursor: default;
 }
 .tts-tone-group {
   display: flex;
+  flex: none;
   align-items: center;
-  gap: var(--space-2);
+  gap: 2px;
   margin-left: auto;
 }
 .tts-pace:active {
   background: none;
 }
 .tts-rate {
-  min-width: 64px;
-  height: 36px;
+  flex: none;
+  min-width: 48px;
+  height: 34px;
   margin-right: auto;
-  padding: 0 var(--space-3);
+  padding: 0 10px;
   border: 0;
   border-radius: 18px;
   background: var(--ui-fill-2);
@@ -12135,15 +12136,15 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   background: var(--ui-fill);
 }
 .tts-tone-label {
-  margin-left: var(--space-2);
+  margin-right: 2px;
 }
 .tts-tone {
-  min-width: 26px;
+  min-width: 24px;
   text-align: center;
 }
 .tts-pace .ui-round.small {
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
 }
 .tts-pace .ui-round:disabled {
   opacity: 0.35;
