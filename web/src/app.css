@@ -3628,25 +3628,6 @@ select.text-input:focus-visible {
 .notif.unread {
   background: var(--accent-soft);
 }
-/* a newer build of the app: first in the list, with its button */
-.notif-update {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.25rem;
-  padding: 0.6rem 0.6rem 0.6rem 0.75rem;
-  border-radius: var(--radius-sm);
-  background: var(--accent-soft);
-}
-.menu .notif-update .btn.primary,
-.menu .notif-update .btn.primary:hover {
-  flex: none;
-  height: 36px;
-  padding: 0 0.9rem;
-  border-radius: var(--radius-sm);
-  background: var(--accent);
-  color: var(--accent-fg);
-}
 .notif-time {
   white-space: nowrap;
 }
@@ -3960,7 +3941,11 @@ fieldset.group:disabled {
   max-width: calc(100vw - 2rem);
   overflow-wrap: anywhere;
 }
-/* "На телефоне вы остановились на …": the reading place left on another device (lib/places) */
+/* "На телефоне вы остановились на …": the reading place left on another device (lib/places) — not over
+   an open sheet (the bell, «Ещё»…): it comes back when the sheet is closed */
+:root:has(.sheet) .place-offer {
+  display: none;
+}
 .place-offer {
   position: fixed;
   left: 50%;
@@ -6570,6 +6555,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   margin-top: var(--space-12);
 }
 /* the sections fold: a heading row each, one open at a time */
+/* the Android app's version, at the page's end */
+.markdown-body .about-app {
+  align-items: center;
+  margin-top: var(--space-8);
+}
 /* the way to «Что нового», under the opening words */
 .markdown-body .about-news {
   align-items: center;
@@ -8126,10 +8116,22 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+/* its action (install, restart) and the way to «Что нового» */
+.notif-new-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+}
+.notif-new-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
 .notif .ui-tile,
 .notif-queue .ui-tile,
-.notif-new .ui-tile,
-.notif-update .ui-tile {
+.notif-new .ui-tile {
   width: 40px;
   height: 40px;
   border-radius: 13px;
@@ -8185,20 +8187,6 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .notif-queue > svg {
   align-self: center;
   color: var(--muted);
-}
-.ui-card.notif-update {
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: 20px;
-  background: color-mix(in srgb, var(--accent) 6%, var(--ui-card));
-}
-.notif-restart.ui-btn {
-  flex: none;
-  width: auto;
-  height: 40px;
-  padding: 0 var(--space-4);
-  font-size: 14px;
 }
 .notif-pad {
   padding: var(--space-4);
@@ -8962,13 +8950,6 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 .more-row .tg-badge {
   flex: none;
-}
-/* a value at the row's end: the app's version ("1.2 → 1.3") */
-.more-row-value {
-  flex: none;
-  color: var(--muted);
-  font-size: 14px;
-  font-variant-numeric: tabular-nums;
 }
 .more-row:active,
 .more-row.on {

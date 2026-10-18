@@ -33,22 +33,7 @@
   /** Android, but not inside the app itself: "Ещё" offers the app. */
   const androidBrowser = !native && /Android/i.test(navigator.userAgent);
 
-  // Inside the app: "Переустановить приложение", with its version and the site's ("1.2 → 1.3").
-  const canDownload = (native?.version() ?? 0) >= 2; // (1.0–1.2 cannot save a file: through the browser then)
-  const installed = canDownload ? (native?.appVersion?.() ?? '') : '';
-  let latest = $state('');
-  $effect(() => {
-    if (!more || !native) return;
-    fetch('/app/version.json', { cache: 'no-store' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((v) => (latest = typeof v?.name === 'string' ? v.name : ''))
-      .catch(() => {});
-  });
-  const versionText = $derived(installed && latest && latest !== installed ? `${installed} → ${latest}` : installed || (latest && !canDownload ? `есть ${latest}` : ''));
-  function reinstall() {
-    if (canDownload) location.href = '/app/upexplorer.apk';
-    else showToast('Один раз — через Chrome: Ещё → Android приложение');
-  }
+  // (updates of the site and of the Android app: the bell's «Обновление»; reinstalling by hand: «О приложении»)
   $effect(() => {
     if (more) return onBack(() => (more = false));
   });
@@ -206,9 +191,6 @@
       <button class="more-row" onclick={fromMore(() => onopen('settings'))}><Icon name="settings" size={20} /><span class="more-row-label">Настройки</span><Icon name="chevron" size={16} /></button>
       {#if session.user?.isAdmin}<button class="more-row" onclick={fromMore(() => onopen('admin'))}><Icon name="lock" size={20} /><span class="more-row-label">Администрирование</span><Icon name="chevron" size={16} /></button>
         <button class="more-row" onclick={fromMore(() => navigate('/lab'))}><Icon name="flask" size={20} /><span class="more-row-label">Лаборатория</span><Icon name="chevron" size={16} /></button>{/if}
-      {#if native}
-        <button class="more-row" onclick={fromMore(reinstall)}><Icon name="cloud-download" size={20} /><span class="more-row-label">Переустановить приложение</span>{#if versionText}<span class="more-row-value">{versionText}</span>{/if}</button>
-      {/if}
       {#if androidBrowser}
         <!-- the Android app (android/): reading aloud goes on with the screen off -->
         <button class="more-row" onclick={fromMore(() => (location.href = '/app/upexplorer.apk'))}><Icon name="plus" size={20} /><span class="more-row-label">Android приложение</span></button>

@@ -4,6 +4,8 @@
   import { renderMarkdown } from '../lib/markdown.js';
   import { navigate } from '../lib/router.svelte.js';
   import Icon from './Icon.svelte';
+  import { native } from '../lib/native.js';
+  import { version, appUpdate, install, checkVersion } from '../lib/version.svelte.js';
 
   /**
    * "О приложении" (/about): the project's about.md, rendered like a README on GitHub. Its title and
@@ -18,6 +20,7 @@
   /** @type {HTMLElement[]} */
   const heads = [];
   onMount(() => {
+    if (native) void checkVersion(); // (the newest Android app, for the version below)
     api.about().then(
       (r) => split(renderMarkdown(r.markdown, '/api/')), // "about/x.webp" in about.md → /api/about/x.webp
       (err) => (error = err.message),
@@ -82,6 +85,17 @@
           {#if open === i}<div class="about-body" id="about-{i}">{@html p.html}</div>{/if}
         </section>
       {/each}
+      {#if native}
+        <!-- the Android app's version; reinstalling it by hand (an update comes to the bell by itself) -->
+        <div class="ui-card about-app">
+          <span class="ui-tile"><Icon name="cloud-download" size={18} /></span>
+          <span class="about-news-text">
+            <b>Приложение для Android {version.app.installed}</b>
+            <span class="muted small">{appUpdate() ? `Есть версия ${version.app.latest}` : version.app.latest ? 'Последняя версия' : 'Версия на устройстве'}</span>
+          </span>
+          <button class="ui-chip" onclick={install}>Переустановить</button>
+        </div>
+      {/if}
     </article>
   {/if}
 </div>

@@ -9,8 +9,8 @@
   import Icon from './Icon.svelte';
   import { markTitle } from '../lib/marks.js';
   import { plainBody } from '../lib/chat.svelte.js';
-  import { version, restart } from '../lib/version.svelte.js';
-  import { whatsNew, loadWhatsNew, unseen, dateText } from '../features/whatsnew/whatsnew.svelte.js';
+  import { version, restart, install, appUpdate } from '../lib/version.svelte.js';
+  import { whatsNew, loadWhatsNew, unseen, dateText, markSeen } from '../features/whatsnew/whatsnew.svelte.js';
   import { device } from '../lib/mobile.svelte.js';
   import { portal } from '../lib/portal.js';
   import { swipeClose } from '../lib/swipe.js';
@@ -28,15 +28,34 @@
     : n.ref.startsWith('note:') ? 'comment'
     : n.kind === 'event' ? 'translate'
     : 'discuss';
-  // «Что нового» (features/whatsnew): its newest entry not seen is the bell's news too
+  // ---- «Обновление»: one card for every update, the first of the list (lib/version.svelte.js) ----
+  // A newer Android app (install it: it brings the newest site too) · a newer build of the site (restart)
+  // · or only what is new not seen yet (features/whatsnew). Its words — the newest entry's points.
   if (session.user) void loadWhatsNew();
   const fresh = $derived(unseen() ? whatsNew.entries[0] : null);
+  const update = $derived(
+    appUpdate() ? { kind: 'app', title: `Обновление приложения · ${version.app.installed ? `${version.app.installed} → ` : ''}${version.app.latest}`, action: `Установить ${version.app.latest}` }
+    : version.updated ? { kind: 'site', title: `Обновление${fresh ? ` · ${dateText(fresh.date)}` : ''}`, action: 'Перезапустить' }
+    : fresh ? { kind: 'news', title: `Что нового · ${dateText(fresh.date)}`, action: '' }
+    : null,
+  );
+  /** The update's own words: what is new, or what the update is. */
+  const updatePoints = $derived(
+    fresh ? `${fresh.titles.slice(0, 4).join(' · ')}${fresh.titles.length > 4 ? ' …' : ''}`
+    : update?.kind === 'app' ? 'Новая версия приложения для Android' : 'Новая версия — перезапустите, чтобы открыть её',
+  );
   function openWhatsNew() {
     open = false;
     navigate('/whatsnew');
   }
-  /** The bell's number: the news, a newer build of the app (until restarted), what is new (until seen). */
-  const count = $derived(notify.unread + (version.updated ? 1 : 0) + (fresh ? 1 : 0));
+  /** The update done (installed, restarted): what is new counts as seen. */
+  function doUpdate() {
+    markSeen();
+    if (update?.kind === 'app') install();
+    else restart();
+  }
+  /** The bell's number: the news, and the update (until done or, if only what is new, seen). */
+  const count = $derived(notify.unread + (update ? 1 : 0));
   const label = $derived(count ? `Уведомления: ${count} новых` : 'Уведомления');
 
   function toggle() {
@@ -88,24 +107,19 @@
   </button>
   {#if open}
     {#snippet content()}
-      {#if version.updated}
-        <!-- a newer build is out: restarting takes it (the list stays as it is until then) -->
-        <div class="ui-card notif-update" role="status">
-          <span class="ui-tile"><Icon name="reset" size={18} /></span>
-          <span class="ui-card-body"><b class="ui-card-title">Приложение обновилось</b><span class="ui-card-meta">Перезапустите, чтобы открыть новую версию</span></span>
-          <button class="ui-btn primary notif-restart" onclick={restart}>Перезапустить</button>
-        </div>
-      {/if}
-      {#if fresh}
-        <!-- what is new: the newest entry not seen, its points' first words -->
-        <button class="ui-card ui-card-btn notif-new" onclick={openWhatsNew}>
-          <span class="ui-tile notif-tile-accent"><Icon name="star" size={18} /></span>
+      {#if update}
+        <!-- «Обновление»: what is new, and what to do — install the app, restart, or nothing (only to read) -->
+        <div class="ui-card notif-new" role="status" data-kind={update.kind}>
+          <span class="ui-tile notif-tile-accent"><Icon name={update.action ? 'reset' : 'star'} size={18} /></span>
           <span class="ui-card-body">
-            <b class="ui-card-title">Что нового · {dateText(fresh.date)}</b>
-            <span class="ui-card-meta notif-new-points">{fresh.titles.slice(0, 4).join(' · ')}{fresh.titles.length > 4 ? ' …' : ''}</span>
+            <b class="ui-card-title">{update.title}</b>
+            <span class="ui-card-meta notif-new-points">{updatePoints}</span>
+            <span class="notif-new-actions">
+              {#if update.action}<button class="ui-chip on" onclick={doUpdate}>{update.action}</button>{/if}
+              {#if whatsNew.entries.length}<button class="link-btn notif-new-more" onclick={openWhatsNew}>Что нового<Icon name="chevron" size={14} /></button>{/if}
+            </span>
           </span>
-          <Icon name="chevron" size={16} />
-        </button>
+        </div>
       {/if}
       {#if notify.queue}
         <button class="ui-card ui-card-btn notif-queue" onclick={showQueue}>
@@ -120,7 +134,7 @@
       {#if notify.loading && !notify.items.length}
         <p class="ui-hint notif-pad">Загрузка…</p>
       {:else if !notify.items.length}
-        {#if !version.updated && !fresh}
+        {#if !update}
           <div class="ui-empty">
             <span class="ui-tile big"><Icon name="bell" size={22} /></span>
             <b>Пока ничего</b>
