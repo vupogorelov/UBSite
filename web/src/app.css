@@ -6261,14 +6261,31 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 /* the sleep timer's minutes left; the bookmark on the paragraph heard */
 .tts-sleep {
+  position: relative;
+  display: inline-flex;
   flex: none;
-  padding: 2px 6px;
-  border-radius: 8px;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 11px;
   background: var(--ui-fill-2);
   color: var(--muted);
   font: 500 11px/14px var(--sans);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  cursor: pointer;
+}
+/* (a finger's room around the small pill) */
+.tts-sleep::before {
+  position: absolute;
+  inset: -10px -4px;
+  content: '';
+}
+.tts-sleep.on {
+  color: var(--text);
 }
 .tts-mark {
   flex: none;

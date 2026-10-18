@@ -34,20 +34,21 @@ export default {
     t.check('закладка на абзац, который звучит, — одним касанием', /Закладка( уже есть)? · \d+:\d+\.\d+/.test(toast), toast);
     if (toast.includes('Отменить')) await page.locator('.toast button', { hasText: 'Отменить' }).click();
 
-    // the sleep timer: 15 minutes — its minutes by the progress line
-    await page.locator('.tts-controls button[aria-label="Настройки голоса"]').click();
-    await page.waitForTimeout(600);
-    await page.locator('.tts-drawer .tts-list-row', { hasText: 'Таймер сна' }).click();
-    await page.waitForTimeout(500);
-    await page.getByRole('radio', { name: '15 минут' }).click();
-    await page.waitForTimeout(500);
-    t.check('таймер сна: осталось 15 минут — у полосы прогресса', (await page.locator('.tts-sleep').textContent())?.trim() === '15 мин');
-    // "to the end of the paper": reading stops at the paper's end, not going on to the next
-    await page.locator('.tts-drawer .tts-list-row', { hasText: 'Таймер сна' }).click();
-    await page.waitForTimeout(500);
-    await page.getByRole('radio', { name: 'До конца Текста' }).click();
-    await page.waitForTimeout(500);
-    t.check('«До конца Текста» — отмечено у полосы', (await page.locator('.tts-sleep').textContent())?.trim() === 'до конца');
+    // the sleep timer: a pill by the progress line, each tap the next step round
+    const pill = page.locator('.tts-sleep');
+    const steps = [];
+    for (let i = 0; i < 6; i++) {
+      await pill.click();
+      await page.waitForTimeout(150);
+      steps.push((await pill.textContent())?.trim() ?? '');
+    }
+    t.check('таймер сна: по кругу — 15 → 30 → 45 → 60 мин → до конца → выключен', steps.join(' | ') === '15 мин | 30 мин | 45 мин | 60 мин | до конца | ', steps.join(' | '));
+    const pct = await page.locator('.tts-progress').evaluate((/** @type {Element} */ row) => {
+      const kids = [...row.children].map((k) => k.className);
+      return kids.findIndex((c) => String(c).includes('tts-pct')) < kids.findIndex((c) => String(c).includes('tts-sleep'));
+    });
+    t.check('процент — слева от полосы, таймер — справа', pct);
+    t.check('в настройках плеера строки таймера больше нет', (await page.locator('.tts-drawer .tts-list-row', { hasText: 'Таймер сна' }).count()) === 0);
     t.check('без ошибок на странице', errors.length === 0, errors.slice(0, 2));
   },
 };

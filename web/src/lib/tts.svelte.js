@@ -89,7 +89,7 @@ export const tts = $state({
    * Checked by a timer and as each sentence starts (the app's events come with the screen off, when the
    * page's timers may sleep).
    */
-  sleep: { until: /** @type {number | null} */ (null), paper: false },
+  sleep: { until: /** @type {number | null} */ (null), paper: false, step: /** @type {number | 'paper' | null} */ (null) },
   ...readPrefs(),
 });
 
@@ -101,7 +101,7 @@ let sleepTimer;
  */
 export function setSleep(choice) {
   clearTimeout(sleepTimer);
-  tts.sleep = { until: typeof choice === 'number' ? Date.now() + choice * 60_000 : null, paper: choice === 'paper' };
+  tts.sleep = { until: typeof choice === 'number' ? Date.now() + choice * 60_000 : null, paper: choice === 'paper', step: choice };
   if (typeof choice === 'number') sleepTimer = setTimeout(sleepDue, choice * 60_000);
 }
 /** The paragraph being read now ("5:1.3"; null — none, or a heading). */

@@ -75,12 +75,13 @@
 </script>
 
 {#if bookMap.ready}
+  <!-- the share read, then the line (as in the player) -->
   <div class="read-progress tts-progress">
+    <span class="tts-pct">{pct(shown)}%</span>
     <input type="range" min="0" max="1000" step="1" value={Math.round(shown * 1000)} style:--done="{shown * 100}%"
       aria-label="Место в книге" aria-valuetext="{pct(shown)}%{target ? `, Текст ${target.paper}` : ''}"
       oninput={(e) => (drag = Number(e.currentTarget.value) / 1000)}
       onchange={(e) => drop(Number(e.currentTarget.value) / 1000)} />
     {#if drag !== null && target}<span class="tts-seek-tip" style:left="clamp(56px, {shown * 100}%, calc(100% - 96px))">Текст {target.paper} · {pct(shown)}%</span>{/if}
-    <span class="tts-pct">{pct(shown)}%</span>
   </div>
 {/if}

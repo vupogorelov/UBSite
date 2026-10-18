@@ -81,6 +81,8 @@
     <circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" />
   {:else if name === 'plus'}
     <path d="M12 5v14M5 12h14" />
+  {:else if name === 'moon'}
+    <path d="M20.5 14.1A8.5 8.5 0 1 1 9.9 3.5a7 7 0 0 0 10.6 10.6z" />
   {:else if name === 'flask'}
     <path d="M9 3h6" /><path d="M10 3v6.5L4.6 18.7A1.5 1.5 0 0 0 5.9 21h12.2a1.5 1.5 0 0 0 1.3-2.3L14 9.5V3" /><path d="M7 15h10" />
   {:else if name === 'dictionary'}

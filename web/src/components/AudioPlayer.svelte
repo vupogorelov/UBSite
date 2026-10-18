@@ -43,12 +43,12 @@
     window.dispatchEvent(new CustomEvent('ub-here', { detail: { what: 'bookmark', ref: readingRef() ?? undefined } }));
   }
 
-  // ---- The sleep timer ----
-  const SLEEP = [
-    { value: '', label: 'Выключен' },
-    ...[15, 30, 45, 60].map((m) => ({ value: String(m), label: `${m} минут` })),
-    { value: 'paper', label: 'До конца Текста' },
-  ];
+  // ---- The sleep timer: a pill by the progress line, each tap the next step round ----
+  const SLEEP = /** @type {(number | 'paper' | null)[]} */ ([null, 15, 30, 45, 60, 'paper']);
+  function nextSleep() {
+    setSleep(SLEEP[(SLEEP.indexOf(tts.sleep.step) + 1) % SLEEP.length]);
+    now = Date.now(); // (after: "30 мин", not 31, at once)
+  }
   /** Now, to show the minutes left (a minute's tick while the timer is on). */
   let now = $state(Date.now());
   $effect(() => {
@@ -57,13 +57,7 @@
     return () => clearInterval(t);
   });
   const sleepLeft = $derived(tts.sleep.until === null ? null : Math.max(1, Math.ceil((tts.sleep.until - now) / 60_000)));
-  const sleepValue = $derived(tts.sleep.paper ? 'paper' : tts.sleep.until !== null ? 'on' : '');
-  /** @param {string} v */
-  function chooseSleep(v) {
-    if (v === 'on') return; // (the timer as it goes)
-    now = Date.now();
-    setSleep(v === 'paper' ? 'paper' : v ? Number(v) : null);
-  }
+  const sleepText = $derived(tts.sleep.paper ? 'до конца' : sleepLeft !== null ? `${sleepLeft} мин` : '');
 
   // ---- The settings below the controls ----
   // They always hang under the controls; with the settings closed the whole player is shifted down by
@@ -308,7 +302,13 @@
     <button class="tts-back" onclick={goBack}><Icon name="reset" size={16} />Вернуться к {back.key.includes(':') ? back.key : `Тексту ${back.paper}`}</button>
   {/if}
   <div class="tts-bar">
+  <!-- the share read (the recording's time) · the progress line · the sleep timer · a bookmark -->
   <div class="tts-progress">
+    {#if trackMode && tts.track}
+      <span class="tts-pct tts-time">{clock(shown * tts.track.duration)} / {clock(tts.track.duration)}</span>
+    {:else}
+      <span class="tts-pct">{pct(shown)}%</span>
+    {/if}
     <input bind:this={line} type="range" min="0" max="1000" step="1" value={Math.round(shown * 1000)} style:--done="{shown * 100}%"
       aria-label={trackMode ? `Место в записи: Текст ${tts.track?.paper}, ${trackName}` : 'Место в книге'}
       aria-valuetext={trackMode && tts.track ? `${clock(shown * tts.track.duration)} из ${clock(tts.track.duration)}` : `${pct(shown)}%${target ? `, Текст ${target.paper}` : ''}`}
@@ -317,12 +317,10 @@
     {#if drag !== null && trackMode && tts.track}
       <span class="tts-seek-tip" style:left="clamp(56px, {shown * 100}%, calc(100% - 96px))">{trackName} · {clock(shown * tts.track.duration)}</span>
     {:else if drag !== null && target}<span class="tts-seek-tip" style:left="clamp(56px, {shown * 100}%, calc(100% - 96px))">Текст {target.paper} · {pct(shown)}%</span>{/if}
-    {#if sleepValue}<span class="tts-sleep" title="Таймер сна">{sleepValue === 'paper' ? 'до конца' : `${sleepLeft} мин`}</span>{/if}
-    {#if trackMode && tts.track}
-      <span class="tts-pct tts-time">{clock(shown * tts.track.duration)} / {clock(tts.track.duration)}</span>
-    {:else}
-      <span class="tts-pct">{pct(shown)}%</span>
-    {/if}
+    <!-- the sleep timer: off (a moon) → 15 → 30 → 45 → 60 min → to the end of the paper → off, a tap each -->
+    <button class="tts-sleep" class:on={sleepText !== ''} onclick={nextSleep}
+      aria-label={sleepText ? `Таймер сна: ${sleepText === 'до конца' ? 'до конца Текста' : `осталось ${sleepText}`}. Нажмите — следующий` : 'Таймер сна выключен. Нажмите — 15 минут'}
+      title="Таймер сна: каждое нажатие — следующий">{#if sleepText}{sleepText}{:else}<Icon name="moon" size={13} />{/if}</button>
     <!-- a bookmark on the paragraph heard now, in one tap -->
     <button class="icon-btn small-btn tts-mark" onclick={bookmarkHere} aria-label="Закладка на абзац, который звучит" title="Закладка на абзац, который звучит"><Icon name="bookmark" size={16} /></button>
   </div>
@@ -364,10 +362,6 @@
               </span>
             {/if}
           </div>
-          <!-- the sleep timer: reading stops by itself (the minutes left — by the progress line) -->
-          <UiSelect class="tts-list-row" label="Таймер сна" title="Таймер сна"
-            value={sleepValue} onchange={chooseSleep}
-            options={sleepValue === 'on' ? [{ value: 'on', label: `Осталось ${sleepLeft} мин` }, { value: '', label: 'Выключить' }, ...SLEEP.slice(1)] : SLEEP} />
           {#if recording}
             <button class="tts-list-row" onclick={() => (playlistOpen = true)}>
               <span class="tts-label">Плейлист</span>
