@@ -1,7 +1,9 @@
 <script>
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { tasks, loadTasks, createTask, patchTask, patchSubtask, orderTasks, placeLabel, openTaskMessage, taskTags, tagCounts, localTaskId } from '../lib/tasks.svelte.js';
+  import { tasks, loadTasks, createTask, patchTask, patchSubtask, deleteTask, orderTasks, placeLabel, openTaskMessage, taskTags, tagCounts, localTaskId } from '../lib/tasks.svelte.js';
+  import { swipeRow } from '../lib/swipe.js';
+  import { showToast } from '../lib/toast.svelte.js';
   import { titleTags, titleParts } from '../../../shared/tasktags.js';
   import { navigate, route, lastPath } from '../lib/router.svelte.js';
   import Icon from './Icon.svelte';
@@ -75,7 +77,7 @@
   }
   // Manual order (drag and drop); importance shows by the red circle, as in the reference.
   const byOrder = (/** @type {Task} */ a, /** @type {Task} */ b) => a.pos - b.pos || b.id - a.id;
-  const shown = $derived(tasks.items.filter(matches));
+  const shown = $derived(tasks.items.filter((t) => !leaving.has(t.id) && matches(t)));
   const active = $derived(shown.filter((t) => t.status !== 'done').sort(byOrder));
   const done = $derived(shown.filter((t) => t.status === 'done').sort((a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? '')));
 
@@ -145,6 +147,21 @@
   let adding = $state(false);
   /** @param {Task} t */
   const toggleDone = (t) => patchTask(t.id, { status: t.status === 'done' ? 'todo' : 'done' });
+
+  // ---- A row swiped aside (a phone): to the right — done (or back to work), to the left — deleted ----
+  // The deleted row goes at once; the task itself a few seconds later, unless «Вернуть» was pressed —
+  // nothing has to be made again (its subtasks, its place, its message stay as they were).
+  const leaving = new SvelteSet();
+  /** @param {Task} t */
+  function removeSoon(t) {
+    leaving.add(t.id);
+    showToast('Задача удалена', { label: 'Вернуть', run: () => leaving.delete(t.id) });
+    setTimeout(() => {
+      if (!leaving.has(t.id)) return;
+      leaving.delete(t.id);
+      void deleteTask(t.id);
+    }, 6500);
+  }
 
   // ---- List: drag to reorder ----
   let dragRow = $state(/** @type {{ id: number, group: string } | null} */ (null));
@@ -231,6 +248,8 @@
   <!-- (a row is focused on purpose: Alt+arrows move it in the list — a keyboard reorder) -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <li class="task-row" class:is-done={t.status === 'done'} id="task-{t.id}" tabindex={group !== null ? 0 : -1}
+    use:swipeRow={{ onright: () => toggleDone(t), onleft: () => removeSoon(t) }}
+    data-swipe-right={t.status === 'done' ? 'Вернуть' : 'Готово'}
     class:dragging={dragRow?.id === t.id} class:drop-before={group !== null && overRow === `${group}:${t.id}`}
     draggable={group !== null}
     ondragstart={(e) => group !== null && ((dragRow = { id: t.id, group }), e.dataTransfer?.setData('text/plain', String(t.id)))}

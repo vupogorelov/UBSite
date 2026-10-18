@@ -7730,6 +7730,48 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .task-row.is-done {
   background: none;
 }
+/* A row swiped aside (a phone, lib/swipe.js swipeRow): it follows the finger; behind it, on the side it
+   leaves, what the swipe will do — «Готово» (green) to the right, «Удалить» (red) to the left — bright
+   once far enough. */
+.task-list {
+  overflow-x: clip;
+}
+.task-row.swipe-r,
+.task-row.swipe-l {
+  transform: translateX(var(--swipe-x, 0px));
+}
+.task-row.swipe-back {
+  transition: transform 0.2s ease;
+}
+.task-row.swipe-r::before,
+.task-row.swipe-l::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  width: 60vw;
+  padding: 0 var(--space-4);
+  border-radius: 18px;
+  color: #fff;
+  font: 600 14px/20px var(--sans);
+  opacity: 0.55;
+}
+.task-row.swipe-r::before {
+  content: attr(data-swipe-right);
+  right: calc(100% + 6px);
+  justify-content: flex-end;
+  background: #15803d;
+}
+.task-row.swipe-l::after {
+  content: 'Удалить';
+  left: calc(100% + 6px);
+  background: #b42318;
+}
+.task-row.swipe-ready::before,
+.task-row.swipe-ready::after {
+  opacity: 1;
+}
 .task-circle {
   width: 22px;
   height: 22px;

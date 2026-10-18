@@ -117,6 +117,82 @@ export function swipeReply(node, onreply) {
 }
 
 /**
+ * A row swiped aside does a thing, as in a task list (Todoist, Reminders): to the right one (done), to
+ * the left another (delete). The row follows the finger — `--swipe-x` (px, signed) for the CSS, the class
+ * `swipe-r` / `swipe-l` by the side, `swipe-ready` past the threshold (with a short vibration); released
+ * past it — the thing is done, otherwise it springs back. Not from the screen's edges (the system's
+ * "back"), not in fields; a vertical stroke stays a scroll, a tap stays a tap.
+ * @param {HTMLElement} node @param {{ onright?: () => void, onleft?: () => void }} opts
+ */
+export function swipeRow(node, opts) {
+  let o = opts;
+  const EDGE = 28, AT = 96;
+  let x0 = 0, y0 = 0, d = 0;
+  /** @type {boolean | null} null — not decided yet */
+  let mine = null;
+  const set = (/** @type {number} */ x) => {
+    node.style.setProperty('--swipe-x', `${x}px`);
+    node.classList.toggle('swipe-r', x > 0);
+    node.classList.toggle('swipe-l', x < 0);
+    node.classList.toggle('swipe-ready', Math.abs(x) >= AT);
+  };
+  /** @param {TouchEvent} e */
+  function start(e) {
+    const t = e.touches[0];
+    mine = e.touches.length === 1 && t.clientX > EDGE && t.clientX < innerWidth - EDGE
+      && !(/** @type {HTMLElement} */ (e.target).closest('input, textarea, select')) ? null : false;
+    x0 = t.clientX;
+    y0 = t.clientY;
+    d = 0;
+    node.classList.remove('swipe-back');
+  }
+  /** @param {TouchEvent} e */
+  function move(e) {
+    if (mine === false) return;
+    const dx = e.touches[0].clientX - x0;
+    const dy = e.touches[0].clientY - y0;
+    if (mine === null) {
+      if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+      mine = Math.abs(dx) > Math.abs(dy) * 1.5 && (dx > 0 ? !!o.onright : !!o.onleft);
+      if (!mine) return;
+    }
+    e.preventDefault();
+    const was = Math.abs(d);
+    d = dx > 0 ? Math.max(0, dx - 12) : Math.min(0, dx + 12);
+    if (!o.onright) d = Math.min(0, d);
+    if (!o.onleft) d = Math.max(0, d);
+    if (was < AT && Math.abs(d) >= AT) navigator.vibrate?.(10);
+    set(d);
+  }
+  /** @param {TouchEvent} e */
+  function end(e) {
+    if (!mine) return;
+    mine = null;
+    // (a stroke the system broke off — a call, a gesture of its own — does nothing)
+    const done = e.type === 'touchend' && Math.abs(d) >= AT ? (d > 0 ? o.onright : o.onleft) : null;
+    node.classList.add('swipe-back'); // springs back (or the row goes: done, removed)
+    set(0);
+    done?.();
+  }
+  node.addEventListener('touchstart', start, { passive: true });
+  node.addEventListener('touchmove', move, { passive: false });
+  node.addEventListener('touchend', end);
+  node.addEventListener('touchcancel', end);
+  return {
+    /** @param {{ onright?: () => void, onleft?: () => void }} next */
+    update(next) {
+      o = next;
+    },
+    destroy() {
+      node.removeEventListener('touchstart', start);
+      node.removeEventListener('touchmove', move);
+      node.removeEventListener('touchend', end);
+      node.removeEventListener('touchcancel', end);
+    },
+  };
+}
+
+/**
  * @typedef {{ dirs: ('down' | 'right' | 'left')[], onclose: () => void }} SwipeOptions
  * @param {HTMLElement} node @param {SwipeOptions} opts
  */
