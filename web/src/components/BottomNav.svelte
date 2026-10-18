@@ -2,6 +2,7 @@
   import { ui, setTab } from '../lib/ui.svelte.js';
   import { route, navigate, lastPath, onBack } from '../lib/router.svelte.js';
   import { swipeClose } from '../lib/swipe.js';
+  import { longPress } from '../lib/longpress.js';
   import { notify } from '../lib/notify.svelte.js';
   import { session, switchWorkspace } from '../lib/session.svelte.js';
   import { pwa, install } from '../lib/pwa.svelte.js';
@@ -119,6 +120,14 @@
     else if (id === 'tasks') ((ui.sidebarOpen = false), navigate('/tasks'));
     else if (id === 'dictionary') ((ui.sidebarOpen = false), navigate('/d'));
   }
+  /**
+   * A held button asks the reader for the paragraph read now: a bookmark on it, or a note to it.
+   * @param {'bookmark' | 'note'} what
+   */
+  function here(what) {
+    if (!bookRoute) return showToast('Откройте книгу — закладка и заметка ставятся к абзацу на экране');
+    window.dispatchEvent(new CustomEvent('ub-here', { detail: what }));
+  }
   /** @param {() => void} fn */
   const fromMore = (fn) => () => {
     more = false;
@@ -127,14 +136,16 @@
 </script>
 
 <nav class="bottom-nav" aria-label="Разделы">
-  <button class:active={current === 'book'} onclick={book} aria-label="Книга: чтение и оглавление">
+  <!-- held: «Книга» — a bookmark on the paragraph read; «Слушать» — a note to it (the reader does it) -->
+  <button class:active={current === 'book'} onclick={book} aria-label="Книга: чтение и оглавление" use:longPress={session.user ? () => here('bookmark') : undefined}>
     <Icon name="book-open" size={24} /><span>Книга</span>
   </button>
   {#each bar as id (id)}
     {@const sec = info(id)}
     {@const n = badge(id)}
     {#if id === 'listen'}
-      <button class:active={tts.open} onclick={listen} aria-pressed={tts.open} aria-label={tts.open ? 'Слушать: закрыть плеер' : 'Слушать: читать вслух'}>
+      <button class:active={tts.open} onclick={listen} aria-pressed={tts.open} aria-label={tts.open ? 'Слушать: закрыть плеер' : 'Слушать: читать вслух'}
+        use:longPress={session.user ? () => here('note') : undefined}>
         <span class="bn-icon"><Icon name="headphones" size={24} />{#if tts.playing}<span class="bn-dot"></span>{/if}</span>
         <span>Слушать</span>
       </button>

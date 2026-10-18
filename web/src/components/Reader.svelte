@@ -13,7 +13,7 @@
   import { showToast } from '../lib/toast.svelte.js';
   import { partName, paperLabel, sectionLabel, plural } from '../lib/format.js';
   import { search, stepHit, currentHit, clearSearch } from '../lib/search.svelte.js';
-  import { notes, loadPaperNotes, hasThread } from '../lib/notes.svelte.js';
+  import { notes, loadPaperNotes, hasThread, createNote, patchNote, deleteNote } from '../lib/notes.svelte.js';
   import { NOTE_COLORS } from '../../../shared/settings.js';
   import { setHighlights, clearHighlights, setRanges, anchorRange, textElement, textOffset, textElOf, caretAt } from '../lib/highlight.js';
   import { createTermPairs } from '../lib/termpairs.svelte.js';
@@ -561,6 +561,45 @@
     termPairs.move(e);
     if (!device.touch) dictHints.move(e); // (a tap moves "the mouse" too: there the sheet opens instead)
   }
+
+  // ---- The bottom bar's buttons held (a phone): a bookmark on the paragraph read, or a note to it ----
+  $effect(() => {
+    /** @param {Event} e */
+    const onHere = (e) => {
+      const first = article && scroller ? firstParagraph(article, scroller, device.mobile ? 64 : 8) : null;
+      if (!first) return;
+      const ref = first.ref;
+      const anchor = { ref, lang: null, start: null, end: null, quote: null };
+      const had = paperNotes.find((n) => n.ref === ref && n.lang === null);
+      flashRef = null;
+      void tick().then(() => {
+        flashRef = ref; // (where it went)
+        setTimeout(() => flashRef === ref && (flashRef = null), 2000);
+      });
+      if (/** @type {CustomEvent} */ (e).detail === 'note') {
+        // as «Комментарий» in the paragraph's menu: its conversation, or a new note's first words
+        notes.activeId = had?.id ?? null;
+        if (!had?.comments.length) notes.draft = { ...anchor, noteId: had?.id ?? null };
+        return;
+      }
+      if (had?.bookmark) return showToast(`Закладка уже есть · ${ref}`);
+      if (had) void patchNote(had.id, { bookmark: true });
+      else void createNote(anchor, { bookmark: true });
+      // «Отменить»: the note as it is by then (its number may have come from the server meanwhile) — a
+      // note made just for the bookmark goes, one that had more keeps it
+      showToast(`Закладка · ${ref}`, {
+        label: 'Отменить',
+        run: () => {
+          const n = paperNotes.find((x) => x.ref === ref && x.lang === null);
+          if (!n) return;
+          if (had) void patchNote(n.id, { bookmark: false });
+          else void deleteNote(n.id);
+        },
+      });
+    };
+    window.addEventListener('ub-here', onHere);
+    return () => window.removeEventListener('ub-here', onHere);
+  });
 
   /** The smallest note under the mouse pointer. @param {number} x @param {number} y */
   function noteAt(x, y) {
