@@ -8760,6 +8760,15 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .search-tools .ui-round.on {
   color: var(--text);
 }
+/* the way to search: three chips under the field */
+.search-modes {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: var(--space-2);
+}
+.search-note {
+  margin: 0 0 var(--space-2);
+}
 /* the syntax in a line, while the field has the focus */
 .search-tip {
   display: flex;

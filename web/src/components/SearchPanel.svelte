@@ -4,8 +4,17 @@
   import { onMount } from 'svelte';
   import {
     search, library, runSearch, loadMore, clearSearch, withFilter, filterValue,
-    loadLibrary, saveQuery, updateQuery, deleteQuery, clearHistory,
+    loadLibrary, saveQuery, updateQuery, deleteQuery, clearHistory, setSearchMode,
   } from '../lib/search.svelte.js';
+  import { settings } from '../lib/settings.svelte.js';
+
+  /** @type {[import('../lib/search.svelte.js').SearchMode, string, string][]} */
+  const MODES = [
+    ['words', 'По словам', 'Слова в любых формах, фразы, правила запроса (?). Работает и без сети'],
+    ['meaning', 'По смыслу', 'Абзацы о том же, даже другими словами (нужна сеть)'],
+    ['hybrid', 'Гибридный', 'Сначала ближайшее по смыслу, затем — где есть ваши слова (нужна сеть)'],
+  ];
+  const mode = $derived(settings.searchMode ?? 'words');
   import { linkClick, route, view } from '../lib/router.svelte.js';
   import { partLabel, plural } from '../lib/format.js';
   import Icon from './Icon.svelte';
@@ -97,7 +106,7 @@
       <input
         bind:this={input}
         bind:value={search.input}
-        placeholder="Слова, &quot;фраза&quot;, /regex/…"
+        placeholder={mode === 'words' ? 'Слова, "фраза", /regex/…' : 'Вопрос своими словами…'}
         aria-label="Поисковый запрос"
         spellcheck="false"
         autocomplete="off"
@@ -110,6 +119,13 @@
         </button>
       {/if}
     </div>
+    <!-- the way to search: by the words (also without a network), by meaning (the model), both -->
+    <div class="ui-chips search-modes" role="radiogroup" aria-label="Как искать">
+      {#each MODES as [id, label, hint] (id)}
+        <button type="button" class="ui-chip" class:on={mode === id} role="radio" aria-checked={mode === id} title={hint}
+          onclick={() => setSearchMode(id)}>{label}</button>
+      {/each}
+    </div>
     <div class="search-tools">
       <button type="submit" class="ui-btn primary search-go">Найти</button>
       <span class="spacer"></span>
@@ -121,7 +137,11 @@
       <button type="button" class="ui-round plain" class:on={panel === 'help'} title="Синтаксис запросов" aria-label="Синтаксис запросов"
         onclick={() => (panel = panel === 'help' ? 'none' : 'help')}><Icon name="help" /></button>
     </div>
-    {#if focused && panel !== 'help'}
+    {#if focused && panel !== 'help' && mode !== 'words'}
+      <p class="search-tip">{mode === 'meaning'
+        ? 'Найдутся абзацы о том же, даже другими словами: «что ждёт детей после смерти?»'
+        : 'Сначала — ближайшее по смыслу, затем и то, где есть ваши слова'}</p>
+    {:else if focused && panel !== 'help'}
       <!-- the syntax in a line while typing; the whole of it under «?» -->
       <p class="search-tip">
         <code>"фраза"</code> <code>настрой*</code> <code>-слово</code> <code>сын | дух</code> <code>часть:1</code>
@@ -219,8 +239,10 @@
 
   {#if search.query}
     <div class="search-summary">
-      <span>{search.total.toLocaleString('ru')} {plural(search.total, 'абзац', 'абзаца', 'абзацев')}</span>
+      <span>{search.total.toLocaleString('ru')} {plural(search.total, 'абзац', 'абзаца', 'абзацев')}{search.mode === 'meaning'
+        ? ', ближайшие по смыслу' : search.mode === 'hybrid' ? ' — по смыслу и по словам' : ''}</span>
     </div>
+    {#if search.note}<div class="muted small search-note">{search.note}</div>{/if}
     <div class="ui-chips facets">
       {#each Object.entries(search.facets) as [part, count] (part)}
         <button class="ui-chip facet" class:on={activePart === part} onclick={() => togglePart(part)}

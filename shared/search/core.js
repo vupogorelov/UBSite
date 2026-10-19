@@ -186,6 +186,17 @@ export function createSearchCore(paras, wordFilter) {
   }
 
   const bySeq = new Map(paras.map((p) => [p.seq, p]));
+  const byRef = new Map(paras.map((p) => [p.ref, p]));
+  /** A result: where, and its text around the first mark. @param {Para} p @param {{ ru: [number, number][], en: [number, number][] }} hl */
+  const card = (p, hl) => ({
+    ref: p.ref,
+    paperId: p.paperId,
+    sectionNum: p.sectionNum,
+    paperTitle: p.paperTitle,
+    sectionTitle: p.sectionTitle,
+    ru: snippet(p.ru, hl.ru),
+    en: snippet(p.en, hl.en),
+  });
 
   return {
     /** @param {string} text @param {number} offset @param {number} limit @param {SearchContext} ctx */
@@ -193,16 +204,7 @@ export function createSearchCore(paras, wordFilter) {
       const { query, seqs, facets } = run(text, ctx);
       const results = seqs.slice(offset, offset + limit).map((seq) => {
         const p = /** @type {Para} */ (bySeq.get(seq));
-        const hl = highlightRanges(query, p);
-        return {
-          ref: p.ref,
-          paperId: p.paperId,
-          sectionNum: p.sectionNum,
-          paperTitle: p.paperTitle,
-          sectionTitle: p.sectionTitle,
-          ru: snippet(p.ru, hl.ru),
-          en: snippet(p.en, hl.en),
-        };
+        return card(p, highlightRanges(query, p));
       });
       return {
         total: seqs.length,
@@ -210,6 +212,40 @@ export function createSearchCore(paras, wordFilter) {
         // All matching refs (book order) for the reader's previous/next navigation.
         refs: offset === 0 ? seqs.map((s) => /** @type {Para} */ (bySeq.get(s)).ref) : undefined,
         results,
+      };
+    },
+
+    /**
+     * Paragraphs found another way (by meaning; best first) as the search's results, in their order: the
+     * query's filters of place apply (part, paper, section; the part counts as the words' do), its words are
+     * marked where `mark` (the hybrid search: what the words found shows why). The first `keep` of the place
+     * are the results (and the most a part counts).
+     * @param {string} text @param {string[]} refs @param {number} keep @param {number} offset @param {number} limit @param {boolean} mark
+     */
+    cards(text, refs, keep, offset, limit, mark) {
+      /** @type {Query | null} */
+      let query = null;
+      try {
+        query = parseQuery(text.trim());
+      } catch {} // (a question by meaning need not be a query of the words)
+      const q = query;
+      const found = /** @type {Para[]} */ (refs.map((r) => byRef.get(r)).filter(Boolean)).filter(
+        (p) =>
+          !q ||
+          ((!q.papers || q.papers.some(([a, b]) => p.paperId >= a && p.paperId <= b)) &&
+            (!q.sections || q.sections.some((s) => p.paperId === s.paper && p.sectionNum >= s.from && p.sectionNum <= s.to))),
+      );
+      /** @type {Record<number, number>} */
+      const facets = {};
+      for (const p of found) facets[p.partId] = Math.min(keep, (facets[p.partId] ?? 0) + 1);
+      const parts = q?.parts;
+      const list = (parts ? found.filter((p) => parts.has(p.partId)) : found).slice(0, keep);
+      const none = { ru: [], en: [] };
+      return {
+        total: list.length,
+        facets,
+        refs: offset === 0 ? [...list].sort((a, b) => a.seq - b.seq).map((p) => p.ref) : undefined,
+        results: list.slice(offset, offset + limit).map((p) => card(p, mark && q ? highlightRanges(q, p) : none)),
       };
     },
 

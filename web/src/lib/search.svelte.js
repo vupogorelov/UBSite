@@ -1,7 +1,7 @@
 // @ts-check
 import { api } from './api.js';
 import { navigate, parsePath } from './router.svelte.js';
-import { settings } from './settings.svelte.js';
+import { settings, setSetting } from './settings.svelte.js';
 import { aliases } from './aliases.svelte.js';
 import { unalias } from '../../../shared/aliases.js';
 
@@ -21,7 +21,20 @@ export const search = $state({
   refs: [],
   loading: false,
   error: '',
+  /** @type {SearchMode} how the shown results were found */
+  mode: 'words',
+  /** Why they are by the words though another way was chosen (no network…). */
+  note: '',
 });
+
+/** @typedef {'words' | 'meaning' | 'hybrid'} SearchMode */
+
+/** The way chosen above the field: kept in the settings; the shown query is searched again. @param {SearchMode} mode */
+export function setSearchMode(mode) {
+  if (settings.searchMode === mode) return;
+  setSetting('searchMode', mode);
+  if (search.query) runSearch(search.query, { record: false });
+}
 
 export const library = $state({
   /** @type {import('./api.js').SavedQuery[]} */ saved: [],
@@ -39,13 +52,26 @@ export async function runSearch(text, opts = {}) {
   search.loading = true;
   try {
     // "Названия по смыслу": a query for "Спасоград" looks for "Салвингтон", as the text has it
-    const d = await api.search(settings.altNames && aliases.list.length ? unalias(q, aliases.list) : q, 0);
+    const text = settings.altNames && aliases.list.length ? unalias(q, aliases.list) : q;
+    /** @type {SearchMode} */
+    let mode = settings.searchMode ?? 'words';
+    let note = '';
+    let d;
+    try {
+      d = await api.search(text, 0, mode);
+    } catch (err) {
+      // by meaning — only with the server's model: without it, the words (on the device too)
+      if (mode === 'words' || /** @type {any} */ (err).status === 400) throw err;
+      note = /** @type {any} */ (err).status ? `${/** @type {Error} */ (err).message} — показан поиск по словам` : 'Без связи с сервером — поиск по словам';
+      mode = 'words';
+      d = await api.search(text, 0);
+    }
     if (my !== token) return;
-    Object.assign(search, { query: q, total: d.total, facets: d.facets, results: d.results, refs: d.refs ?? [], error: '' });
+    Object.assign(search, { query: q, total: d.total, facets: d.facets, results: d.results, refs: d.refs ?? [], error: '', mode, note });
     if (opts.record !== false) api.addHistory(q).then(loadLibrary, () => {});
   } catch (err) {
     if (my !== token) return;
-    Object.assign(search, { query: '', total: 0, facets: {}, results: [], refs: [], error: /** @type {Error} */ (err).message });
+    Object.assign(search, { query: '', total: 0, facets: {}, results: [], refs: [], note: '', error: /** @type {Error} */ (err).message });
   } finally {
     if (my === token) search.loading = false;
   }
@@ -56,7 +82,7 @@ export async function loadMore() {
   const my = token;
   search.loading = true;
   try {
-    const d = await api.search(search.query, search.results.length);
+    const d = await api.search(search.query, search.results.length, search.mode);
     if (my === token) search.results.push(...d.results);
   } finally {
     if (my === token) search.loading = false;
@@ -65,7 +91,7 @@ export async function loadMore() {
 
 export function clearSearch() {
   token++;
-  Object.assign(search, { input: '', query: '', total: 0, facets: {}, results: [], refs: [], loading: false, error: '' });
+  Object.assign(search, { input: '', query: '', total: 0, facets: {}, results: [], refs: [], loading: false, error: '', note: '' });
 }
 
 /**

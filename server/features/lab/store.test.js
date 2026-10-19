@@ -79,6 +79,12 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
     assert.deepEqual(todo?.items.map((x) => x.ref), ['47:2.8'], 'left to judge: each paragraph once, the judged ones not');
     assert.ok((todo?.items[0].by.length ?? 0) >= 2, 'found by several columns — shown once, with each place');
 
+    // the platform's search: by meaning — the model's closest; the hybrid — its first two, then the words' too
+    assert.deepEqual(await lab.find('что с детьми после смерти', 'meaning', 1, () => []), ['47:2.7']);
+    const hybrid = (await lab.find('что с детьми после смерти', 'hybrid', 3, () => [{ ref: '47:2.9' }])) ?? [];
+    assert.equal(hybrid[0], '47:2.7');
+    assert.ok(hybrid.includes('47:2.9'), 'what the words found joins in');
+
     // «Я и Книга»: by its model alone, kept as the column 'book' of the score
     assert.deepEqual(await lab.bookAnswer('что с детьми после смерти', 1), ['47:2.7']);
     assert.equal(lab.status().score.find((x) => x.col === 'book')?.top3, 1);

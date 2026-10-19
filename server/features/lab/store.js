@@ -427,6 +427,20 @@ export function createLab(db, engine, where, list = MODELS) {
       return refs;
     },
 
+    /**
+     * The platform's search by meaning (server/meaning.js), by the Book's model: `meaning` — its closest;
+     * `hybrid` — as the mixed column: its first two, then its list and the words' merged. Null — the model
+     * is not worked out yet. Nothing is kept (the Laboratory's score is of its own questions).
+     * @param {string} text @param {'meaning' | 'hybrid'} mode @param {number} n
+     * @param {(text: string, limit: number) => { ref: string }[]} byWords
+     */
+    async find(text, mode, n, byWords) {
+      const m = list.find((x) => x.book);
+      if (!m || !/** @type {{ n: number }} */ (q.done.get(m.id)).n || !engine.installed()) return null;
+      const model = (await closest(m, text, Math.max(n, DEEP))).map((x) => x.ref);
+      return (mode === 'hybrid' ? mix(model, byWords(text, DEEP).map((p) => p.ref)) : model).slice(0, n);
+    },
+
     /** The judgement of a paragraph for a question: true, false, or null — not judged. @param {string} question @param {string} ref */
     judgedFor(question, ref) {
       const j = /** @type {any[]} */ (q.judgedOf.all(question.trim())).find((x) => x.ref === ref);

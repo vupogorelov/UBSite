@@ -20,6 +20,7 @@ import { createGlossary } from './glossary.js';
 import { createTermIndex } from './terms.js';
 import { createChat } from './chat.js';
 import { createBookVoice } from './bookvoice.js';
+import { createMeaning } from './meaning.js';
 import { createMailer } from './mail.js';
 
 /** @typedef {(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse, path: string) => boolean} Interceptor */
@@ -60,6 +61,8 @@ export function createCore(db) {
     terms: createTermIndex(db, glossary),
     tags: createTagStore(db),
     voice: createBookVoice(db, auth, chat),
+    /** The search by meaning (server/meaning.js): the Laboratory's model joins in. */
+    meaning: createMeaning(),
     mailer: createMailer(),
 
     // ---- how a feature joins in ----

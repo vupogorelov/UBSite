@@ -7,7 +7,8 @@ const TIMEOUT_MS = Number(process.env.UB_SEARCH_TIMEOUT_MS ?? 3000);
 
 /**
  * @typedef {{ op: 'search', text: string, offset: number, limit: number, ws: number }
- *   | { op: 'highlights', text: string, paper: number, ws: number }} SearchRequest
+ *   | { op: 'highlights', text: string, paper: number, ws: number }
+ *   | { op: 'cards', text: string, refs: string[], keep: number, offset: number, limit: number, mark: boolean, ws: number }} SearchRequest
  * @typedef {{ msg: SearchRequest, resolve: (v: any) => void, reject: (e: Error) => void }} Job
  */
 

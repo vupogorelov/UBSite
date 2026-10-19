@@ -222,7 +222,8 @@
 
   // Search matches in the open paper; re-applied when the text re-renders (e.g. English mode).
   $effect(() => {
-    const q = search.query;
+    // (by meaning: nothing to mark — the words are not what was found)
+    const q = search.mode === 'meaning' ? '' : search.query;
     const paperId = data?.paper.id;
     void enMode, substituted; // re-rendered paragraphs invalidate earlier ranges
     if (!q || paperId === undefined) {

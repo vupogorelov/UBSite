@@ -14,14 +14,18 @@ const tags = createTagStore(db);
 
 /**
  * @typedef {{ id: number, op: 'search', text: string, offset: number, limit: number, ws: number }
- *   | { id: number, op: 'highlights', text: string, paper: number, ws: number }} Request
+ *   | { id: number, op: 'highlights', text: string, paper: number, ws: number }
+ *   | { id: number, op: 'cards', text: string, refs: string[], keep: number, offset: number, limit: number, mark: boolean, ws: number }} Request
+ * (cards: paragraphs found by meaning, as results — see the search core)
  */
 
 port.on('message', (/** @type {Request} */ msg) => {
   const ctx = { tagRefs: (/** @type {string} */ name) => tags.refsWith(msg.ws, name) };
   try {
     const result =
-      msg.op === 'search' ? engine.search(msg.text, msg.offset, msg.limit, ctx) : engine.highlights(msg.text, msg.paper, ctx);
+      msg.op === 'search' ? engine.search(msg.text, msg.offset, msg.limit, ctx)
+      : msg.op === 'cards' ? engine.cards(msg.text, msg.refs, msg.keep, msg.offset, msg.limit, msg.mark)
+      : engine.highlights(msg.text, msg.paper, ctx);
     port.postMessage({ id: msg.id, result });
   } catch (err) {
     const e = /** @type {Error} */ (err);

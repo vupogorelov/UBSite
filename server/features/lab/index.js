@@ -3,7 +3,8 @@
 // meaning — models turn the book's paragraphs and a question into vectors; the closest paragraphs are
 // compared with the word search. Nobody else sees it, and it holds nobody up: the model works in a
 // process of its own at a lower priority (engine-client.js), its vectors are in a file of their own
-// (data/lab.db). Gone with this folder, that file and data/models.
+// (data/lab.db). The model chosen answers the platform's search by meaning and the hybrid one, for everyone
+// (server/meaning.js). Gone with this folder, that file and data/models: the search is by the words then.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { HttpError, readJson } from '../../http.js';
@@ -70,6 +71,8 @@ export default {
       if (!core.auth.userById(ownerId)?.isAdmin) return null;
       return open().bookAnswer(text, limit);
     });
+    // ---- the search by meaning and the hybrid one, for everyone (the search's modes; server/meaning.js) ----
+    core.meaning.use((text, mode, limit) => open().find(text, mode, limit, (t, l) => core.voice.find(t, l)));
     const q = {
       message: core.db.prepare(`SELECT m.id, m.ref AS chat, m.anchor_ref AS ref, u.is_agent AS agent
         FROM public_messages m LEFT JOIN users u ON u.id = m.author_id WHERE m.id = ?`),

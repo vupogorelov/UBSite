@@ -220,9 +220,14 @@ export const api = {
   /** @param {Partial<Settings>} patch @returns {Promise<Settings>} */
   saveSettings: (patch) => request('PUT', `/api/workspaces/${current.ws}/settings`, patch),
 
-  /** @param {string} q @param {number} offset @returns {Promise<SearchResponse>} */
-  search: (q, offset) =>
-    orOnDevice(() => request('GET', `/api/search?ws=${current.ws}&q=${encodeURIComponent(q)}&offset=${offset}&limit=50`), { op: 'search', text: q, offset, limit: 50 }),
+  /**
+   * By the words — on the device too without a network; by meaning and the hybrid one — the server's model only.
+   * @param {string} q @param {number} offset @param {'words' | 'meaning' | 'hybrid'} [mode] @returns {Promise<SearchResponse>}
+   */
+  search: (q, offset, mode = 'words') =>
+    mode === 'words'
+      ? orOnDevice(() => request('GET', `/api/search?ws=${current.ws}&q=${encodeURIComponent(q)}&offset=${offset}&limit=50`), { op: 'search', text: q, offset, limit: 50 })
+      : request('GET', `/api/search?ws=${current.ws}&q=${encodeURIComponent(q)}&offset=${offset}&limit=50&mode=${mode}`),
   /** @param {string} q @param {number} paper @returns {Promise<Highlights>} */
   highlights: (q, paper) =>
     orOnDevice(() => request('GET', `/api/search/highlights?ws=${current.ws}&q=${encodeURIComponent(q)}&paper=${paper}`), { op: 'highlights', text: q, paper }),

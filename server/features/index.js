@@ -87,7 +87,7 @@ export const FEATURES = [
     },
   },
   { name: 'workspaces', setup: (c) => registerWorkspaceRoutes(c.router, c.db, c.auth) },
-  { name: 'search', setup: (c) => registerSearchRoutes(c.router, c.auth) },
+  { name: 'search', setup: (c) => registerSearchRoutes(c.router, c.auth, c.meaning) },
   { name: 'notes', setup: (c) => registerAnnotationRoutes(c.router, c.db, c.tags, c.auth, c.chat) },
   { name: 'collections', setup: (c) => registerCollectionRoutes(c.router, c.db, c.auth, c.chat) },
   {
