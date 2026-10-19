@@ -11,8 +11,10 @@ import { request } from '../../lib/api.js';
  * good, bad, open: of the paragraphs its columns answered — judged answering, not, not yet judged
  * @typedef {{ col: string, asked: number, good: number, bad: number, open: number, top3: number, answered: number }} Score
  * a column's score over the questions it was asked: hits, misses, not judged; questions with a hit among its first three, at all
- * @typedef {{ id: string, title: string, size: string, downloaded: boolean, answered: number, of: number, good: number, bad: number, ms: number, running: boolean, progress: { done: number, of: number } | null, error: string | null }} Writer
- * a writing model: how many saved questions it answered (of), judged true (good) or not (bad), its mean time
+ * @typedef {{ id: string, title: string, size: string, downloaded: boolean, remote: boolean, ready: boolean, answered: number, of: number, good: number, bad: number, ms: number, running: boolean, progress: { done: number, of: number } | null, error: string | null }} Writer
+ * a writing model: how many saved questions it answered (of), judged true (good) or not (bad), its mean time;
+ * remote — through the application's AI connection (ready: it is connected)
+ * @typedef {{ provider: string, title: string, since: string }} AiConnection the application's AI: which service, since when
  * @typedef {{ question: string, refs: string[], answers: Record<string, { text: string, ms: number, tokens: number, good: boolean | null }> }} Reply
  * the written answers to a saved question: the paragraphs they were made from, each model's
  * @typedef {{ installed: boolean, engineRunning: boolean, settings: Settings, models: Model[], questions: Question[], score: Score[], writers: Writer[] }} Status
@@ -56,4 +58,9 @@ export const labApi = {
   replies: () => request('GET', '/api/lab/replies'),
   /** @param {{ question: string, model: string, good: boolean | null }} b @returns {Promise<Status>} */
   judgeReply: (b) => request('POST', '/api/lab/replies/judged', b),
+  /** The application's AI connection (server/ai.js), or null. @returns {Promise<AiConnection | null>} */
+  aiApp: () => request('GET', '/api/ai/app'),
+  /** The service's sign-in page to open (it comes back to `back`). @param {string} provider @param {string} back @returns {Promise<{ url: string }>} */
+  connectAi: (provider, back) => request('POST', '/api/ai/app/connect', { provider, back }),
+  disconnectAi: () => request('DELETE', '/api/ai/app'),
 };

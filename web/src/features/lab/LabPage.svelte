@@ -29,6 +29,34 @@
     return () => clearInterval(t);
   });
 
+  // ---- The application's AI: a service connected by a sign-in in the browser (OAuth); the remote models answer through it ----
+  let ai = $state(/** @type {import('./api.js').AiConnection | null | undefined} */ (undefined));
+  const loadAi = () => labApi.aiApp().then((a) => (ai = a), () => (ai = null));
+  loadAi();
+  {
+    // back from the service's sign-in: ?ai=connected, or why not
+    const back = new URLSearchParams(location.search).get('ai');
+    if (back) {
+      showToast(back === 'connected' ? 'Нейросеть подключена' : back);
+      history.replaceState(history.state, '', location.pathname);
+    }
+  }
+  async function connectAi() {
+    try {
+      location.href = (await labApi.connectAi('openrouter', '/lab')).url;
+    } catch (e) {
+      showToast(/** @type {Error} */ (e).message);
+    }
+  }
+  async function disconnectAi() {
+    try {
+      await labApi.disconnectAi();
+      await Promise.all([loadAi(), load()]);
+    } catch (e) {
+      showToast(/** @type {Error} */ (e).message);
+    }
+  }
+
   // ---- The Book's answers in its own words: the writing models, their answers to the saved questions ----
   let replies = $state(/** @type {import('./api.js').Reply[] | null} */ (null));
   async function toggleReplies() {
@@ -269,6 +297,22 @@
       {#if status.writers.length}
         <!-- the Book's answers in its own words: each writing model answers the saved questions from the paragraphs found by meaning -->
         <div class="ui-label">Ответы своими словами</div>
+        <!-- the application's AI: the remote models answer through it (the shared answers of the day, later) -->
+        <ul class="ui-cards">
+          <li class="ui-card lab-model">
+            <span class="lab-model-text">
+              <b>Нейросеть приложения</b>
+              <span class="muted small">{ai === undefined ? 'Загрузка…' : ai
+                ? `${ai.title} · подключена ${new Date(`${ai.since.replace(' ', 'T')}Z`).toLocaleDateString('ru')}`
+                : 'Не подключена. Вход через браузер — аккаунт OpenRouter; его бесплатные модели отвечают за приложение'}</span>
+            </span>
+            {#if ai}
+              <button class="ui-chip" onclick={disconnectAi}>Отключить</button>
+            {:else if ai === null}
+              <button class="ui-chip on" onclick={connectAi}>Подключить</button>
+            {/if}
+          </li>
+        </ul>
         <ul class="ui-cards">
           {#each status.writers as w (w.id)}
             <li class="ui-card lab-model">
@@ -283,6 +327,8 @@
               </span>
               {#if w.running}
                 <button class="ui-chip" onclick={() => act(labApi.pauseWriting)}><Icon name="pause" size={14} />Пауза</button>
+              {:else if !w.ready}
+                <button class="ui-chip" disabled title="Сначала подключите нейросеть приложения">Нет подключения</button>
               {:else if w.answered < w.of}
                 <button class="ui-chip" onclick={() => act(() => labApi.write(w.id))} disabled={!status.installed || status.writers.some((x) => x.running)}>
                   <Icon name="play" size={14} />{w.answered ? 'Дальше' : 'Ответить'}</button>

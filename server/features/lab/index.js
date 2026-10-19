@@ -29,7 +29,14 @@ export default {
     let lab = null;
     // opened when the Laboratory is first looked at: a server never looked at keeps no file of it
     // (the vectors: beside the database)
-    const open = () => (lab ??= createLab(core.db, createEngine(MODELS), { file: process.env.UB_LAB_DB ?? join(DATA, 'lab.db'), models: MODELS }));
+    const open = () =>
+      (lab ??= createLab(core.db, createEngine(MODELS), {
+        file: process.env.UB_LAB_DB ?? join(DATA, 'lab.db'),
+        models: MODELS,
+        // the remote writing models: through the application's AI connection (server/ai.js)
+        ai: (model, messages, max) => core.ai.chat('app', model, messages, { max }),
+        aiReady: () => !!core.ai.status('app'),
+      }));
     process.on('exit', () => lab?.close());
 
     const r = core.router;

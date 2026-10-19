@@ -19,6 +19,7 @@ import { registerNotificationRoutes } from '../api/notifications.js';
 import { registerBookRoutes } from '../api/book.js';
 import { registerWorkspaceRoutes } from '../api/workspaces.js';
 import { registerSearchRoutes } from '../api/search.js';
+import { registerAiRoutes } from '../api/ai.js';
 import { registerAnnotationRoutes } from '../api/annotations.js';
 import { registerCollectionRoutes } from '../api/collections.js';
 import { createMarkTasks } from '../marktasks.js';
@@ -88,6 +89,15 @@ export const FEATURES = [
   },
   { name: 'workspaces', setup: (c) => registerWorkspaceRoutes(c.router, c.db, c.auth) },
   { name: 'search', setup: (c) => registerSearchRoutes(c.router, c.auth, c.meaning) },
+  {
+    name: 'ai',
+    setup(c) {
+      registerAiRoutes(c.router, c.ai);
+      // the way back from a sign-in may come in a browser not signed in here (the phone's own): its one-time
+      // state is what admits it
+      c.guest(/^\/api\/ai\/callback\/[a-z]+$/);
+    },
+  },
   { name: 'notes', setup: (c) => registerAnnotationRoutes(c.router, c.db, c.tags, c.auth, c.chat) },
   { name: 'collections', setup: (c) => registerCollectionRoutes(c.router, c.db, c.auth, c.chat) },
   {

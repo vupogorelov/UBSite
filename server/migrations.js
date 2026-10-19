@@ -819,4 +819,14 @@ export const MIGRATIONS = [
   `
   UPDATE paragraphs SET html_ru = keep_numbers(html_ru) WHERE plain_ru GLOB '*[0-9] [0-9][0-9][0-9]*';
   `,
+  // 39: the AI's connections (server/ai.js): whose ('app' — the application's own, the shared answers; later
+  // 'user:<id>' — a reader's own), which service, its key — on the server only, never sent to a browser.
+  `
+  CREATE TABLE ai_keys (
+    owner      TEXT PRIMARY KEY,
+    provider   TEXT NOT NULL,
+    secret     TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  ) WITHOUT ROWID;
+  `,
 ];

@@ -50,10 +50,15 @@ export const MODELS = [
  * Chosen (2026-10-19, 17 questions): Gemma 4 E2B — true to the text in 14 of 17, ≈9 s an answer (two of its three
  * misses — the paragraphs found were not about it; the third — «not directly» where something close was there).
  * Tried and dropped: Gemma 4 E4B — 13 of 17, ≈17 s; Qwen3.5-4B — 13 of 17, ≈27 s.
- * @type {{ id: string, title: string, size: string, spec: import('./engine-client.js').Writer, book?: boolean }[]}
+ * `remote`: a model of a service reached through the application's AI connection (server/ai.js) — nothing on
+ * this server; its free ones (OpenRouter: ≈50 requests a day for the whole account).
+ * @typedef {{ id: string, title: string, size: string, book?: boolean } & ({ spec: import('./engine-client.js').Writer, remote?: undefined } | { remote: { model: string }, spec?: undefined })} WriterModel
+ * @type {WriterModel[]}
  */
 export const WRITERS = [
   { id: 'gemma4-e2b', title: 'Gemma 4 E2B (Google)', size: '≈3,9 ГБ', book: true, spec: { name: 'onnx-community/gemma-4-E2B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
+  { id: 'or-gemma4-31b', title: 'Gemma 4 31B (Google) · OpenRouter', size: 'удалённо', remote: { model: 'google/gemma-4-31b-it:free' } },
+  { id: 'or-nemotron-ultra', title: 'Nemotron 3 Ultra 550B (NVIDIA) · OpenRouter', size: 'удалённо', remote: { model: 'nvidia/nemotron-3-ultra-550b-a55b:free' } },
 ];
 /** How many paragraphs a written answer is made from (as many as «Я и Книга» answers with). */
 const FROM = 3;
@@ -101,7 +106,8 @@ const RRF = 60;
 /**
  * @param {DatabaseSync} db the platform's database (the paragraphs are read from it)
  * @param {ReturnType<typeof import('./engine-client.js').createEngine>} engine
- * @param {{ file: string, models: string }} where the lab's database file; the models' folder
+ * @param {{ file: string, models: string, ai?: (model: string, messages: { role: string, content: string }[], max: number) => Promise<{ text: string, tokens: number }>, aiReady?: () => boolean }} where
+ *   the lab's database file; the models' folder; the remote writing models' way (the application's AI connection) and whether it is connected
  * @param {typeof MODELS} [list] the models (a test's own)
  * @param {typeof WRITERS} [writers] the writing models (a test's own)
  */
@@ -193,8 +199,16 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
     return refs.map((ref) => ({ ref, text: /** @type {any} */ (q.paragraph.get(ref))[lang] }));
   };
   /** A writing model's answer to a question from the paragraphs. @param {typeof WRITERS[number]} w @param {string} question @param {string[]} refs */
-  const writeFrom = (w, question, refs) =>
-    serial(() => engine.write(w.spec, messagesFor(question, paragraphsFor(question, refs)), { threads: settings.threads, max: MAX_TOKENS }));
+  const writeFrom = (w, question, refs) => {
+    const messages = messagesFor(question, paragraphsFor(question, refs));
+    if (w.remote) {
+      // (a thinking model's thoughts count too: room for them)
+      if (!where.ai) throw new HttpError(409, 'Нейросеть приложения не подключена');
+      return where.ai(w.remote.model, messages, MAX_TOKENS * 4);
+    }
+    const spec = w.spec;
+    return serial(() => engine.write(spec, messages, { threads: settings.threads, max: MAX_TOKENS }));
+  };
 
   /** The spec as the engine is to run it now: on the video card when chosen and the model can. @param {typeof MODELS[number]} m @returns {Spec} */
   const specOf = (m) => (settings.gpu && gpuCapable(m) ? { ...m.spec, device: 'dml' } : m.spec);
@@ -352,7 +366,8 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
           const rows = /** @type {any[]} */ (q.replies.all()).filter((r) => r.model === w.id && saved.has(r.question));
           return {
             id: w.id, title: w.title, size: w.size,
-            downloaded: existsSync(`${where.models}/${w.spec.name}`),
+            downloaded: w.spec ? existsSync(`${where.models}/${w.spec.name}`) : true,
+            remote: !!w.remote, ready: w.remote ? !!where.aiReady?.() : true,
             answered: rows.length, of: saved.size,
             good: rows.filter((r) => r.good === 1).length, bad: rows.filter((r) => r.good === 0).length,
             ms: rows.length ? Math.round(rows.reduce((s, r) => s + r.ms, 0) / rows.length) : 0,
@@ -510,6 +525,7 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
       const w = writers.find((x) => x.id === id);
       if (!w) throw new HttpError(404, 'Нет такой модели');
       if (!engine.installed()) throw new HttpError(503, 'Движок модели не установлен (server/features/lab/engine: npm install)');
+      if (w.remote && !where.aiReady?.()) throw new HttpError(409, 'Сначала подключите нейросеть приложения');
       const book = list.find((x) => x.book);
       if (!book || !(/** @type {{ n: number }} */ (q.done.get(book.id)).n)) throw new HttpError(409, 'Сначала посчитайте модель поиска по смыслу');
       if (writing.model) throw new HttpError(409, 'Сейчас отвечает другая модель — дождитесь или поставьте на паузу');
@@ -531,7 +547,7 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
           writing.error[id] = /** @type {Error} */ (err).message;
         } finally {
           writing.model = null;
-          engine.release(w.spec.name);
+          if (w.spec) engine.release(w.spec.name);
         }
       })();
     },
