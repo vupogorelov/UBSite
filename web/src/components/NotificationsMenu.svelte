@@ -140,6 +140,9 @@
             <b>Пока ничего</b>
             <p class="muted small">Сюда приходят новости из обсуждений абзацев, в которых вы участвуете или за которыми следите,
               ответы на ваши заметки и комментарии, упоминания и отметки ваших сообщений.</p>
+            <p class="muted small">А какие изменения были в самом приложении&nbsp;— можно посмотреть в «Что нового».</p>
+            <!-- nothing new for one: what is new in the platform -->
+            <button class="ui-chip notif-empty-new" onclick={openWhatsNew}>Посмотреть изменения</button>
           </div>
         {/if}
       {:else}

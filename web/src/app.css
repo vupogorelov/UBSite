@@ -7380,6 +7380,10 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   max-width: 300px;
   margin: 0;
 }
+/* the bell with nothing in it: the way to what is new in the platform, under its words */
+.notif-empty-new {
+  margin-top: var(--space-3);
+}
 .ui-count {
   display: flex;
   align-items: center;
