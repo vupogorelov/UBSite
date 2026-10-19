@@ -56,6 +56,14 @@ export const MODELS = [
     id: 'gemma2', title: 'EmbeddingGemma 2 (Google)', size: '≈1,1 ГБ', query: 'task: search result | query: {}', passage: 'title: none | text: {}',
     spec: { name: 'onnx-community/embeddinggemma-2-ONNX', dtype: 'fp32', external: true, textOnly: true, pooling: 'sentence' },
   },
+  {
+    // a Russian and English model (SaluteDevices, 2026, MIT; Qwen3 reading both ways), by the mean; a question
+    // with its instruction, a text as it is. No ONNX of its own: converted by hand (PyTorch → ONNX, full
+    // precision, its vectors those of PyTorch's) into data/models/ai-sage/Giga-Embeddings-instruct-480M-0826 —
+    // config.json as of an encoder ("bert"), the tokenizer's files, onnx/model.onnx + model.onnx_data
+    id: 'giga', title: 'Giga-Embeddings 480M (Сбер)', size: '≈1,9 ГБ', query: 'Instruct: Given a query, retrieve relevant passages\nQuery: {}', passage: '{}',
+    spec: { name: 'ai-sage/Giga-Embeddings-instruct-480M-0826', dtype: 'fp32', external: true, pooling: 'mean' },
+  },
 ];
 /** A text marked as the model wants it. @param {string} template @param {string} text */
 const marked = (template, text) => template.replace('{}', () => text);
