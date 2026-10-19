@@ -55,5 +55,50 @@ export default {
       return open().status();
     });
     r.on('DELETE', '/api/lab/questions/:id', ({ params, user }) => (requireAdmin(user), open().removeQuestion(Number(params.id)), open().status()));
+
+    // ---- «Я и Книга» answered by the search by meaning — an administrator's own conversation, to try it
+    // in earnest; everyone else's Book answers by the words, as before (server/bookvoice.js) ----
+    core.voice.useFinder(async (text, ownerId, limit) => {
+      if (!core.auth.userById(ownerId)?.isAdmin) return null;
+      return open().bookAnswer(text, limit, (t, n) => core.voice.find(t, n));
+    });
+    const q = {
+      message: core.db.prepare(`SELECT m.id, m.ref AS chat, m.anchor_ref AS ref, u.is_agent AS agent
+        FROM public_messages m LEFT JOIN users u ON u.id = m.author_id WHERE m.id = ?`),
+      // the question a Book's answer is to: the owner's last message before it
+      question: core.db.prepare(`SELECT body FROM public_messages WHERE ref = ? AND id < ? AND author_id = ? AND kind = 'message'
+        AND hidden_at IS NULL ORDER BY id DESC LIMIT 1`),
+      answers: core.db.prepare(`SELECT m.id, m.anchor_ref AS ref FROM public_messages m JOIN users u ON u.id = m.author_id
+        WHERE m.ref = ? AND u.is_agent = 1 AND m.anchor_ref IS NOT NULL ORDER BY m.id DESC LIMIT 300`),
+    };
+    /** A Book's answer in one's own «Я и Книга»: its paragraph and the question it answers. @param {number} id @param {number} userId */
+    const bookAnswer = (id, userId) => {
+      const m = /** @type {any} */ (q.message.get(id));
+      if (!m || m.chat !== `dm:${userId}` || !m.agent || !m.ref) throw new HttpError(404, 'Это не ответ Книги в вашем чате');
+      const question = /** @type {{ body: string } | undefined} */ (q.question.get(m.chat, id, userId))?.body;
+      if (!question) throw new HttpError(404, 'Вопрос к этому ответу не найден');
+      return { ref: /** @type {string} */ (m.ref), question };
+    };
+    // { id, good: true | false | null } — a Book's answer judged: its paragraph for its question (as in the Laboratory)
+    r.on('POST', '/api/lab/book-judged', async ({ req, user }) => {
+      requireAdmin(user);
+      const b = /** @type {any} */ ((await readJson(req)) ?? {});
+      const { ref, question } = bookAnswer(Number(b.id), /** @type {any} */ (user).id);
+      open().judge({ question, ref, good: b.good });
+      return { id: Number(b.id), good: b.good };
+    });
+    // the judgements of the Book's answers in one's «Я и Книга»: { [message id]: true | false }
+    r.on('GET', '/api/lab/book-judged', ({ user }) => {
+      requireAdmin(user);
+      const uid = /** @type {any} */ (user).id;
+      /** @type {Record<number, boolean>} */
+      const out = {};
+      for (const a of /** @type {{ id: number, ref: string }[]} */ (q.answers.all(`dm:${uid}`))) {
+        const question = /** @type {{ body: string } | undefined} */ (q.question.get(`dm:${uid}`, a.id, uid))?.body;
+        const j = question ? open().judgedFor(question, a.ref) : null;
+        if (j !== null) out[a.id] = j;
+      }
+      return out;
+    });
   },
 };

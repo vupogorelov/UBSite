@@ -18,11 +18,35 @@
   import { pinchFont } from '../lib/pinch.js';
   import { settings, setSetting } from '../lib/settings.svelte.js';
   import { outbox, retry, discard } from '../lib/outbox.svelte.js';
+  import { labApi } from '../features/lab/api.js';
 
   /** One conversation of the chat page; `focus`: a message to open it at. @type {{ key: string, focus?: number | null, onback?: () => void }} */
   let { key, focus = null, onback } = $props();
 
   let info = $state(/** @type {import('../lib/api.js').ChatInfo | null} */ (null));
+
+  // ---- «Я и Книга», an administrator's: the Book answers by the search by meaning (the Laboratory),
+  // each answer marked hit / missed — the Laboratory's marks, its score ----
+  const judging = $derived(info?.kind === 'dm' && !!session.user?.isAdmin);
+  let bookJudged = $state(/** @type {Record<number, boolean>} */ ({}));
+  $effect(() => {
+    if (!judging) return;
+    labApi.bookJudged().then((r) => (bookJudged = r), () => {});
+  });
+  /** @param {{ id: number }} m @param {boolean | null} good */
+  async function judgeBook(m, good) {
+    const was = bookJudged;
+    const next = { ...bookJudged };
+    if (good === null) delete next[m.id];
+    else next[m.id] = good;
+    bookJudged = next;
+    try {
+      await labApi.judgeBook(m.id, good);
+    } catch (e) {
+      bookJudged = was;
+      showToast(/** @type {Error} */ (e).message);
+    }
+  }
   /** @type {import('../lib/api.js').PublicMessage[]} */ let messages = $state([]);
   let hasMore = $state(true);
   let loadingOlder = false;
@@ -546,7 +570,8 @@
         onpin={info?.canPin ? pin : undefined} pinnedId={info?.pinned?.id ?? null}
         onquote={info?.kind === 'para' ? showQuote : undefined}
         onmark={session.user?.isAdmin ? markMessage : undefined}
-        ondiscuss={info?.discussion ? discuss : undefined} />
+        ondiscuss={info?.discussion ? discuss : undefined}
+        onjudge={judging ? judgeBook : undefined} judged={bookJudged} />
     </div>
   </div>
   {#if findActive}

@@ -220,7 +220,7 @@ export function createLab(db, engine, where) {
       const js = [...(found.get(x.text) ?? [])].map((r) => judged.get(`${x.text}\n${r}`));
       return { ...x, good: js.filter((j) => j === true).length, bad: js.filter((j) => j === false).length, open: js.filter((j) => j === undefined).length };
     });
-    const order = [...MODELS.map((m) => m.id), 'mix', 'words'];
+    const order = [...MODELS.map((m) => m.id), 'mix', 'book', 'words'];
     return { questions, score: [...score.values()].sort((a, b) => order.indexOf(a.col) - order.indexOf(b.col)) };
   }
 
@@ -333,6 +333,31 @@ export function createLab(db, engine, where) {
       const judged = {};
       for (const j of /** @type {any[]} */ (q.judgedOf.all(text))) judged[j.ref] = !!j.good;
       return { text, columns, judged };
+    },
+
+    /**
+     * «Я и Книга» answered by the mixed search (its model and the words): the refs, best first — null when
+     * its model is not worked out yet (the Book answers by the words then). The answer is kept as the
+     * column 'book' (the score: how the Book itself does).
+     * @param {string} text @param {number} n @param {(text: string, limit: number) => { ref: string }[]} byWords
+     */
+    async bookAnswer(text, n, byWords) {
+      text = text.trim();
+      const m = MODELS.find((x) => x.mix);
+      if (!text || text.length > 500 || !m || !/** @type {{ n: number }} */ (q.done.get(m.id)).n || !engine.installed()) return null;
+      const model = (await closest(m, text, DEEP)).map((x) => x.ref);
+      const refs = mix(model, byWords(text, DEEP).map((p) => p.ref)).slice(0, n);
+      transaction(lab, () => {
+        q.clearAnswer.run(text, 'book');
+        refs.forEach((ref, i) => q.putAnswer.run(text, 'book', i + 1, ref));
+      });
+      return refs;
+    },
+
+    /** The judgement of a paragraph for a question: true, false, or null — not judged. @param {string} question @param {string} ref */
+    judgedFor(question, ref) {
+      const j = /** @type {any[]} */ (q.judgedOf.all(question.trim())).find((x) => x.ref === ref);
+      return j ? !!j.good : null;
     },
 
     /**

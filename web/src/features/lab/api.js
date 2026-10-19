@@ -31,6 +31,10 @@ export const labApi = {
   judge: (b) => request('POST', '/api/lab/judged', b),
   /** @returns {Promise<Todo[]>} */
   todo: () => request('GET', '/api/lab/todo'),
+  /** The judgements of the Book's answers in one's «Я и Книга»: message id → hit. @returns {Promise<Record<number, boolean>>} */
+  bookJudged: () => request('GET', '/api/lab/book-judged'),
+  /** A Book's answer judged (its paragraph for the question it answers). @param {number} id @param {boolean | null} good */
+  judgeBook: (id, good) => request('POST', '/api/lab/book-judged', { id, good }),
   /** @param {number} id @returns {Promise<Status>} */
   removeQuestion: (id) => request('DELETE', `/api/lab/questions/${id}`),
 };

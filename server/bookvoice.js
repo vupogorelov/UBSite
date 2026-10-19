@@ -114,13 +114,32 @@ export function createBookVoice(db, auth, chat) {
   }
 
   /**
+   * Another way to find the answer (the Laboratory's search by meaning, for whom it is tried): the refs it
+   * found, or null — not this one's, or not able now (the words then, as always).
+   * @typedef {(text: string, ownerId: number, limit: number) => Promise<string[] | null>} Finder
+   */
+  /** @type {Finder | null} */
+  let finder = null;
+  const paragraphText = db.prepare('SELECT ref, plain_ru AS text FROM paragraphs WHERE ref = ?');
+
+  /**
    * Answers a question in one's "Я и Книга": up to three paragraphs, the first as a reply to it; or
    * says it found nothing. @param {string} key @param {{ id: number, body: string }} question
-   * @returns {string[]} the refs it answered with
+   * @returns {Promise<string[]>} the refs it answered with
    */
-  function answer(key, question) {
+  async function answer(key, question) {
     const book = bookUser();
-    const found = find(question.body);
+    const owner = Number(key.split(':')[1]);
+    /** @type {string[] | null} */
+    let refs = null;
+    try {
+      refs = finder ? await finder(question.body, owner, ANSWERS) : null;
+    } catch (err) {
+      console.error('The other search could not answer, the words do:', err);
+    }
+    const found = refs
+      ? refs.map((ref) => /** @type {{ ref: string, text: string } | undefined} */ (paragraphText.get(ref))).filter((p) => !!p).map((p) => /** @type {{ ref: string, text: string }} */ (p))
+      : find(question.body);
     if (!found.length) {
       chat.post(key, book, { body: NOTHING, replyTo: question.id });
       return [];
@@ -134,15 +153,16 @@ export function createBookVoice(db, auth, chat) {
     answer,
     find,
 
+    /** Another way to find the answer (the Laboratory's): see `finder`. @param {Finder | null} fn */
+    useFinder(fn) {
+      finder = fn;
+    },
+
     /** Live: "Книга Урантии печатает…", then the answer. @param {string} key @param {{ id: number, body: string }} question */
     answerSoon(key, question) {
       chat.typing(key, bookUser());
       setTimeout(() => {
-        try {
-          answer(key, question);
-        } catch (err) {
-          console.error('The Book could not answer:', err);
-        }
+        answer(key, question).catch((err) => console.error('The Book could not answer:', err));
       }, 900).unref();
     },
 

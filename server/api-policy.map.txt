@@ -51,6 +51,7 @@ GET /api/guest/paper/:id last
 GET /api/health live
 GET /api/integrations/en last
 GET /api/lab last
+GET /api/lab/book-judged last
 GET /api/lab/todo last
 GET /api/notifications last
 GET /api/notifications/count last
@@ -124,6 +125,7 @@ POST /api/dict direct
 POST /api/glossary direct
 POST /api/integrations/en/run direct
 POST /api/lab/ask direct
+POST /api/lab/book-judged direct
 POST /api/lab/judged direct
 POST /api/lab/models/:id/run direct
 POST /api/lab/pause direct

@@ -71,7 +71,7 @@ test("the Book's voice: once a day at 9 (Moscow), a paragraph never twice, its d
   assert.equal(chat.list(anna).find((c) => c.key === key)?.muted, true);
 });
 
-test('"Я и Книга": one\'s own conversation; the Book answers with the paragraphs that speak of the question', () => {
+test('"Я и Книга": one\'s own conversation; the Book answers with the paragraphs that speak of the question', async () => {
   const db = openDb(':memory:');
   db.exec(`
     INSERT INTO parts (id, title_ru, title_en) VALUES (1, 'Часть', 'Part');
@@ -100,7 +100,7 @@ test('"Я и Книга": one\'s own conversation; the Book answers with the par
   chat.onDirect((key) => asked.push(key));
   const q = chat.post('dm:10', anna, { body: 'Кто такой Настройщик Мысли?' });
   assert.deepEqual(asked, ['dm:10']);
-  assert.deepEqual(voice.answer('dm:10', q), ['5:1.2']);
+  assert.deepEqual(await voice.answer('dm:10', q), ['5:1.2']);
   const [, reply] = chat.page('dm:10', anna);
   assert.equal(reply.authorAgent, true);
   assert.equal(reply.post?.ref, '5:1.2');
@@ -108,11 +108,19 @@ test('"Я и Книга": one\'s own conversation; the Book answers with the par
 
   // nothing about it — it says so
   const q2 = chat.post('dm:10', anna, { body: 'Как испечь пирог?' });
-  assert.deepEqual(voice.answer('dm:10', q2), []);
+  assert.deepEqual(await voice.answer('dm:10', q2), []);
   assert.match(chat.page('dm:10', anna).at(-1)?.body ?? '', /не нашлось/);
+
+  // another way to find (the Laboratory's, for its owner): its refs; not this one's (null) or failing — the words
+  voice.useFinder(async (_text, owner) => (owner === 10 ? ['5:1.1'] : null));
+  assert.deepEqual(await voice.answer('dm:10', chat.post('dm:10', anna, { body: 'Кто такой Настройщик Мысли?' })), ['5:1.1']);
+  voice.useFinder(async () => {
+    throw new Error('no model');
+  });
+  assert.deepEqual(await voice.answer('dm:10', chat.post('dm:10', anna, { body: 'Кто такой Настройщик Мысли?' })), ['5:1.2']);
 });
 
-test('"Я и Книга" in English: an English question is answered from the English text', () => {
+test('"Я и Книга" in English: an English question is answered from the English text', async () => {
   const db = openDb(':memory:');
   db.exec(`
     INSERT INTO parts (id, title_ru, title_en) VALUES (1, 'Часть', 'Part');
@@ -128,5 +136,5 @@ test('"Я и Книга" in English: an English question is answered from the En
   const voice = createBookVoice(db, auth, chat);
   const anna = /** @type {any} */ ({ id: 10, username: 'anna', displayName: null, isAdmin: false, isCoordinator: false });
   const q = chat.post('dm:10', anna, { body: 'What is prayer?' });
-  assert.deepEqual(voice.answer('dm:10', q), ['5:1.1']);
+  assert.deepEqual(await voice.answer('dm:10', q), ['5:1.1']);
 });

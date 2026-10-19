@@ -45,10 +45,12 @@
    *   onhide?: (m: Msg) => void, canhide?: boolean, candeleteall?: boolean, render?: (body: string) => string,
    *   chatKey?: string | null, onpin?: (m: Msg | null) => void, pinnedId?: number | null,
    *   onquote?: (text: string) => void, onmark?: (m: Msg, mark: import('../lib/api.js').Mark | null) => void,
-   *   ondiscuss?: (m: Msg) => void, onretry?: (m: Msg) => void, ondiscard?: (m: Msg) => void
+   *   ondiscuss?: (m: Msg) => void, onretry?: (m: Msg) => void, ondiscard?: (m: Msg) => void,
+   *   onjudge?: (m: Msg, good: boolean | null) => void, judged?: Record<number, boolean>
    * }}
+   * `onjudge`, `judged`: the Book's answers in an administrator's «Я и Книга» marked hit / missed (the Laboratory).
    */
-  let { messages, me, compact = false, unreadAfter = null, reactions = [], onreply, onreact, onedit, ondelete, onhide, canhide = false, candeleteall = false, render, chatKey = null, onpin, pinnedId = null, onquote, onmark, ondiscuss, onretry, ondiscard } = $props();
+  let { messages, me, compact = false, unreadAfter = null, reactions = [], onreply, onreact, onedit, ondelete, onhide, canhide = false, candeleteall = false, render, chatKey = null, onpin, pinnedId = null, onquote, onmark, ondiscuss, onretry, ondiscard, onjudge, judged = {} } = $props();
 
   const toDate = (/** @type {string} */ s) => new Date(s.replace(' ', 'T') + 'Z');
   const dayKey = (/** @type {string} */ s) => toDate(s).toDateString();
@@ -292,6 +294,16 @@
           {:else if m.post}
             <!-- the Book's word: its paragraph (in the channel — with the way to its discussion) -->
             <BookPost post={m.post} comments={m.comments ?? 0} ondiscuss={m.linkedId && ondiscuss ? () => ondiscuss?.(m) : undefined} />
+            {#if onjudge && m.authorAgent}
+              <!-- «Я и Книга», an administrator's: does this paragraph answer the question? (the Laboratory's marks) -->
+              {@const j = judged[m.id]}
+              <div class="tg-judge" role="group" aria-label="Ответ попал?">
+                <button class="tg-judge-btn good" class:on={j === true} aria-pressed={j === true} onclick={() => onjudge(m, j === true ? null : true)}
+                  title="Попал: этот абзац отвечает на вопрос"><Icon name="check" size={14} />Попал</button>
+                <button class="tg-judge-btn bad" class:on={j === false} aria-pressed={j === false} onclick={() => onjudge(m, j === false ? null : false)}
+                  title="Мимо: не об этом"><Icon name="close" size={14} />Мимо</button>
+              </div>
+            {/if}
           {:else if render}
             <div class="tg-text comment-body">{@html render(m.body)}<span class="tg-meta-space"></span></div>
           {:else}
