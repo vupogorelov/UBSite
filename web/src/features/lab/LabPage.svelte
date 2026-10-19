@@ -151,16 +151,21 @@
             <button class="ui-chip" aria-label="Больше потоков" disabled={set.threads >= set.maxThreads} onclick={() => act(() => labApi.configure({ threads: set.threads + 1 }))}>+</button>
           </span>
         </div>
+        <!-- (the video card and all at once: only when there is a model for it, and more than one) -->
+        {#if status.models.some((m) => m.gpu)}
         <label class="set-item set-switch">
           <span class="set-item-text"><b>Видеокарта</b>
             <span>Модели полной точности ({status.models.filter((m) => m.gpu).map((m) => m.id).join(', ')}) — в 6–7 раз быстрее, векторы те же. Остальные считаются на процессоре.</span></span>
           <input type="checkbox" class="ui-switch" checked={set.gpu} onchange={(e) => act(() => labApi.configure({ gpu: e.currentTarget.checked }))} />
         </label>
+        {/if}
+        {#if status.models.length > 1}
         <label class="set-item set-switch">
           <span class="set-item-text"><b>Все модели сразу</b>
             <span>Каждая в своём процессе, а не по очереди. Памяти нужно больше.</span></span>
           <input type="checkbox" class="ui-switch" checked={set.together} onchange={(e) => act(() => labApi.configure({ together: e.currentTarget.checked }))} />
         </label>
+        {/if}
       </div>
 
       <div class="ui-label lab-models-h">Модели

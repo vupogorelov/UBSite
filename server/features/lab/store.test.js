@@ -8,6 +8,13 @@ import { DatabaseSync } from 'node:sqlite';
 import { openDb } from '../../db.js';
 import { createLab, mix } from './store.js';
 
+/** The models compared (the platform keeps one): two of the mixed search, one of full precision. */
+const MODELS = [
+  { id: 'gemma', title: 'Gemma', size: '', query: 'q: {}', passage: 'p: {}', mix: true, book: true, spec: { name: 'g/gemma', pooling: /** @type {const} */ ('sentence') } },
+  { id: 'e5-base', title: 'e5', size: '', query: 'q: {}', passage: 'p: {}', mix: true, spec: { name: 'x/e5', pooling: /** @type {const} */ ('mean') } },
+  { id: 'berta', title: 'BERTA', size: '', query: 'q: {}', passage: 'p: {}', spec: { name: 's/berta', dtype: 'fp32', pooling: /** @type {const} */ ('mean') } },
+];
+
 /** A model of its own: the meaning is which of three words a text has (a vector of three numbers). */
 const fakeEngine = () => ({
   installed: () => true,
@@ -46,7 +53,7 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
         ('дети', 'e5-base', '47:2.8', 1), ('дети', 'words', '47:2.8', 0);`);
     old.close();
 
-    const lab = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir });
+    const lab = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir }, MODELS);
     // models asked for while another works: in turn
     lab.run('e5-base');
     lab.run('gemma');
@@ -108,7 +115,7 @@ test('the Laboratory: all models at once, the threads shared by the ones on the 
         await gate;
         return engine.embed(spec, texts);
       },
-    }), { file: join(dir, 'lab.db'), models: dir });
+    }), { file: join(dir, 'lab.db'), models: dir }, MODELS);
     assert.throws(() => lab.configure({ threads: 17 }), /от 1 до 16/);
     lab.configure({ threads: 12, gpu: true, together: true });
     lab.runAll();
@@ -118,12 +125,12 @@ test('the Laboratory: all models at once, the threads shared by the ones on the 
     const onCpu = s.models.filter((m) => m.device === 'cpu').length;
     assert.deepEqual([of('berta').device, of('gemma').device], ['gpu', 'cpu'], 'the video card: full precision only');
     assert.equal(of('gemma').threads, Math.floor(12 / onCpu), "the processor's threads shared");
-    assert.equal(seen.get('sergeyzh/BERTA')?.device, 'dml');
+    assert.equal(seen.get('s/berta')?.device, 'dml');
     release();
     for (let i = 0; i < 200 && lab.status().models.some((m) => m.running); i++) await new Promise((r) => setTimeout(r, 20));
     assert.ok(lab.status().models.every((m) => m.done === 2), 'each worked out');
     lab.close();
-    const again = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir });
+    const again = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir }, MODELS);
     assert.deepEqual(again.status().settings, { threads: 12, gpu: true, together: true, maxThreads: 16 }, 'the settings kept');
     again.close();
   } finally {

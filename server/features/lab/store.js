@@ -21,13 +21,15 @@ import { transaction } from '../../db.js';
  * marked ({} — the text); `spec` — for the engine (engine/embed.js): which file, how the pieces make one
  * vector; `mix`: a model of the mixed search (the first worked out of them); `book`: the model «Я и Книга»
  * answers by, alone.
- * Chosen (2026-10-19, 14 questions, 590 marks): EmbeddingGemma — the right paragraph first in 11 of 14,
- * among the first three in 12, 53 hits (e5-base: 8, 11, 37); mixed with the words it gains nothing (the
- * same first places, fewer hits) — the Book answers by it alone. e5-base stays to compare with.
- * Tried and dropped: e5-small — e5-base better in every question; bge-m3 — a draw with e5-base at twice the
- * size; Granite R2 (IBM) — as e5-base (37 hits); Qwen3-Embedding-0.6B — below e5-base at twice the size;
- * USER2-base (deepvk) — as e5-base (36 hits); paraphrase-multilingual-MiniLM — near the words (26);
- * rubert-tiny2 — below the words (7). BERTA — near Gemma (11 first, 50 hits): kept.
+ * Chosen (2026-10-19, 17 questions, 1062 marks): EmbeddingGemma — the best for what it costs: the right
+ * paragraph first in 12 of 17, among the first three in 13, 60 hits, at ≈310 МБ; mixed with the words it
+ * gains nothing — the Book answers by it alone. A model to compare with: added here (and its vectors worked
+ * out), dropped again when judged — its vectors and answers go, the judgements stay.
+ * Tried and dropped: Giga-Embeddings 480M (SaluteDevices) — the best (13 first, 15 in three, 62 hits), but six
+ * times the size (≈1,9 ГБ); BERTA (sergeyzh) — near Gemma (12, 13, 56); e5-base (9, 14, 45); EmbeddingGemma 2
+ * — below the first one (8, 11, 38); e5-small, bge-m3, Granite R2, Qwen3-Embedding-0.6B, USER2-base,
+ * paraphrase-multilingual-MiniLM, rubert-tiny2 — at e5-base's level or below. Mixing two models (by their
+ * first ten): more hits, not more in the first three.
  * @typedef {import('./engine-client.js').Spec} Spec
  * @type {{ id: string, title: string, size: string, query: string, passage: string, spec: Spec, mix?: boolean, book?: boolean }[]}
  */
@@ -37,32 +39,6 @@ export const MODELS = [
     id: 'gemma', title: 'embeddinggemma-300m (Google)', size: '≈310 МБ', query: 'task: search result | query: {}', passage: 'title: none | text: {}',
     mix: true, book: true,
     spec: { name: 'onnx-community/embeddinggemma-300m-ONNX', external: true, pooling: 'sentence' },
-  },
-  {
-    id: 'e5-base', title: 'multilingual-e5-base (Microsoft)', size: '≈280 МБ', query: 'query: {}', passage: 'passage: {}', mix: true,
-    spec: { name: 'Xenova/multilingual-e5-base', pooling: 'mean' },
-  },
-  {
-    // a Russian model (sergeyzh, MIT; learnt from FRIDA), a question and a text each with its mark, by the
-    // mean. No ONNX of its own: the files are laid in data/models/sergeyzh/BERTA by hand, from DaniShe/BERTA-onnx
-    // (its fp32 export, the weights unchanged), the model into onnx/
-    id: 'berta', title: 'BERTA (sergeyzh)', size: '≈510 МБ', query: 'search_query: {}', passage: 'search_document: {}',
-    spec: { name: 'sergeyzh/BERTA', dtype: 'fp32', pooling: 'mean' },
-  },
-  {
-    // EmbeddingGemma's next version (Google, 2026, Apache 2.0; on Gemma 4): of text, pictures and sound — its
-    // text part alone (270M); the same marks. Full precision (≈1,1 ГБ): on the video card as fast as the
-    // first one at 8 bits on the processor
-    id: 'gemma2', title: 'EmbeddingGemma 2 (Google)', size: '≈1,1 ГБ', query: 'task: search result | query: {}', passage: 'title: none | text: {}',
-    spec: { name: 'onnx-community/embeddinggemma-2-ONNX', dtype: 'fp32', external: true, textOnly: true, pooling: 'sentence' },
-  },
-  {
-    // a Russian and English model (SaluteDevices, 2026, MIT; Qwen3 reading both ways), by the mean; a question
-    // with its instruction, a text as it is. No ONNX of its own: converted by hand (PyTorch → ONNX, full
-    // precision, its vectors those of PyTorch's) into data/models/ai-sage/Giga-Embeddings-instruct-480M-0826 —
-    // config.json as of an encoder ("bert"), the tokenizer's files, onnx/model.onnx + model.onnx_data
-    id: 'giga', title: 'Giga-Embeddings 480M (Сбер)', size: '≈1,9 ГБ', query: 'Instruct: Given a query, retrieve relevant passages\nQuery: {}', passage: '{}',
-    spec: { name: 'ai-sage/Giga-Embeddings-instruct-480M-0826', dtype: 'fp32', external: true, pooling: 'mean' },
   },
 ];
 /** A text marked as the model wants it. @param {string} template @param {string} text */
@@ -109,8 +85,9 @@ const RRF = 60;
  * @param {DatabaseSync} db the platform's database (the paragraphs are read from it)
  * @param {ReturnType<typeof import('./engine-client.js').createEngine>} engine
  * @param {{ file: string, models: string }} where the lab's database file; the models' folder
+ * @param {typeof MODELS} [list] the models (a test's own)
  */
-export function createLab(db, engine, where) {
+export function createLab(db, engine, where, list = MODELS) {
   const lab = new DatabaseSync(where.file);
   lab.exec(`
     PRAGMA journal_mode = WAL;
@@ -127,7 +104,7 @@ export function createLab(db, engine, where) {
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
   `);
   // (a model dropped from the list: its vectors and answers go — the judgements stay, they are the reader's)
-  const kept = MODELS.map((m) => `'${m.id}'`).join(', ');
+  const kept = list.map((m) => `'${m.id}'`).join(', ');
   lab.exec(`DELETE FROM vectors WHERE model NOT IN (${kept}); DELETE FROM answers WHERE col NOT IN (${kept}, 'mix', 'words');`);
   // (the first marks were per column: one judgement where they agree; where they differ — left to judge again)
   if (lab.prepare("SELECT 1 FROM sqlite_master WHERE name = 'marks'").get()) {
@@ -189,7 +166,7 @@ export function createLab(db, engine, where) {
 
   /** @param {string} id */
   const modelOf = (id) => {
-    const m = MODELS.find((x) => x.id === id);
+    const m = list.find((x) => x.id === id);
     if (!m) throw new HttpError(404, 'Нет такой модели');
     return m;
   };
@@ -303,7 +280,7 @@ export function createLab(db, engine, where) {
       const js = [...(found.get(x.text) ?? [])].map((r) => judged.get(`${x.text}\n${r}`));
       return { ...x, good: js.filter((j) => j === true).length, bad: js.filter((j) => j === false).length, open: js.filter((j) => j === undefined).length };
     });
-    const order = [...MODELS.map((m) => m.id), 'mix', 'book', 'words'];
+    const order = [...list.map((m) => m.id), 'mix', 'book', 'words'];
     return { questions, score: [...score.values()].sort((a, b) => order.indexOf(a.col) - order.indexOf(b.col)) };
   }
 
@@ -315,7 +292,7 @@ export function createLab(db, engine, where) {
         installed: engine.installed(),
         engineRunning: engine.running(),
         settings: { ...settings, maxThreads: MAX_THREADS },
-        models: MODELS.map((m) => ({
+        models: list.map((m) => ({
           id: m.id, title: m.title, size: m.size,
           downloaded: existsSync(`${where.models}/${m.spec.name}`),
           done: /** @type {{ n: number }} */ (q.done.get(m.id)).n, total,
@@ -353,7 +330,7 @@ export function createLab(db, engine, where) {
     },
     /** Every model not worked out to the end: started (at once or in turn). */
     runAll() {
-      for (const m of MODELS) if (/** @type {{ n: number }} */ (q.done.get(m.id)).n < /** @type {{ n: number }} */ (q.total.get()).n) this.run(m.id);
+      for (const m of list) if (/** @type {{ n: number }} */ (q.done.get(m.id)).n < /** @type {{ n: number }} */ (q.total.get()).n) this.run(m.id);
     },
 
     /** Stops a model's work after its batch (or every model's; the ones waiting in turn wait no more). @param {string} [id] */
@@ -400,7 +377,7 @@ export function createLab(db, engine, where) {
       const columns = [];
       /** The models' long lists (for the mixed one). @type {Map<string, string[]>} */
       const deep = new Map();
-      for (const m of MODELS) {
+      for (const m of list) {
         if (!/** @type {{ n: number }} */ (q.done.get(m.id)).n) continue;
         const t = Date.now();
         try {
@@ -413,7 +390,7 @@ export function createLab(db, engine, where) {
       }
       const words = byWords(text, DEEP).map((p) => p.ref);
       // the mixed: its model leads, the words add what it missed (mix)
-      const best = MODELS.find((m) => m.mix && deep.has(m.id));
+      const best = list.find((m) => m.mix && deep.has(m.id));
       if (best) {
         const found = mix(/** @type {string[]} */ (deep.get(best.id)), words).slice(0, TOP).map(para);
         columns.push({ id: 'mix', title: `Смешанный: ${best.id} + слова`, found });
@@ -440,7 +417,7 @@ export function createLab(db, engine, where) {
      */
     async bookAnswer(text, n) {
       text = text.trim();
-      const m = MODELS.find((x) => x.book);
+      const m = list.find((x) => x.book);
       if (!text || text.length > 500 || !m || !/** @type {{ n: number }} */ (q.done.get(m.id)).n || !engine.installed()) return null;
       const refs = (await closest(m, text, n)).map((x) => x.ref);
       transaction(lab, () => {
