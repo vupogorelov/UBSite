@@ -144,6 +144,53 @@ test('the Laboratory: all models at once, the threads shared by the ones on the 
   }
 });
 
+test('the Laboratory: a writing model answers the saved questions from the paragraphs found; the answers judged', async () => {
+  const db = openDb(':memory:');
+  db.exec(`
+    INSERT INTO parts (id, title_ru, title_en) VALUES (1, 'Часть', 'Part');
+    INSERT INTO papers (id, part_id, title_ru, title_en) VALUES (47, 1, 'Обители', 'Mansions');
+    INSERT INTO paragraphs (ref, seq, paper_id, section_num, num, page_ref, html_ru, html_en, plain_ru, plain_en) VALUES
+      ('47:2.7', 1, 47, 2, 7, '1', '', '', 'Дети после смерти растут в мирах.', 'Children after death.'),
+      ('47:2.9', 2, 47, 2, 9, '2', '', '', 'Люцифер восстал.', 'Lucifer rebelled.');
+  `);
+  const dir = mkdtempSync(join(tmpdir(), 'lab-'));
+  try {
+    /** @type {any[]} */
+    const asked = [];
+    const engine = {
+      ...fakeEngine(),
+      released: /** @type {string[]} */ ([]),
+      /** @param {any} spec @param {{ role: string, content: string }[]} messages */
+      async write(spec, messages) {
+        asked.push(messages);
+        return { text: 'Дети растут в мирах (47:2.7).', tokens: 9 };
+      },
+      /** @param {string} name */
+      release(name) {
+        this.released.push(name);
+      },
+    };
+    const WRITERS = [{ id: 'w', title: 'W', size: '', spec: { name: 'x/w', cls: 'X' } }];
+    const lab = createLab(db, /** @type {any} */ (engine), { file: join(dir, 'lab.db'), models: dir }, MODELS, WRITERS);
+    assert.throws(() => lab.write('w'), /Сначала посчитайте/, 'without the vectors there is nothing to answer from');
+    lab.run('gemma');
+    for (let i = 0; i < 200 && lab.status().models.some((m) => m.running); i++) await new Promise((r) => setTimeout(r, 20));
+    lab.addQuestion('что с детьми после смерти');
+    lab.write('w');
+    for (let i = 0; i < 200 && lab.status().writers[0].running; i++) await new Promise((r) => setTimeout(r, 20));
+    const r = lab.replies();
+    assert.equal(r[0].refs[0], '47:2.7', 'from the paragraphs the Book finds, the closest first');
+    assert.match(asked[0][1].content, /\[47:2\.7\] Дети после смерти/, 'the paragraphs given, with their numbers, in the question\'s language');
+    assert.equal(r[0].answers.w.text, 'Дети растут в мирах (47:2.7).');
+    assert.deepEqual(engine.released, ['x/w'], 'the model let go at the end');
+    lab.judgeReply({ question: 'что с детьми после смерти', model: 'w', good: true });
+    assert.deepEqual([lab.status().writers[0].answered, lab.status().writers[0].good], [1, 1]);
+    lab.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the mixed search: the model's first two stay; the words add what it missed, not taking its places", async () => {
   const model = ['a', 'b', 'c', 'd', 'e'];
   const words = ['x', 'c', 'y'];

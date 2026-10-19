@@ -11,7 +11,11 @@ import { request } from '../../lib/api.js';
  * good, bad, open: of the paragraphs its columns answered — judged answering, not, not yet judged
  * @typedef {{ col: string, asked: number, good: number, bad: number, open: number, top3: number, answered: number }} Score
  * a column's score over the questions it was asked: hits, misses, not judged; questions with a hit among its first three, at all
- * @typedef {{ installed: boolean, engineRunning: boolean, settings: Settings, models: Model[], questions: Question[], score: Score[] }} Status
+ * @typedef {{ id: string, title: string, size: string, downloaded: boolean, answered: number, of: number, good: number, bad: number, ms: number, running: boolean, progress: { done: number, of: number } | null, error: string | null }} Writer
+ * a writing model: how many saved questions it answered (of), judged true (good) or not (bad), its mean time
+ * @typedef {{ question: string, refs: string[], answers: Record<string, { text: string, ms: number, tokens: number, good: boolean | null }> }} Reply
+ * the written answers to a saved question: the paragraphs they were made from, each model's
+ * @typedef {{ installed: boolean, engineRunning: boolean, settings: Settings, models: Model[], questions: Question[], score: Score[], writers: Writer[] }} Status
  * @typedef {{ ref: string, ru: string, en: string, paperTitle: string, score?: number, lang?: 'ru' | 'en' }} Found
  * @typedef {{ id: string, title: string, ms?: number, found: Found[] } | { id: string, title: string, error: string }} Column
  * @typedef {{ text: string, columns: Column[], judged: Record<string, boolean> }} Answer
@@ -44,4 +48,12 @@ export const labApi = {
   judgeBook: (id, good) => request('POST', '/api/lab/book-judged', { id, good }),
   /** @param {number} id @returns {Promise<Status>} */
   removeQuestion: (id) => request('DELETE', `/api/lab/questions/${id}`),
+  /** A writing model answers the saved questions (`again`: all of them). @param {string} id @param {boolean} [again] @returns {Promise<Status>} */
+  write: (id, again = false) => request('POST', `/api/lab/writers/${id}/run`, { again }),
+  /** @returns {Promise<Status>} */
+  pauseWriting: () => request('POST', '/api/lab/writers/pause'),
+  /** @returns {Promise<Reply[]>} */
+  replies: () => request('GET', '/api/lab/replies'),
+  /** @param {{ question: string, model: string, good: boolean | null }} b @returns {Promise<Status>} */
+  judgeReply: (b) => request('POST', '/api/lab/replies/judged', b),
 };

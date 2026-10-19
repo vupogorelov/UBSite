@@ -19,12 +19,36 @@
 
   const load = () => labApi.status().then((s) => ((status = s), (error = '')), (e) => (error = e.message));
   load();
-  // while a model works: its progress every few seconds
+  // while a model works: its progress every few seconds (and the written answers, if open)
   $effect(() => {
-    if (!status?.models.some((m) => m.running || m.queued)) return;
-    const t = setInterval(load, 3000);
+    if (!status?.models.some((m) => m.running || m.queued) && !status?.writers.some((w) => w.running)) return;
+    const t = setInterval(() => {
+      load();
+      if (replies) labApi.replies().then((r) => (replies = r), () => {});
+    }, 3000);
     return () => clearInterval(t);
   });
+
+  // ---- The Book's answers in its own words: the writing models, their answers to the saved questions ----
+  let replies = $state(/** @type {import('./api.js').Reply[] | null} */ (null));
+  async function toggleReplies() {
+    if (replies) return void (replies = null);
+    try {
+      replies = await labApi.replies();
+    } catch (e) {
+      showToast(/** @type {Error} */ (e).message);
+    }
+  }
+  /** @param {string} question @param {string} model @param {boolean} good */
+  async function judgeReply(question, model, good) {
+    const r = replies?.find((x) => x.question === question)?.answers[model];
+    if (!r) return;
+    r.good = r.good === good ? null : good;
+    await act(() => labApi.judgeReply({ question, model, good: r.good }));
+  }
+  /** The answer's text with its paragraphs' numbers as links. @param {string} text */
+  const pieces = (text) => text.split(/(\d{1,3}:\d{1,2}\.\d{1,3})/);
+  const secs = (/** @type {number} */ ms) => `${Math.round(ms / 1000)} с`;
 
   /** @param {() => Promise<import('./api.js').Status>} call */
   async function act(call) {
@@ -242,6 +266,62 @@
         </div>
         <p class="muted small lab-note">«3/10» — в трёх вопросах из десяти, заданных этому поиску. «?» — найденные абзацы без отметки: отметьте их, и счёт станет точнее.</p>
       {/if}
+      {#if status.writers.length}
+        <!-- the Book's answers in its own words: each writing model answers the saved questions from the paragraphs found by meaning -->
+        <div class="ui-label">Ответы своими словами</div>
+        <ul class="ui-cards">
+          {#each status.writers as w (w.id)}
+            <li class="ui-card lab-model">
+              <span class="lab-model-text">
+                <b>{w.title} <span class="muted lab-size">{w.size}{w.downloaded ? '' : ' · скачается при запуске'}</span></b>
+                <span class="muted small">
+                  {#if w.progress}Отвечает: {w.progress.done} из {w.progress.of}…{:else}Ответила на {w.answered} из {w.of}{/if}
+                  {#if w.good || w.bad} · <span class="lab-good">✓{w.good}</span> <span class="lab-bad">✗{w.bad}</span>{/if}
+                  {#if w.ms} · ≈ {secs(w.ms)} на ответ{/if}
+                </span>
+                {#if w.error}<span class="lab-error small">{w.error}</span>{/if}
+              </span>
+              {#if w.running}
+                <button class="ui-chip" onclick={() => act(labApi.pauseWriting)}><Icon name="pause" size={14} />Пауза</button>
+              {:else if w.answered < w.of}
+                <button class="ui-chip" onclick={() => act(() => labApi.write(w.id))} disabled={!status.installed || status.writers.some((x) => x.running)}>
+                  <Icon name="play" size={14} />{w.answered ? 'Дальше' : 'Ответить'}</button>
+              {:else if w.of}
+                <button class="ui-chip" onclick={() => act(() => labApi.write(w.id, true))} disabled={status.writers.some((x) => x.running)}>
+                  <Icon name="reset" size={14} />Заново</button>
+              {/if}
+            </li>
+          {/each}
+        </ul>
+        {#if status.writers.some((w) => w.answered)}
+          <button class="ui-chip on lab-todo-btn" onclick={toggleReplies}>{replies ? 'Скрыть ответы' : 'Показать ответы и отметить'}</button>
+        {/if}
+        {#if replies}
+          {#each replies as r (r.question)}
+            <section class="lab-todo">
+              <h2 class="lab-todo-q">{r.question}</h2>
+              <span class="muted small">по абзацам: {#each r.refs as ref, i (ref)}{i ? ', ' : ''}<a href="/{ref}" onclick={(e) => (e.preventDefault(), navigate(`/${ref}`))}>{ref}</a>{/each}</span>
+              <ol class="lab-found">
+                {#each status.writers.filter((w) => r.answers[w.id]) as w (w.id)}
+                  {@const a = r.answers[w.id]}
+                  <li class="lab-item" class:good={a.good === true} class:bad={a.good === false}>
+                    <span class="lab-marks">
+                      <button class="lab-mark lab-mark-good" class:on={a.good === true} aria-pressed={a.good === true} title="Верно: по тексту и по существу"
+                        aria-label="Верно: {w.title}" onclick={() => judgeReply(r.question, w.id, true)}><Icon name="check" size={16} /></button>
+                      <button class="lab-mark lab-mark-bad" class:on={a.good === false} aria-pressed={a.good === false} title="Неверно: выдумала, исказила или мимо"
+                        aria-label="Неверно: {w.title}" onclick={() => judgeReply(r.question, w.id, false)}><Icon name="close" size={16} /></button>
+                    </span>
+                    <div class="lab-hit">
+                      <span class="lab-hit-head"><b>{w.title}</b><span class="muted">{secs(a.ms)}</span></span>
+                      <span class="lab-hit-text">{#each pieces(a.text) as p, i (i)}{#if i % 2}<a href="/{p}" onclick={(e) => (e.preventDefault(), navigate(`/${p}`))}>{p}</a>{:else}{p}{/if}{/each}</span>
+                    </div>
+                  </li>
+                {/each}
+              </ol>
+            </section>
+          {/each}
+        {/if}
+      {/if}
       {#if openTotal || todo}
         <!-- what is left to judge: every paragraph once, whichever columns found it -->
         <button class="ui-chip on lab-todo-btn" onclick={toggleTodo}>
@@ -379,6 +459,7 @@
   }
   .lab-size {
     font-weight: 400;
+    white-space: nowrap;
   }
   .lab-bar {
     display: block;

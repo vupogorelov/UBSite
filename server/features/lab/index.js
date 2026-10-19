@@ -63,6 +63,21 @@ export default {
       open().judge(/** @type {any} */ ((await readJson(req)) ?? {}));
       return open().status();
     });
+    // ---- the Book's answers in its own words: the writing models answer the saved questions ----
+    // { again } — every saved question (else those not answered yet)
+    r.on('POST', '/api/lab/writers/:id/run', async ({ req, params, user }) => {
+      requireAdmin(user);
+      open().write(params.id, !!(/** @type {any} */ ((await readJson(req)) ?? {}).again));
+      return open().status();
+    });
+    r.on('POST', '/api/lab/writers/pause', ({ user }) => (requireAdmin(user), open().pauseWriting(), open().status()));
+    r.on('GET', '/api/lab/replies', ({ user }) => (requireAdmin(user), open().replies()));
+    // { question, model, good: true | false | null }
+    r.on('POST', '/api/lab/replies/judged', async ({ req, user }) => {
+      requireAdmin(user);
+      open().judgeReply(/** @type {any} */ ((await readJson(req)) ?? {}));
+      return open().status();
+    });
     r.on('DELETE', '/api/lab/questions/:id', ({ params, user }) => (requireAdmin(user), open().removeQuestion(Number(params.id)), open().status()));
 
     // ---- «Я и Книга» answered by the search by meaning (EmbeddingGemma) — an administrator's own conversation, to try it

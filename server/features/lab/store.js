@@ -15,6 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { existsSync } from 'node:fs';
 import { HttpError } from '../../http.js';
 import { transaction } from '../../db.js';
+import { langOf, messagesFor, MAX_TOKENS } from './reply.js';
 
 /**
  * The models to try, each as its card says: `query` and `passage` — how it wants a question and a text
@@ -41,6 +42,20 @@ export const MODELS = [
     spec: { name: 'onnx-community/embeddinggemma-300m-ONNX', external: true, pooling: 'sentence' },
   },
 ];
+/**
+ * The small generative models to try for «Я и Книга»'s answers in the Book's own words (reply.js): each answers the
+ * saved questions from the paragraphs the Book's model found; the administrator judges — true to the text or not.
+ * 4-bit, on the processor (on DirectML they write nonsense): ≈5–12 words a second.
+ * @type {{ id: string, title: string, size: string, spec: import('./engine-client.js').Writer }[]}
+ */
+export const WRITERS = [
+  { id: 'qwen35-4b', title: 'Qwen3.5-4B (Alibaba)', size: '≈3,3 ГБ', spec: { name: 'onnx-community/Qwen3.5-4B-ONNX', cls: 'Qwen3_5ForConditionalGeneration' } },
+  { id: 'gemma4-e4b', title: 'Gemma 4 E4B (Google)', size: '≈5,9 ГБ', spec: { name: 'onnx-community/gemma-4-E4B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
+  { id: 'gemma4-e2b', title: 'Gemma 4 E2B (Google)', size: '≈3,9 ГБ', spec: { name: 'onnx-community/gemma-4-E2B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
+];
+/** How many paragraphs a written answer is made from (as many as «Я и Книга» answers with). */
+const FROM = 3;
+
 /** A text marked as the model wants it. @param {string} template @param {string} text */
 const marked = (template, text) => template.replace('{}', () => text);
 /**
@@ -86,8 +101,9 @@ const RRF = 60;
  * @param {ReturnType<typeof import('./engine-client.js').createEngine>} engine
  * @param {{ file: string, models: string }} where the lab's database file; the models' folder
  * @param {typeof MODELS} [list] the models (a test's own)
+ * @param {typeof WRITERS} [writers] the writing models (a test's own)
  */
-export function createLab(db, engine, where, list = MODELS) {
+export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
   const lab = new DatabaseSync(where.file);
   lab.exec(`
     PRAGMA journal_mode = WAL;
@@ -102,7 +118,13 @@ export function createLab(db, engine, where, list = MODELS) {
       PRIMARY KEY (question, col, rank)) WITHOUT ROWID;
     -- how the vectors are worked out: threads, the video card, all models at once
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
+    -- a writing model's answer to a saved question, from the paragraphs (refs: JSON); good — the administrator's
+    -- judgement: true to the text and to the point (1) or not (0)
+    CREATE TABLE IF NOT EXISTS replies (question TEXT NOT NULL, model TEXT NOT NULL, refs TEXT NOT NULL, text TEXT NOT NULL,
+      ms INTEGER NOT NULL, tokens INTEGER NOT NULL, good INTEGER, created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (question, model)) WITHOUT ROWID;
   `);
+  lab.exec(`DELETE FROM replies WHERE model NOT IN (${writers.map((w) => `'${w.id}'`).join(', ') || "''"})`);
   // (a model dropped from the list: its vectors and answers go — the judgements stay, they are the reader's)
   const kept = list.map((m) => `'${m.id}'`).join(', ');
   lab.exec(`DELETE FROM vectors WHERE model NOT IN (${kept}); DELETE FROM answers WHERE col NOT IN (${kept}, 'mix', 'words');`);
@@ -131,6 +153,9 @@ export function createLab(db, engine, where, list = MODELS) {
     answersAll: lab.prepare('SELECT question, col, rank, ref FROM answers ORDER BY question, col, rank'),
     clearAnswer: lab.prepare('DELETE FROM answers WHERE question = ? AND col = ?'),
     putAnswer: lab.prepare('INSERT INTO answers (question, col, rank, ref) VALUES (?, ?, ?, ?)'),
+    replies: lab.prepare('SELECT question, model, refs, text, ms, tokens, good FROM replies'),
+    putReply: lab.prepare('INSERT OR REPLACE INTO replies (question, model, refs, text, ms, tokens, good) VALUES (?, ?, ?, ?, ?, ?, NULL)'),
+    judgeReply: lab.prepare('UPDATE replies SET good = ? WHERE question = ? AND model = ?'),
     settings: lab.prepare('SELECT key, value FROM settings'),
     setting: lab.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'),
   };
@@ -150,6 +175,8 @@ export function createLab(db, engine, where, list = MODELS) {
   const jobs = /** @type {Map<string, { stop: boolean, rate: number }>} */ (new Map());
   let queue = /** @type {string[]} */ ([]);
   const errors = /** @type {Record<string, string>} */ ({});
+  /** The writing in the background: one model at a time (gigabytes each), the saved questions in turn. */
+  const writing = { model: /** @type {string | null} */ (null), stop: false, done: 0, of: 0, error: /** @type {Record<string, string>} */ ({}) };
 
   /** The spec as the engine is to run it now: on the video card when chosen and the model can. @param {typeof MODELS[number]} m @returns {Spec} */
   const specOf = (m) => (settings.gpu && gpuCapable(m) ? { ...m.spec, device: 'dml' } : m.spec);
@@ -301,6 +328,20 @@ export function createLab(db, engine, where, list = MODELS) {
           threads: jobs.has(m.id) ? threadsOf(m) : null,
         })),
         ...judgement(),
+        // the writing models: how many saved questions each answered, how well, how fast
+        writers: writers.map((w) => {
+          const saved = new Set(/** @type {{ text: string }[]} */ (q.questions.all()).map((x) => x.text));
+          const rows = /** @type {any[]} */ (q.replies.all()).filter((r) => r.model === w.id && saved.has(r.question));
+          return {
+            id: w.id, title: w.title, size: w.size,
+            downloaded: existsSync(`${where.models}/${w.spec.name}`),
+            answered: rows.length, of: saved.size,
+            good: rows.filter((r) => r.good === 1).length, bad: rows.filter((r) => r.good === 0).length,
+            ms: rows.length ? Math.round(rows.reduce((s, r) => s + r.ms, 0) / rows.length) : 0,
+            running: writing.model === w.id, progress: writing.model === w.id ? { done: writing.done, of: writing.of } : null,
+            error: writing.error[w.id] ?? null,
+          };
+        }),
       };
     },
 
@@ -441,6 +482,70 @@ export function createLab(db, engine, where, list = MODELS) {
       return (mode === 'hybrid' ? mix(model, byWords(text, DEEP).map((p) => p.ref)) : model).slice(0, n);
     },
 
+    /**
+     * A writing model answers the saved questions in the Book's words (those it has not answered; `again` — all),
+     * each from the paragraphs the Book's model finds for it; in the background, one model at a time. Its
+     * process is let go at the end (gigabytes).
+     * @param {string} id @param {boolean} [again]
+     */
+    write(id, again = false) {
+      const w = writers.find((x) => x.id === id);
+      if (!w) throw new HttpError(404, 'Нет такой модели');
+      if (!engine.installed()) throw new HttpError(503, 'Движок модели не установлен (server/features/lab/engine: npm install)');
+      const book = list.find((x) => x.book);
+      if (!book || !(/** @type {{ n: number }} */ (q.done.get(book.id)).n)) throw new HttpError(409, 'Сначала посчитайте модель поиска по смыслу');
+      if (writing.model) throw new HttpError(409, 'Сейчас отвечает другая модель — дождитесь или поставьте на паузу');
+      const answered = new Set(/** @type {any[]} */ (q.replies.all()).filter((r) => r.model === id).map((r) => r.question));
+      const todo = /** @type {{ text: string }[]} */ (q.questions.all()).map((x) => x.text).filter((t) => again || !answered.has(t)).reverse();
+      Object.assign(writing, { model: id, stop: false, done: 0, of: todo.length });
+      delete writing.error[id];
+      void (async () => {
+        try {
+          for (const question of todo) {
+            if (writing.stop) break;
+            const lang = langOf(question);
+            const refs = (await closest(book, question, FROM)).map((x) => x.ref);
+            const paragraphs = refs.map((ref) => ({ ref, text: /** @type {any} */ (q.paragraph.get(ref))[lang] }));
+            const t = Date.now();
+            const { text, tokens } = await engine.write(w.spec, messagesFor(question, paragraphs), { threads: settings.threads, max: MAX_TOKENS });
+            q.putReply.run(question, id, JSON.stringify(refs), text, Date.now() - t, tokens);
+            writing.done++;
+          }
+        } catch (err) {
+          writing.error[id] = /** @type {Error} */ (err).message;
+        } finally {
+          writing.model = null;
+          engine.release(w.spec.name);
+        }
+      })();
+    },
+    /** The writing stops after the answer in hand. */
+    pauseWriting() {
+      writing.stop = true;
+    },
+    /**
+     * The written answers, per saved question (newest first): the paragraphs they were made from, each model's
+     * answer with its time and judgement.
+     */
+    replies() {
+      const by = Map.groupBy(/** @type {any[]} */ (q.replies.all()), (r) => r.question);
+      return /** @type {{ text: string }[]} */ (q.questions.all())
+        .filter((x) => by.has(x.text))
+        .map((x) => {
+          const rows = /** @type {any[]} */ (by.get(x.text));
+          return {
+            question: x.text,
+            refs: /** @type {string[]} */ (JSON.parse(rows[0].refs)),
+            answers: Object.fromEntries(rows.map((r) => [r.model, { text: r.text, ms: r.ms, tokens: r.tokens, good: r.good === null ? null : !!r.good }])),
+          };
+        });
+    },
+    /** A written answer judged: true to the text and to the point (true), not (false), not judged (null). @param {Record<string, unknown>} b */
+    judgeReply(b) {
+      if (typeof b.question !== 'string' || typeof b.model !== 'string') throw new HttpError(400, 'Нужны вопрос и модель');
+      q.judgeReply.run(b.good === null ? null : b.good ? 1 : 0, b.question, b.model);
+    },
+
     /** The judgement of a paragraph for a question: true, false, or null — not judged. @param {string} question @param {string} ref */
     judgedFor(question, ref) {
       const j = /** @type {any[]} */ (q.judgedOf.all(question.trim())).find((x) => x.ref === ref);
@@ -482,6 +587,7 @@ export function createLab(db, engine, where, list = MODELS) {
     },
     close() {
       this.pause();
+      writing.stop = true;
       engine.stop();
       lab.close();
     },

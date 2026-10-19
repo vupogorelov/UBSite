@@ -52,6 +52,7 @@ GET /api/health live
 GET /api/integrations/en last
 GET /api/lab last
 GET /api/lab/book-judged last
+GET /api/lab/replies last
 GET /api/lab/todo last
 GET /api/notifications last
 GET /api/notifications/count last
@@ -131,8 +132,11 @@ POST /api/lab/models/:id/pause direct
 POST /api/lab/models/:id/run direct
 POST /api/lab/pause direct
 POST /api/lab/questions direct
+POST /api/lab/replies/judged direct
 POST /api/lab/run-all direct
 POST /api/lab/settings direct
+POST /api/lab/writers/:id/run direct
+POST /api/lab/writers/pause direct
 POST /api/log direct
 POST /api/notifications/seen direct
 POST /api/pronunciations direct

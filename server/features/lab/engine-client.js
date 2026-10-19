@@ -19,7 +19,12 @@ const IDLE = 10 * 60_000;
  * @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, textOnly?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec
  */
 
-/** @typedef {{ child: import('node:child_process').ChildProcess, threads: number, waiting: Map<number, { resolve: (v: { vectors: Float32Array, dims: number }) => void, reject: (e: Error) => void }>, idle?: ReturnType<typeof setTimeout> }} Proc */
+/**
+ * A model that writes («Я и Книга»'s answers; engine/embed.js): its name, its class, which files.
+ * @typedef {{ name: string, cls: string, dtype?: string }} Writer
+ */
+
+/** @typedef {{ child: import('node:child_process').ChildProcess, threads: number, waiting: Map<number, { resolve: (v: any) => void, reject: (e: Error) => void }>, idle?: ReturnType<typeof setTimeout> }} Proc */
 
 /** @param {string} models where the models are kept (data/models) */
 export function createEngine(models) {
@@ -43,7 +48,7 @@ export function createEngine(models) {
       const w = p.waiting.get(m.id);
       p.waiting.delete(m.id);
       if (m.error) w?.reject(new Error(m.error));
-      else w?.resolve({ vectors: m.vectors, dims: m.dims });
+      else w?.resolve(m);
     });
     c.on('exit', () => {
       if (procs.get(key) === p) procs.delete(key);
@@ -53,6 +58,30 @@ export function createEngine(models) {
     });
     procs.set(key, p);
     return p;
+  }
+
+  /**
+   * A request to the process of `key` (started if none; with other threads — restarted when `exact` and idle).
+   * @param {string} key @param {number} threads @param {boolean} exact @param {Record<string, unknown>} msg
+   * @returns {Promise<any>}
+   */
+  function ask(key, threads, exact, msg) {
+    let p = procs.get(key);
+    if (p && exact && p.threads !== threads && !p.waiting.size) {
+      procs.delete(key);
+      p.child.kill();
+      p = undefined;
+    }
+    p ??= start(key, threads);
+    const proc = p;
+    clearTimeout(proc.idle);
+    proc.idle = setTimeout(() => proc.child.kill(), IDLE);
+    proc.idle.unref();
+    const id = ++seq;
+    return new Promise((resolve, reject) => {
+      proc.waiting.set(id, { resolve, reject });
+      proc.child.send({ id, ...msg });
+    });
   }
 
   return {
@@ -69,23 +98,19 @@ export function createEngine(models) {
      * @returns {Promise<{ vectors: Float32Array, dims: number }>}
      */
     embed(spec, texts, { threads, exact } = { threads: 8 }) {
-      const key = `${spec.name} ${spec.device ?? 'cpu'}`;
-      let p = procs.get(key);
-      if (p && exact && p.threads !== threads && !p.waiting.size) {
-        procs.delete(key);
-        p.child.kill();
-        p = undefined;
-      }
-      p ??= start(key, threads);
-      const proc = p;
-      clearTimeout(proc.idle);
-      proc.idle = setTimeout(() => proc.child.kill(), IDLE);
-      proc.idle.unref();
-      const id = ++seq;
-      return new Promise((resolve, reject) => {
-        proc.waiting.set(id, { resolve, reject });
-        proc.child.send({ id, spec, texts });
-      });
+      return ask(`${spec.name} ${spec.device ?? 'cpu'}`, threads, !!exact, { spec, texts }).then((m) => ({ vectors: m.vectors, dims: m.dims }));
+    },
+    /**
+     * A writing model's answer to a conversation (on the processor, `threads` of it).
+     * @param {Writer} spec @param {{ role: string, content: string }[]} messages @param {{ threads: number, max: number }} opts
+     * @returns {Promise<{ text: string, tokens: number }>}
+     */
+    write(spec, messages, { threads, max }) {
+      return ask(`${spec.name} cpu`, threads, true, { op: 'write', spec, messages, max }).then((m) => ({ text: m.text, tokens: m.tokens }));
+    },
+    /** A model's process stopped (a writing model holds gigabytes: let go when its work is done). @param {string} name */
+    release(name) {
+      for (const [key, p] of procs) if (key.startsWith(`${name} `) && !p.waiting.size) p.child.kill();
     },
     stop() {
       for (const p of procs.values()) {
