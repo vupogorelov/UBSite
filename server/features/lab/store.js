@@ -3,9 +3,10 @@
 // the questions to try them on — in a file of its own (data/lab.db): the platform's database, its copies
 // and the book's copy on the devices are not touched; the experiment is gone with that file.
 //
-// The vectors are worked out in the background (`run`): a few paragraphs at a time, with a pause between,
-// in the book's order — the first papers can be asked about while the rest are still being done. A question
-// is compared with every vector (a few milliseconds for the whole book): the closest paragraphs.
+// The vectors are worked out in the background (`run`): 32 paragraphs of a like length at a time, each model
+// in a process of its own — one model after another, or all at once (`configure`: the processor's threads
+// shared between them; the video card for the full-precision ones). A question is compared with every
+// vector (a few milliseconds for the whole book): the closest paragraphs.
 //
 // The answers are compared by the administrator's judgement: a paragraph answers a question or not, whoever
 // found it — one mark per question and paragraph, seen in every column. Each column's answer (the models,
@@ -67,6 +68,13 @@ export const MODELS = [
 ];
 /** A text marked as the model wants it. @param {string} template @param {string} text */
 const marked = (template, text) => template.replace('{}', () => text);
+/**
+ * Whether a model can work on the video card: full precision only — there its vectors are the processor's
+ * (checked: USER2-base, BERTA, 6–7 times faster on an RTX 4060); the 8-bit ones come out different, and a
+ * question must be turned into a vector the way the paragraphs were.
+ * @param {{ spec: Spec }} m
+ */
+export const gpuCapable = (m) => m.spec.dtype === 'fp32';
 
 /**
  * The mixed search: the model's first two stay where they are (it finds what is meant); after them its
@@ -83,8 +91,12 @@ export function mix(model, words) {
   for (const list of [model, words]) list.forEach((ref, i) => weight.set(ref, (weight.get(ref) ?? 0) + 1 / (RRF + i + 1)));
   return [...head, ...[...weight].sort((a, b) => b[1] - a[1]).map(([ref]) => ref).filter((ref) => !head.includes(ref))];
 }
-const BATCH = 8;
-const PAUSE = 30;
+/** Paragraphs per batch: of a like length (less padding) — the engine does 32 at once much faster than 8. */
+const BATCH = 32;
+/** The processor threads: up to the machine's 16 logical cores; 8 unless set. */
+const MAX_THREADS = 16;
+/** A model on the video card: two threads of the processor are enough for it. */
+const GPU_THREADS = 2;
 const TOP = 10;
 /** How deep the mixed search looks into each of its two lists. */
 const DEEP = 50;
@@ -112,6 +124,8 @@ export function createLab(db, engine, where) {
     -- what each column answered a question, in its order (the last time it was asked)
     CREATE TABLE IF NOT EXISTS answers (question TEXT NOT NULL, col TEXT NOT NULL, rank INTEGER NOT NULL, ref TEXT NOT NULL,
       PRIMARY KEY (question, col, rank)) WITHOUT ROWID;
+    -- how the vectors are worked out: threads, the video card, all models at once
+    CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL) WITHOUT ROWID;
   `);
   // (a model dropped from the list: its vectors and answers go — the judgements stay, they are the reader's)
   const kept = MODELS.map((m) => `'${m.id}'`).join(', ');
@@ -141,13 +155,38 @@ export function createLab(db, engine, where) {
     answersAll: lab.prepare('SELECT question, col, rank, ref FROM answers ORDER BY question, col, rank'),
     clearAnswer: lab.prepare('DELETE FROM answers WHERE question = ? AND col = ?'),
     putAnswer: lab.prepare('INSERT INTO answers (question, col, rank, ref) VALUES (?, ?, ?, ?)'),
+    settings: lab.prepare('SELECT key, value FROM settings'),
+    setting: lab.prepare('INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)'),
   };
+
+  /** How the vectors are worked out: the processor's threads (shared by the models working on it), the video card for the models that can, all asked-for models at once (else in turn). */
+  const settings = { threads: 8, gpu: false, together: false };
+  for (const s of /** @type {{ key: string, value: string }[]} */ (q.settings.all())) {
+    if (s.key in settings) /** @type {any} */ (settings)[s.key] = JSON.parse(s.value);
+  }
 
   /** Each model's vectors in memory (made when first asked; grown as more are worked out). @type {Map<string, Row[]>} */
   const loaded = new Map();
-  /** The work in the background: one model at a time (the engine holds one). */
-  /** The work in the background: one model at a time (the others asked for wait in `queue`, in turn). */
-  const job = { model: /** @type {string | null} */ (null), queue: /** @type {string[]} */ ([]), stop: false, error: /** @type {Record<string, string>} */ ({}), rate: 0 };
+  /**
+   * The work in the background: the models at work (each in its process, `stop` — paused after its batch),
+   * the ones waiting in turn (not all at once), the last error of each.
+   */
+  const jobs = /** @type {Map<string, { stop: boolean, rate: number }>} */ (new Map());
+  let queue = /** @type {string[]} */ ([]);
+  const errors = /** @type {Record<string, string>} */ ({});
+
+  /** The spec as the engine is to run it now: on the video card when chosen and the model can. @param {typeof MODELS[number]} m @returns {Spec} */
+  const specOf = (m) => (settings.gpu && gpuCapable(m) ? { ...m.spec, device: 'dml' } : m.spec);
+  /**
+   * The processor threads of a model at work: on the video card — a few; on the processor — its share of
+   * them all with the others working on it.
+   * @param {typeof MODELS[number]} m
+   */
+  const threadsOf = (m) => {
+    if (specOf(m).device === 'dml') return GPU_THREADS;
+    const onCpu = [...jobs.keys()].filter((id) => specOf(modelOf(id)).device !== 'dml').length;
+    return Math.max(1, Math.floor(settings.threads / Math.max(1, onCpu)));
+  };
 
   /** @param {string} id */
   const modelOf = (id) => {
@@ -166,26 +205,51 @@ export function createLab(db, engine, where) {
     return r;
   }
 
-  /** Works out the model's missing vectors, a batch at a time, until done or paused. @param {typeof MODELS[number]} m */
-  async function work(m) {
+  /**
+   * Works out the model's missing vectors, a batch at a time, until done or paused: the texts by length (a
+   * batch of like ones — less padding), each batch with the threads the model has now (they change as other
+   * models start and finish).
+   * @param {typeof MODELS[number]} m @param {{ stop: boolean, rate: number }} job
+   */
+  async function work(m, job) {
     const have = new Set(/** @type {{ ref: string, lang: string }[]} */ (q.have.all(m.id)).map((x) => `${x.ref} ${x.lang}`));
     /** @type {{ ref: string, lang: 'ru' | 'en', text: string }[]} */
     const todo = [];
     for (const p of /** @type {{ ref: string, ru: string, en: string }[]} */ (q.paragraphs.all())) {
       for (const lang of /** @type {const} */ (['ru', 'en'])) if (p[lang] && !have.has(`${p.ref} ${lang}`)) todo.push({ ref: p.ref, lang, text: p[lang] });
     }
+    todo.sort((a, b) => a.text.length - b.text.length);
     const started = Date.now();
     for (let i = 0; i < todo.length && !job.stop; i += BATCH) {
       const part = todo.slice(i, i + BATCH);
-      const { vectors, dims } = await engine.embed(m.spec, part.map((x) => marked(m.passage, x.text)));
-      part.forEach((x, k) => {
-        const vec = vectors.slice(k * dims, (k + 1) * dims);
-        q.put.run(m.id, x.ref, x.lang, new Uint8Array(vec.buffer));
-        loaded.get(m.id)?.push({ ref: x.ref, lang: x.lang, vec });
-      });
+      const { vectors, dims } = await engine.embed(specOf(m), part.map((x) => marked(m.passage, x.text)), { threads: threadsOf(m), exact: true });
+      transaction(lab, () =>
+        part.forEach((x, k) => {
+          const vec = vectors.slice(k * dims, (k + 1) * dims);
+          q.put.run(m.id, x.ref, x.lang, new Uint8Array(vec.buffer));
+          loaded.get(m.id)?.push({ ref: x.ref, lang: x.lang, vec });
+        }),
+      );
       job.rate = Math.round(((i + part.length) / Math.max(1, Date.now() - started)) * 60_000);
-      await new Promise((r) => setTimeout(r, PAUSE)); // (the server's other work goes first)
+      await new Promise((r) => setImmediate(r)); // (the server's other work goes first)
     }
+  }
+
+  /** Starts the model's work; when it ends, the next in turn (one at a time unless all at once). @param {typeof MODELS[number]} m */
+  function begin(m) {
+    const job = { stop: false, rate: 0 };
+    jobs.set(m.id, job);
+    delete errors[m.id];
+    void work(m, job)
+      .catch((err) => (errors[m.id] = /** @type {Error} */ (err).message))
+      .finally(() => {
+        jobs.delete(m.id);
+        next();
+      });
+  }
+  /** The models in turn: started while there is room (all at once, or one). */
+  function next() {
+    while (queue.length && (settings.together || !jobs.size)) begin(modelOf(/** @type {string} */ (queue.shift())));
   }
 
   /**
@@ -193,7 +257,7 @@ export function createLab(db, engine, where) {
    * @param {typeof MODELS[number]} m @param {string} text @param {number} n
    */
   async function closest(m, text, n) {
-    const { vectors } = await engine.embed(m.spec, [marked(m.query, text)]);
+    const { vectors } = await engine.embed(specOf(m), [marked(m.query, text)], { threads: settings.threads });
     /** @type {Map<string, { score: number, lang: 'ru' | 'en' }>} */
     const best = new Map();
     for (const r of rows(m.id)) {
@@ -251,11 +315,14 @@ export function createLab(db, engine, where) {
       return {
         installed: engine.installed(),
         engineRunning: engine.running(),
+        settings: { ...settings, maxThreads: MAX_THREADS },
         models: MODELS.map((m) => ({
           id: m.id, title: m.title, size: m.size,
           downloaded: existsSync(`${where.models}/${m.spec.name}`),
           done: /** @type {{ n: number }} */ (q.done.get(m.id)).n, total,
-          running: job.model === m.id, queued: job.queue.includes(m.id), rate: job.model === m.id ? job.rate : 0, error: job.error[m.id] ?? null,
+          running: jobs.has(m.id), queued: queue.includes(m.id), rate: jobs.get(m.id)?.rate ?? 0, error: errors[m.id] ?? null,
+          gpu: gpuCapable(m), device: specOf(m).device === 'dml' ? 'gpu' : 'cpu',
+          threads: jobs.has(m.id) ? threadsOf(m) : null,
         })),
         ...judgement(),
       };
@@ -276,37 +343,48 @@ export function createLab(db, engine, where) {
       }
     },
 
-    /** Starts working out a model's vectors (another model's work stops first). @param {string} id */
+    /** Starts working out a model's vectors — at once, or in turn after the one at work (as set). @param {string} id */
     run(id) {
       modelOf(id);
       if (!engine.installed()) throw new HttpError(503, 'Движок модели не установлен (server/features/lab/engine: npm install)');
-      if (job.model === id) return void (job.stop = false); // (paused, its batch not yet done: goes on)
-      if (!job.queue.includes(id)) job.queue.push(id);
-      if (job.model) return; // (in turn, after the one at work)
-      const next = async () => {
-        while (job.queue.length) {
-          const m = modelOf(/** @type {string} */ (job.queue.shift()));
-          job.model = m.id;
-          job.stop = false;
-          job.rate = 0;
-          delete job.error[m.id];
-          try {
-            await work(m);
-          } catch (err) {
-            job.error[m.id] = /** @type {Error} */ (err).message;
-          } finally {
-            job.model = null;
-          }
-          if (job.stop) break; // (paused: the queue waits)
-        }
-      };
-      void next();
+      const job = jobs.get(id);
+      if (job) return void (job.stop = false); // (paused, its batch not yet done: goes on)
+      if (!queue.includes(id)) queue.push(id);
+      next();
+    },
+    /** Every model not worked out to the end: started (at once or in turn). */
+    runAll() {
+      for (const m of MODELS) if (/** @type {{ n: number }} */ (q.done.get(m.id)).n < /** @type {{ n: number }} */ (q.total.get()).n) this.run(m.id);
     },
 
-    /** Stops the work after its batch; the models waiting in turn wait no more. */
-    pause() {
-      job.stop = true;
-      job.queue = [];
+    /** Stops a model's work after its batch (or every model's; the ones waiting in turn wait no more). @param {string} [id] */
+    pause(id) {
+      if (id) {
+        queue = queue.filter((x) => x !== id);
+        const job = jobs.get(id);
+        if (job) job.stop = true;
+        return;
+      }
+      queue = [];
+      for (const job of jobs.values()) job.stop = true;
+    },
+
+    /**
+     * Changes how the vectors are worked out: { threads: 1–16, gpu, together } (any of them). The work going on
+     * takes them from its next batch; all at once — the models waiting in turn start.
+     * @param {Record<string, unknown>} b
+     */
+    configure(b) {
+      if (b.threads !== undefined) {
+        const t = Number(b.threads);
+        if (!Number.isInteger(t) || t < 1 || t > MAX_THREADS) throw new HttpError(400, `Потоков — от 1 до ${MAX_THREADS}`);
+        settings.threads = t;
+      }
+      for (const k of /** @type {const} */ (['gpu', 'together'])) if (b[k] !== undefined) settings[k] = !!b[k];
+      transaction(lab, () => {
+        for (const [k, v] of Object.entries(settings)) q.setting.run(k, JSON.stringify(v));
+      });
+      next();
     },
 
     /**
@@ -413,7 +491,7 @@ export function createLab(db, engine, where) {
       q.removeQuestion.run(id);
     },
     close() {
-      job.stop = true;
+      this.pause();
       engine.stop();
       lab.close();
     },

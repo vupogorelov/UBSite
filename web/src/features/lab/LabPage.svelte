@@ -138,20 +138,51 @@
     {:else}
       {#if !status.installed}<p class="ui-hint">Движок модели не установлен: <code>npm install</code> в server/features/lab/engine.</p>{/if}
 
-      <div class="ui-label">Модели</div>
+      <!-- how the vectors are worked out: the processor's threads, the video card, all models at once -->
+      {@const set = status.settings}
+      <div class="ui-label">Как считать</div>
+      <div class="set-card">
+        <div class="set-item set-switch lab-threads">
+          <span class="set-item-text"><b>Потоки процессора</b>
+            <span>Сколько ядер отдать моделям. При одновременном расчёте делятся между моделями на процессоре.</span></span>
+          <span class="lab-step">
+            <button class="ui-chip" aria-label="Меньше потоков" disabled={set.threads <= 1} onclick={() => act(() => labApi.configure({ threads: set.threads - 1 }))}>−</button>
+            <b class="lab-step-n" aria-live="polite">{set.threads}</b>
+            <button class="ui-chip" aria-label="Больше потоков" disabled={set.threads >= set.maxThreads} onclick={() => act(() => labApi.configure({ threads: set.threads + 1 }))}>+</button>
+          </span>
+        </div>
+        <label class="set-item set-switch">
+          <span class="set-item-text"><b>Видеокарта</b>
+            <span>Модели полной точности ({status.models.filter((m) => m.gpu).map((m) => m.id).join(', ')}) — в 6–7 раз быстрее, векторы те же. Остальные считаются на процессоре.</span></span>
+          <input type="checkbox" class="ui-switch" checked={set.gpu} onchange={(e) => act(() => labApi.configure({ gpu: e.currentTarget.checked }))} />
+        </label>
+        <label class="set-item set-switch">
+          <span class="set-item-text"><b>Все модели сразу</b>
+            <span>Каждая в своём процессе, а не по очереди. Памяти нужно больше.</span></span>
+          <input type="checkbox" class="ui-switch" checked={set.together} onchange={(e) => act(() => labApi.configure({ together: e.currentTarget.checked }))} />
+        </label>
+      </div>
+
+      <div class="ui-label lab-models-h">Модели
+        {#if status.models.some((m) => m.running || m.queued)}
+          <button class="ui-chip" onclick={() => act(() => labApi.pause())}><Icon name="pause" size={14} />Остановить все</button>
+        {:else if status.models.some((m) => m.done < m.total)}
+          <button class="ui-chip" onclick={() => act(labApi.runAll)} disabled={!status.installed}><Icon name="play" size={14} />Посчитать все</button>
+        {/if}
+      </div>
       <ul class="ui-cards">
         {#each status.models as m (m.id)}
           <li class="ui-card lab-model">
             <span class="lab-model-text">
               <b>{m.title} <span class="muted lab-size">{m.size}{m.downloaded ? '' : ' · скачается при запуске'}</span></b>
               <span class="lab-bar" aria-hidden="true"><span style:width="{m.total ? (m.done / m.total) * 100 : 0}%"></span></span>
-              <span class="muted small">{m.done || m.running ? progress(m) : 'Ещё не считали'}{m.running ? ' · считается' : m.queued ? ' · в очереди' : ''}</span>
+              <span class="muted small">{m.done || m.running ? progress(m) : 'Ещё не считали'}{m.running ? ` · считается ${m.device === 'gpu' ? 'на видеокарте' : `на процессоре, ${m.threads} ${plural(m.threads ?? 0, 'поток', 'потока', 'потоков')}`}` : m.queued ? ' · в очереди' : ''}</span>
               {#if m.error}<span class="lab-error small">{m.error}</span>{/if}
             </span>
             {#if m.running}
-              <button class="ui-chip" onclick={() => act(labApi.pause)}><Icon name="pause" size={14} />Пауза</button>
+              <button class="ui-chip" onclick={() => act(() => labApi.pause(m.id))}><Icon name="pause" size={14} />Пауза</button>
             {:else if m.queued}
-              <button class="ui-chip" disabled>В очереди</button>
+              <button class="ui-chip" onclick={() => act(() => labApi.pause(m.id))} title="Убрать из очереди">В очереди</button>
             {:else if m.done < m.total}
               <button class="ui-chip" onclick={() => act(() => labApi.run(m.id))} disabled={!status.installed}><Icon name="play" size={14} />{m.done ? 'Дальше' : 'Посчитать'}</button>
             {/if}
@@ -308,6 +339,32 @@
   }
   .lab-model {
     align-items: center;
+  }
+  .lab-models-h {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    justify-content: space-between;
+  }
+  .lab-step {
+    display: flex;
+    flex: none;
+    gap: var(--space-2);
+    align-items: center;
+  }
+  .lab-threads {
+    cursor: default;
+  }
+  .lab-step .ui-chip {
+    justify-content: center;
+    width: 36px;
+    padding: 0;
+    font-size: 18px;
+  }
+  .lab-step-n {
+    min-width: 2ch;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
   }
   .lab-model-text {
     display: grid;

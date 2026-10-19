@@ -85,6 +85,52 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
   }
 });
 
+test('the Laboratory: all models at once, the threads shared by the ones on the processor, the video card for full precision', async () => {
+  const db = openDb(':memory:');
+  db.exec(`
+    INSERT INTO parts (id, title_ru, title_en) VALUES (1, 'Часть', 'Part');
+    INSERT INTO papers (id, part_id, title_ru, title_en) VALUES (47, 1, 'Обители', 'Mansions');
+    INSERT INTO paragraphs (ref, seq, paper_id, section_num, num, page_ref, html_ru, html_en, plain_ru, plain_en) VALUES
+      ('47:2.7', 1, 47, 2, 7, '1', '', '', 'Дети после смерти.', 'Children after death.');
+  `);
+  const dir = mkdtempSync(join(tmpdir(), 'lab-'));
+  try {
+    /** What each model's batch was asked with. @type {Map<string, { device?: string, threads?: number }>} */
+    const seen = new Map();
+    let release = () => {};
+    const gate = new Promise((r) => (release = () => r(undefined)));
+    const engine = fakeEngine();
+    const lab = createLab(db, /** @type {any} */ ({
+      ...engine,
+      /** @param {any} spec @param {string[]} texts @param {any} opts */
+      async embed(spec, texts, opts) {
+        seen.set(spec.name, { device: spec.device, threads: opts?.threads });
+        await gate;
+        return engine.embed(spec, texts);
+      },
+    }), { file: join(dir, 'lab.db'), models: dir });
+    assert.throws(() => lab.configure({ threads: 17 }), /от 1 до 16/);
+    lab.configure({ threads: 12, gpu: true, together: true });
+    lab.runAll();
+    const s = lab.status();
+    assert.ok(s.models.every((m) => m.running), 'all at once');
+    const of = (/** @type {string} */ id) => /** @type {any} */ (s.models.find((m) => m.id === id));
+    const onCpu = s.models.filter((m) => m.device === 'cpu').length;
+    assert.deepEqual([of('user2').device, of('gemma').device], ['gpu', 'cpu'], 'the video card: full precision only');
+    assert.equal(of('gemma').threads, Math.floor(12 / onCpu), "the processor's threads shared");
+    assert.equal(seen.get('deepvk/USER2-base')?.device, 'dml');
+    release();
+    for (let i = 0; i < 200 && lab.status().models.some((m) => m.running); i++) await new Promise((r) => setTimeout(r, 20));
+    assert.ok(lab.status().models.every((m) => m.done === 2), 'each worked out');
+    lab.close();
+    const again = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir });
+    assert.deepEqual(again.status().settings, { threads: 12, gpu: true, together: true, maxThreads: 16 }, 'the settings kept');
+    again.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test("the mixed search: the model's first two stay; the words add what it missed, not taking its places", async () => {
   const model = ['a', 'b', 'c', 'd', 'e'];
   const words = ['x', 'c', 'y'];

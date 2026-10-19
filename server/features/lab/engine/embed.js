@@ -13,7 +13,7 @@ env.cacheDir = process.env.LAB_MODELS ?? 'models';
 const threads = Number(process.env.LAB_THREADS) || 2;
 const session_options = { intraOpNumThreads: threads, interOpNumThreads: 1 };
 
-/** @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence' }} Spec */
+/** @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec */
 
 /** The models loaded, by name: all held (the Laboratory compares them; the process ends when idle). @type {Map<string, Promise<(texts: string[]) => Promise<{ vectors: Float32Array, dims: number }>>>} */
 const held = new Map();
@@ -24,6 +24,8 @@ async function load(spec) {
   const options = {
     dtype: spec.dtype ?? 'q8', // (8-bit: a quarter of the size, nearly the same vectors)
     session_options,
+    // the video card (DirectML): full precision only — its vectors are the processor's; the 8-bit ones differ
+    ...(spec.device === 'dml' ? { device: 'dml' } : {}),
     ...(spec.file ? { model_file_name: spec.file } : {}),
     ...(spec.external ? { use_external_data_format: true } : {}),
   };

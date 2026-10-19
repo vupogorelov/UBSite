@@ -127,9 +127,12 @@ POST /api/integrations/en/run direct
 POST /api/lab/ask direct
 POST /api/lab/book-judged direct
 POST /api/lab/judged direct
+POST /api/lab/models/:id/pause direct
 POST /api/lab/models/:id/run direct
 POST /api/lab/pause direct
 POST /api/lab/questions direct
+POST /api/lab/run-all direct
+POST /api/lab/settings direct
 POST /api/log direct
 POST /api/notifications/seen direct
 POST /api/pronunciations direct

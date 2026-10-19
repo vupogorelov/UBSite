@@ -36,7 +36,15 @@ export default {
     // the paragraphs left to judge, per question
     r.on('GET', '/api/lab/todo', ({ user }) => (requireAdmin(user), open().todo()));
     r.on('POST', '/api/lab/models/:id/run', ({ params, user }) => (requireAdmin(user), open().run(params.id), open().status()));
+    r.on('POST', '/api/lab/models/:id/pause', ({ params, user }) => (requireAdmin(user), open().pause(params.id), open().status()));
+    r.on('POST', '/api/lab/run-all', ({ user }) => (requireAdmin(user), open().runAll(), open().status()));
     r.on('POST', '/api/lab/pause', ({ user }) => (requireAdmin(user), open().pause(), open().status()));
+    // { threads: 1–16, gpu, together } — how the vectors are worked out
+    r.on('POST', '/api/lab/settings', async ({ req, user }) => {
+      requireAdmin(user);
+      open().configure(/** @type {any} */ ((await readJson(req)) ?? {}));
+      return open().status();
+    });
     // { text } — the closest paragraphs of each model, and of the word search
     r.on('POST', '/api/lab/ask', async ({ req, user }) => {
       requireAdmin(user);
