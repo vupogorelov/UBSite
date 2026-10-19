@@ -53,6 +53,13 @@ export const MODELS = [
     spec: { name: 'deepvk/USER2-base', dtype: 'fp32', pooling: 'mean' },
   },
   {
+    // a Russian model (sergeyzh, MIT; learnt from FRIDA), a question and a text each with its mark, by the
+    // mean. No ONNX of its own: the files are laid in data/models/sergeyzh/BERTA by hand, from DaniShe/BERTA-onnx
+    // (its fp32 export, the weights unchanged), the model into onnx/
+    id: 'berta', title: 'BERTA (sergeyzh)', size: '≈510 МБ', query: 'search_query: {}', passage: 'search_document: {}',
+    spec: { name: 'sergeyzh/BERTA', dtype: 'fp32', pooling: 'mean' },
+  },
+  {
     // a small multilingual model of paraphrases (sentence-transformers, Apache 2.0), by the mean
     id: 'minilm', title: 'paraphrase-multilingual-MiniLM-L12-v2', size: '≈120 МБ', query: '{}', passage: '{}',
     spec: { name: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', pooling: 'mean' },
