@@ -39,6 +39,18 @@ export const MODELS = [
     id: 'e5-base', title: 'multilingual-e5-base (Microsoft)', size: '≈280 МБ', query: 'query: {}', passage: 'passage: {}', mix: true,
     spec: { name: 'Xenova/multilingual-e5-base', pooling: 'mean' },
   },
+  {
+    // a small Russian model (2021, MIT), by the first piece. It has no ONNX of its own: the files are laid in
+    // data/models/cointegrated/rubert-tiny2 by hand — config and tokenizer from cointegrated/rubert-tiny2,
+    // onnx/model.onnx from fissium/rubert-tiny2 (its conversion)
+    id: 'rubert-tiny2', title: 'rubert-tiny2 (cointegrated)', size: '≈120 МБ', query: '{}', passage: '{}',
+    spec: { name: 'cointegrated/rubert-tiny2', dtype: 'fp32', pooling: 'cls' },
+  },
+  {
+    // a small multilingual model of paraphrases (sentence-transformers, Apache 2.0), by the mean
+    id: 'minilm', title: 'paraphrase-multilingual-MiniLM-L12-v2', size: '≈120 МБ', query: '{}', passage: '{}',
+    spec: { name: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', pooling: 'mean' },
+  },
 ];
 /** A text marked as the model wants it. @param {string} template @param {string} text */
 const marked = (template, text) => template.replace('{}', () => text);
