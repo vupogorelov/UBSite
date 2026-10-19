@@ -56,11 +56,11 @@ export default {
     });
     r.on('DELETE', '/api/lab/questions/:id', ({ params, user }) => (requireAdmin(user), open().removeQuestion(Number(params.id)), open().status()));
 
-    // ---- «Я и Книга» answered by the search by meaning — an administrator's own conversation, to try it
+    // ---- «Я и Книга» answered by the search by meaning (EmbeddingGemma) — an administrator's own conversation, to try it
     // in earnest; everyone else's Book answers by the words, as before (server/bookvoice.js) ----
     core.voice.useFinder(async (text, ownerId, limit) => {
       if (!core.auth.userById(ownerId)?.isAdmin) return null;
-      return open().bookAnswer(text, limit, (t, n) => core.voice.find(t, n));
+      return open().bookAnswer(text, limit);
     });
     const q = {
       message: core.db.prepare(`SELECT m.id, m.ref AS chat, m.anchor_ref AS ref, u.is_agent AS agent

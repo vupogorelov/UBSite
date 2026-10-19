@@ -47,12 +47,16 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
     old.close();
 
     const lab = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir });
+    // models asked for while another works: in turn
     lab.run('e5-base');
-    for (let i = 0; i < 100 && lab.status().models[0].done < 6; i++) await new Promise((r) => setTimeout(r, 20));
-    assert.equal(lab.status().models[0].done, 6, 'both languages of the three paragraphs');
+    lab.run('gemma');
+    const model = (/** @type {string} */ id) => lab.status().models.find((m) => m.id === id);
+    assert.equal(model('gemma')?.queued, true);
+    for (let i = 0; i < 200 && model('gemma')?.done !== 6; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.deepEqual([model('e5-base')?.done, model('gemma')?.done], [6, 6], 'each worked out in turn: both languages of the three paragraphs');
 
     const a = await lab.ask('что с детьми после смерти', () => [{ ref: '47:2.8' }, { ref: '47:2.9' }]);
-    assert.deepEqual(a.columns.map((c) => c.id), ['e5-base', 'mix', 'words']);
+    assert.deepEqual(a.columns.map((c) => c.id), ['gemma', 'e5-base', 'mix', 'words']);
     const found = (/** @type {string} */ id) => /** @type {any} */ (a.columns.find((c) => c.id === id)).found.map((/** @type {any} */ f) => f.ref);
     assert.equal(found('e5-base')[0], '47:2.7', 'the closest by meaning first');
     assert.deepEqual(new Set(found('mix')), new Set(['47:2.7', '47:2.8', '47:2.9']), 'the mixed: both lists');
@@ -68,12 +72,9 @@ test('the Laboratory: one judgement per paragraph (the old per-column marks wher
     assert.deepEqual(todo?.items.map((x) => x.ref), ['47:2.8'], 'left to judge: each paragraph once, the judged ones not');
     assert.ok((todo?.items[0].by.length ?? 0) >= 2, 'found by several columns — shown once, with each place');
 
-    // models asked for while another works: in turn
-    lab.run('granite');
-    lab.run('gemma');
-    assert.equal(lab.status().models.find((m) => m.id === 'gemma')?.queued, true);
-    for (let i = 0; i < 200 && lab.status().models.find((m) => m.id === 'gemma')?.done !== 6; i++) await new Promise((r) => setTimeout(r, 20));
-    assert.deepEqual(lab.status().models.filter((m) => m.done === 6).map((m) => m.id), ['e5-base', 'granite', 'gemma'], 'each worked out in turn');
+    // «Я и Книга»: by its model alone, kept as the column 'book' of the score
+    assert.deepEqual(await lab.bookAnswer('что с детьми после смерти', 1), ['47:2.7']);
+    assert.equal(lab.status().score.find((x) => x.col === 'book')?.top3, 1);
 
     const kept = new DatabaseSync(join(dir, 'lab.db'), { readOnly: true });
     assert.deepEqual(kept.prepare("SELECT ref, good FROM judged WHERE question = 'дети'").all().map((r) => ({ ...r })), [{ ref: '47:2.7', good: 1 }], 'the old marks: only where the columns agreed');

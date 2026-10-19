@@ -18,31 +18,26 @@ import { transaction } from '../../db.js';
 /**
  * The models to try, each as its card says: `query` and `passage` — how it wants a question and a text
  * marked ({} — the text); `spec` — for the engine (engine/embed.js): which file, how the pieces make one
- * vector; `mix`: the model of the mixed search.
- * Tried and dropped (2026-10-17, ten questions judged): e5-small — e5-base better in every question;
- * bge-m3 — as good as e5-base (a draw) at twice the size, six times the time, three times the memory.
+ * vector; `mix`: a model of the mixed search (the first worked out of them); `book`: the model «Я и Книга»
+ * answers by, alone.
+ * Chosen (2026-10-19, 14 questions, 590 marks): EmbeddingGemma — the right paragraph first in 11 of 14,
+ * among the first three in 12, 53 hits (e5-base: 8, 11, 37); mixed with the words it gains nothing (the
+ * same first places, fewer hits) — the Book answers by it alone. e5-base stays to compare with.
+ * Tried and dropped: e5-small — e5-base better in every question; bge-m3 — a draw with e5-base at twice the
+ * size; Granite R2 (IBM) — as e5-base (37 hits); Qwen3-Embedding-0.6B — below e5-base at twice the size.
  * @typedef {import('./engine-client.js').Spec} Spec
- * @type {{ id: string, title: string, size: string, query: string, passage: string, spec: Spec, mix?: boolean }[]}
+ * @type {{ id: string, title: string, size: string, query: string, passage: string, spec: Spec, mix?: boolean, book?: boolean }[]}
  */
 export const MODELS = [
   {
-    id: 'e5-base', title: 'multilingual-e5-base (Microsoft)', size: '≈280 МБ', query: 'query: {}', passage: 'passage: {}', mix: true,
-    spec: { name: 'Xenova/multilingual-e5-base', pooling: 'mean' },
-  },
-  {
-    // IBM, 2026, Apache 2.0; Russian among its 52 best-served languages; no marks; by the first piece
-    id: 'granite', title: 'granite-embedding-311m-multilingual-r2 (IBM)', size: '≈310 МБ', query: '{}', passage: '{}',
-    spec: { name: 'ibm-granite/granite-embedding-311m-multilingual-r2', dtype: 'fp32', file: 'model_quint8_avx2', pooling: 'cls' },
-  },
-  {
     // Google, 2025, the Gemma terms; the model makes the sentence's vector itself
     id: 'gemma', title: 'embeddinggemma-300m (Google)', size: '≈310 МБ', query: 'task: search result | query: {}', passage: 'title: none | text: {}',
+    mix: true, book: true,
     spec: { name: 'onnx-community/embeddinggemma-300m-ONNX', external: true, pooling: 'sentence' },
   },
   {
-    // Alibaba, 2025, Apache 2.0; twice the size; a question with an instruction; by the last piece
-    id: 'qwen', title: 'Qwen3-Embedding-0.6B (Alibaba)', size: '≈610 МБ', query: 'Instruct: Given a question, retrieve passages of a book that answer it\nQuery:{}', passage: '{}',
-    spec: { name: 'onnx-community/Qwen3-Embedding-0.6B-ONNX', pooling: 'last_token' },
+    id: 'e5-base', title: 'multilingual-e5-base (Microsoft)', size: '≈280 МБ', query: 'query: {}', passage: 'passage: {}', mix: true,
+    spec: { name: 'Xenova/multilingual-e5-base', pooling: 'mean' },
   },
 ];
 /** A text marked as the model wants it. @param {string} template @param {string} text */
@@ -336,17 +331,16 @@ export function createLab(db, engine, where) {
     },
 
     /**
-     * «Я и Книга» answered by the mixed search (its model and the words): the refs, best first — null when
-     * its model is not worked out yet (the Book answers by the words then). The answer is kept as the
-     * column 'book' (the score: how the Book itself does).
-     * @param {string} text @param {number} n @param {(text: string, limit: number) => { ref: string }[]} byWords
+     * «Я и Книга» answered by its model (`book`: EmbeddingGemma) alone: the refs, best first — null when the
+     * model is not worked out yet (the Book answers by the words then). The answer is kept as the column
+     * 'book' (the score: how the Book itself does).
+     * @param {string} text @param {number} n
      */
-    async bookAnswer(text, n, byWords) {
+    async bookAnswer(text, n) {
       text = text.trim();
-      const m = MODELS.find((x) => x.mix);
+      const m = MODELS.find((x) => x.book);
       if (!text || text.length > 500 || !m || !/** @type {{ n: number }} */ (q.done.get(m.id)).n || !engine.installed()) return null;
-      const model = (await closest(m, text, DEEP)).map((x) => x.ref);
-      const refs = mix(model, byWords(text, DEEP).map((p) => p.ref)).slice(0, n);
+      const refs = (await closest(m, text, n)).map((x) => x.ref);
       transaction(lab, () => {
         q.clearAnswer.run(text, 'book');
         refs.forEach((ref, i) => q.putAnswer.run(text, 'book', i + 1, ref));
