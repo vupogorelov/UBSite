@@ -3977,6 +3977,10 @@ fieldset.group:disabled {
   gap: 2px;
   padding: 0.5rem 0.75rem 0.75rem;
   font-family: var(--sans);
+  /* the sizes as set (the setting, two fingers): Android's text autosizing (a large system font) would make
+     the long blocks — the book's paragraphs — larger than the messages, and two fingers would not reach them */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 .tg-row {
   display: flex;
