@@ -47,6 +47,12 @@ export const MODELS = [
     spec: { name: 'cointegrated/rubert-tiny2', dtype: 'fp32', pooling: 'cls' },
   },
   {
+    // a Russian model (deepvk, 2025, Apache 2.0; USER's next version, Russian and English): its own ONNX
+    // (full precision, ≈600 МБ), a question and a text each with its mark, by the mean
+    id: 'user2', title: 'USER2-base (deepvk)', size: '≈600 МБ', query: 'search_query: {}', passage: 'search_document: {}',
+    spec: { name: 'deepvk/USER2-base', dtype: 'fp32', pooling: 'mean' },
+  },
+  {
     // a small multilingual model of paraphrases (sentence-transformers, Apache 2.0), by the mean
     id: 'minilm', title: 'paraphrase-multilingual-MiniLM-L12-v2', size: '≈120 МБ', query: '{}', passage: '{}',
     spec: { name: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', pooling: 'mean' },
