@@ -11,6 +11,8 @@
   import { swipeReply } from '../lib/swipe.js';
   import Icon from './Icon.svelte';
   import BookPost from './BookPost.svelte';
+  import Fold from './Fold.svelte';
+  import { settings } from '../lib/settings.svelte.js';
 
   /**
    * @typedef {{
@@ -307,7 +309,7 @@
           {:else if render}
             <div class="tg-text comment-body">{@html render(m.body)}<span class="tg-meta-space"></span></div>
           {:else}
-            <div class="tg-text">
+            <div class="tg-text"><Fold on={settings.chatFold}>
               {#each blocks(m.body) as b, bi (bi)}
                 {#if b.quote}
                   <!-- "> …" lines: a quote, as Telegram draws it; in a paragraph's thread — from the book -->
@@ -326,8 +328,7 @@
                     </blockquote>
                   {/if}
                 {:else}{@render rich(b.text)}{/if}
-              {/each}
-              <span class="tg-meta-space"></span>
+              {/each}</Fold><span class="tg-meta-space"></span>
             </div>
           {/if}
           {#if m.reactions?.length}

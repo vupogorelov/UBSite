@@ -4784,6 +4784,28 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .book-post-en.collapsible.expanded {
   display: block;
 }
+/* a long message folded to its first lines (Fold.svelte; Settings → «Чаты»): the last one fades */
+.fold.folded {
+  max-height: calc(var(--fold-lines, 5) * 1lh);
+  overflow: hidden;
+}
+.fold.over {
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.2lh), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.2lh), transparent);
+}
+.fold-btn {
+  display: block;
+  justify-self: start;
+  padding: 2px 0 0;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: 500 calc(var(--chat-font-size, 15px) - 1px) / 1.4 var(--sans);
+  cursor: pointer;
+}
 /* the footer leaves the bubble's corner to its time */
 .book-post-foot {
   display: flex;

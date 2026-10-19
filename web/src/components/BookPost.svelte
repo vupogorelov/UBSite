@@ -4,6 +4,7 @@
   import { settings } from '../lib/settings.svelte.js';
   import { paperLabel } from '../lib/format.js';
   import Icon from './Icon.svelte';
+  import Fold from './Fold.svelte';
 
   /**
    * A message of the Book anchored to its paragraph, inside its bubble: where it is in the book (a link),
@@ -27,7 +28,7 @@
     <Icon name="book-open" size={13} />{paperLabel(post.paperId)} · {post.ref}
   </a>
   <div class="book-post-title" lang={book.main}>{book.main === 'en' ? post.paperTitleEn || post.paperTitle : post.paperTitle}</div>
-  <div class="book-post-text" lang={book.main}>{@html inLang(post, book.main)}</div>
+  <Fold on={settings.chatFold} cls="book-post-text" lang={book.main}>{@html inLang(post, book.main)}</Fold>
   {#if post.en && book.main === 'ru'}
     {#if showEn}
       <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->

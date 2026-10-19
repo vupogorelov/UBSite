@@ -16,6 +16,7 @@
  *   chatOwn: string,
  *   chatFont: 'sans' | 'serif',
  *   chatRadius: number,
+ *   chatFold: boolean,
  *   fontWeight: number,
  *   lineHeight: number,
  *   columnWidth: number,
@@ -235,6 +236,10 @@ export const SETTINGS_GROUPS = [
         options: [['sans', 'Как в интерфейсе'], ['serif', 'Как в книге']],
       },
       { key: 'chatRadius', label: 'Скругление сообщений', type: 'range', min: 4, max: 22, step: 1, unit: 'px', default: 14 },
+      {
+        key: 'chatFold', label: 'Сворачивать длинные сообщения', type: 'toggle', default: false,
+        hint: 'Длинное сообщение и абзац книги показываются первыми пятью строками; «Показать полностью» — развернуть прямо в чате.',
+      },
     ],
   },
   {
