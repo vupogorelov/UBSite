@@ -16,6 +16,8 @@ const MAX = 900;
 /** How many paragraphs answer a question in "Я и Книга". */
 const ANSWERS = 3;
 const NOTHING = 'Прямых слов об этом во мне не нашлось. Спросите иначе — другими словами или о понятии из книги.';
+/** How long the Book's own words are waited for (the model writes ≈10 s; a queue of questions — longer). */
+const WRITE_WITHIN = Number(process.env.UB_WRITE_WITHIN_MS ?? 90_000);
 /** The words of a question that say nothing about its subject. */
 const STOP = new Set(
   ('кто что как где когда зачем почему какой какая какое какие каков такой такая такое такие это этот эта эти ' +
@@ -120,7 +122,38 @@ export function createBookVoice(db, auth, chat) {
    */
   /** @type {Finder | null} */
   let finder = null;
+  /**
+   * The Book's answer in its own words (the Laboratory's small generative model, for whom it is tried): written
+   * from the paragraphs found, each thought with its paragraph's number — or null (not this one's, or not able
+   * now: the paragraphs alone then, as always).
+   * @typedef {(question: string, refs: string[], ownerId: number) => Promise<string | null>} Writer
+   */
+  /** @type {Writer | null} */
+  let writer = null;
   const paragraphText = db.prepare('SELECT ref, plain_ru AS text FROM paragraphs WHERE ref = ?');
+
+  /**
+   * The words for the answer, while «Книга печатает…» stays on (the model writes for seconds); none — in time
+   * or at all — the paragraphs answer alone. @param {string} key @param {string} question @param {string[]} refs @param {number} owner
+   */
+  async function written(key, question, refs, owner) {
+    if (!writer) return null;
+    const book = bookUser();
+    const typing = setInterval(() => chat.typing(key, book), 4000);
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let late;
+    try {
+      /** @type {Promise<null>} */
+      const timeout = new Promise((resolve) => (late = setTimeout(() => resolve(null), WRITE_WITHIN)));
+      return await Promise.race([writer(question, refs, owner), timeout]);
+    } catch (err) {
+      console.error('The Book could not answer in its words, the paragraphs do:', err);
+      return null;
+    } finally {
+      clearInterval(typing);
+      clearTimeout(late);
+    }
+  }
 
   /**
    * Answers a question in one's "Я и Книга": up to three paragraphs, the first as a reply to it; or
@@ -144,7 +177,10 @@ export function createBookVoice(db, auth, chat) {
       chat.post(key, book, { body: NOTHING, replyTo: question.id });
       return [];
     }
-    found.forEach((p, i) => chat.post(key, book, { body: p.text, anchor: { ref: p.ref }, replyTo: i === 0 ? question.id : null }));
+    // its own words first, as the reply; the paragraphs after them, as quotes to check them by
+    const words = await written(key, question.body, found.map((p) => p.ref), owner);
+    if (words) chat.post(key, book, { body: words, replyTo: question.id });
+    found.forEach((p, i) => chat.post(key, book, { body: p.text, anchor: { ref: p.ref }, replyTo: i === 0 && !words ? question.id : null }));
     return found.map((p) => p.ref);
   }
 
@@ -156,6 +192,10 @@ export function createBookVoice(db, auth, chat) {
     /** Another way to find the answer (the Laboratory's): see `finder`. @param {Finder | null} fn */
     useFinder(fn) {
       finder = fn;
+    },
+    /** The answer in the Book's own words (the Laboratory's): see `writer`. @param {Writer | null} fn */
+    useWriter(fn) {
+      writer = fn;
     },
 
     /** Live: "Книга Урантии печатает…", then the answer. @param {string} key @param {{ id: number, body: string }} question */

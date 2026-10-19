@@ -86,6 +86,11 @@ export default {
       if (!core.auth.userById(ownerId)?.isAdmin) return null;
       return open().bookAnswer(text, limit);
     });
+    // …and in its own words (the writing model), from the paragraphs found — an administrator's, as the above
+    core.voice.useWriter(async (question, refs, ownerId) => {
+      if (!core.auth.userById(ownerId)?.isAdmin) return null;
+      return open().bookWrite(question, refs);
+    });
     // ---- the search by meaning and the hybrid one, for everyone (the search's modes; server/meaning.js) ----
     core.meaning.use((text, mode, limit) => open().find(text, mode, limit, (t, l) => core.voice.find(t, l)));
     const q = {

@@ -45,13 +45,15 @@ export const MODELS = [
 /**
  * The small generative models to try for «Я и Книга»'s answers in the Book's own words (reply.js): each answers the
  * saved questions from the paragraphs the Book's model found; the administrator judges — true to the text or not.
- * 4-bit, on the processor (on DirectML they write nonsense): ≈5–12 words a second.
- * @type {{ id: string, title: string, size: string, spec: import('./engine-client.js').Writer }[]}
+ * 4-bit, on the processor (on DirectML they write nonsense): ≈5–12 words a second. `book`: the one «Я и Книга»
+ * answers with.
+ * Chosen (2026-10-19, 17 questions): Gemma 4 E2B — true to the text in 14 of 17, ≈9 s an answer (two of its three
+ * misses — the paragraphs found were not about it; the third — «not directly» where something close was there).
+ * Tried and dropped: Gemma 4 E4B — 13 of 17, ≈17 s; Qwen3.5-4B — 13 of 17, ≈27 s.
+ * @type {{ id: string, title: string, size: string, spec: import('./engine-client.js').Writer, book?: boolean }[]}
  */
 export const WRITERS = [
-  { id: 'qwen35-4b', title: 'Qwen3.5-4B (Alibaba)', size: '≈3,3 ГБ', spec: { name: 'onnx-community/Qwen3.5-4B-ONNX', cls: 'Qwen3_5ForConditionalGeneration' } },
-  { id: 'gemma4-e4b', title: 'Gemma 4 E4B (Google)', size: '≈5,9 ГБ', spec: { name: 'onnx-community/gemma-4-E4B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
-  { id: 'gemma4-e2b', title: 'Gemma 4 E2B (Google)', size: '≈3,9 ГБ', spec: { name: 'onnx-community/gemma-4-E2B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
+  { id: 'gemma4-e2b', title: 'Gemma 4 E2B (Google)', size: '≈3,9 ГБ', book: true, spec: { name: 'onnx-community/gemma-4-E2B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
 ];
 /** How many paragraphs a written answer is made from (as many as «Я и Книга» answers with). */
 const FROM = 3;
@@ -177,6 +179,22 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
   const errors = /** @type {Record<string, string>} */ ({});
   /** The writing in the background: one model at a time (gigabytes each), the saved questions in turn. */
   const writing = { model: /** @type {string | null} */ (null), stop: false, done: 0, of: 0, error: /** @type {Record<string, string>} */ ({}) };
+  /** A writing model answers one at a time — the Laboratory's questions and «Я и Книга»'s alike. */
+  let line = Promise.resolve();
+  /** @template T @param {() => Promise<T>} fn @returns {Promise<T>} */
+  const serial = (fn) => {
+    const run = line.then(fn, fn);
+    line = run.then(() => {}, () => {});
+    return run;
+  };
+  /** The paragraphs to answer from, in the question's language. @param {string} question @param {string[]} refs */
+  const paragraphsFor = (question, refs) => {
+    const lang = langOf(question);
+    return refs.map((ref) => ({ ref, text: /** @type {any} */ (q.paragraph.get(ref))[lang] }));
+  };
+  /** A writing model's answer to a question from the paragraphs. @param {typeof WRITERS[number]} w @param {string} question @param {string[]} refs */
+  const writeFrom = (w, question, refs) =>
+    serial(() => engine.write(w.spec, messagesFor(question, paragraphsFor(question, refs)), { threads: settings.threads, max: MAX_TOKENS }));
 
   /** The spec as the engine is to run it now: on the video card when chosen and the model can. @param {typeof MODELS[number]} m @returns {Spec} */
   const specOf = (m) => (settings.gpu && gpuCapable(m) ? { ...m.spec, device: 'dml' } : m.spec);
@@ -503,11 +521,9 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
         try {
           for (const question of todo) {
             if (writing.stop) break;
-            const lang = langOf(question);
             const refs = (await closest(book, question, FROM)).map((x) => x.ref);
-            const paragraphs = refs.map((ref) => ({ ref, text: /** @type {any} */ (q.paragraph.get(ref))[lang] }));
             const t = Date.now();
-            const { text, tokens } = await engine.write(w.spec, messagesFor(question, paragraphs), { threads: settings.threads, max: MAX_TOKENS });
+            const { text, tokens } = await writeFrom(w, question, refs);
             q.putReply.run(question, id, JSON.stringify(refs), text, Date.now() - t, tokens);
             writing.done++;
           }
@@ -518,6 +534,15 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
           engine.release(w.spec.name);
         }
       })();
+    },
+    /**
+     * «Я и Книга»'s answer in the Book's own words, by its writing model (`book`), from the paragraphs found;
+     * null — no such model or engine. @param {string} question @param {string[]} refs
+     */
+    async bookWrite(question, refs) {
+      const w = writers.find((x) => x.book);
+      if (!w || !engine.installed() || !refs.length) return null;
+      return (await writeFrom(w, question, refs)).text || null;
     },
     /** The writing stops after the answer in hand. */
     pauseWriting() {
