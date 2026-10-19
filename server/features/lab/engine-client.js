@@ -14,9 +14,9 @@ const IDLE = 10 * 60_000;
 
 /**
  * A model for the engine: its name; which of its files (`dtype`, `file`; `external` — weights in a file
- * beside); how the pieces of a text make one vector (engine/embed.js); `device` — 'dml': on the video card
- * (DirectML), else the processor.
- * @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec
+ * beside; `textOnly` — a model of pictures and sound too: its text part alone); how the pieces of a text
+ * make one vector (engine/embed.js); `device` — 'dml': on the video card (DirectML), else the processor.
+ * @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, textOnly?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec
  */
 
 /** @typedef {{ child: import('node:child_process').ChildProcess, threads: number, waiting: Map<number, { resolve: (v: { vectors: Float32Array, dims: number }) => void, reject: (e: Error) => void }>, idle?: ReturnType<typeof setTimeout> }} Proc */

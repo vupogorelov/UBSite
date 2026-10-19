@@ -116,9 +116,9 @@ test('the Laboratory: all models at once, the threads shared by the ones on the 
     assert.ok(s.models.every((m) => m.running), 'all at once');
     const of = (/** @type {string} */ id) => /** @type {any} */ (s.models.find((m) => m.id === id));
     const onCpu = s.models.filter((m) => m.device === 'cpu').length;
-    assert.deepEqual([of('user2').device, of('gemma').device], ['gpu', 'cpu'], 'the video card: full precision only');
+    assert.deepEqual([of('berta').device, of('gemma').device], ['gpu', 'cpu'], 'the video card: full precision only');
     assert.equal(of('gemma').threads, Math.floor(12 / onCpu), "the processor's threads shared");
-    assert.equal(seen.get('deepvk/USER2-base')?.device, 'dml');
+    assert.equal(seen.get('sergeyzh/BERTA')?.device, 'dml');
     release();
     for (let i = 0; i < 200 && lab.status().models.some((m) => m.running); i++) await new Promise((r) => setTimeout(r, 20));
     assert.ok(lab.status().models.every((m) => m.done === 2), 'each worked out');

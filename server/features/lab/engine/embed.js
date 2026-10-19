@@ -7,13 +7,13 @@
 // A model's spec (../store.js MODELS): its name; `dtype` and `file` — which of its files (8-bit mostly);
 // `external` — its weights in a file beside (.onnx_data); `pooling` — how the pieces of a text make one
 // vector: their mean (e5), the first (Granite), the last (Qwen), or the model's own sentence output (Gemma).
-import { pipeline, AutoModel, AutoTokenizer, env } from '@huggingface/transformers';
+import { pipeline, AutoConfig, AutoModel, AutoTokenizer, env } from '@huggingface/transformers';
 
 env.cacheDir = process.env.LAB_MODELS ?? 'models';
 const threads = Number(process.env.LAB_THREADS) || 2;
 const session_options = { intraOpNumThreads: threads, interOpNumThreads: 1 };
 
-/** @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec */
+/** @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, textOnly?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec */
 
 /** The models loaded, by name: all held (the Laboratory compares them; the process ends when idle). @type {Map<string, Promise<(texts: string[]) => Promise<{ vectors: Float32Array, dims: number }>>>} */
 const held = new Map();
@@ -32,6 +32,12 @@ async function load(spec) {
   if (spec.pooling === 'sentence') {
     // the model makes the sentence's vector itself (its pooling and projection inside)
     const tokenizer = await AutoTokenizer.from_pretrained(spec.name);
+    if (spec.textOnly) {
+      // a model of pictures and sound too (EmbeddingGemma 2): its text part alone
+      const config = /** @type {any} */ (await AutoConfig.from_pretrained(spec.name));
+      config.vision_config = config.audio_config = null;
+      options.config = config;
+    }
     const model = await AutoModel.from_pretrained(spec.name, options);
     return async (/** @type {string[]} */ texts) => {
       const out = await model(tokenizer(texts, { padding: true, truncation: true }));

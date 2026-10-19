@@ -25,7 +25,9 @@ import { transaction } from '../../db.js';
  * among the first three in 12, 53 hits (e5-base: 8, 11, 37); mixed with the words it gains nothing (the
  * same first places, fewer hits) — the Book answers by it alone. e5-base stays to compare with.
  * Tried and dropped: e5-small — e5-base better in every question; bge-m3 — a draw with e5-base at twice the
- * size; Granite R2 (IBM) — as e5-base (37 hits); Qwen3-Embedding-0.6B — below e5-base at twice the size.
+ * size; Granite R2 (IBM) — as e5-base (37 hits); Qwen3-Embedding-0.6B — below e5-base at twice the size;
+ * USER2-base (deepvk) — as e5-base (36 hits); paraphrase-multilingual-MiniLM — near the words (26);
+ * rubert-tiny2 — below the words (7). BERTA — near Gemma (11 first, 50 hits): kept.
  * @typedef {import('./engine-client.js').Spec} Spec
  * @type {{ id: string, title: string, size: string, query: string, passage: string, spec: Spec, mix?: boolean, book?: boolean }[]}
  */
@@ -41,19 +43,6 @@ export const MODELS = [
     spec: { name: 'Xenova/multilingual-e5-base', pooling: 'mean' },
   },
   {
-    // a small Russian model (2021, MIT), by the first piece. It has no ONNX of its own: the files are laid in
-    // data/models/cointegrated/rubert-tiny2 by hand — config and tokenizer from cointegrated/rubert-tiny2,
-    // onnx/model.onnx from fissium/rubert-tiny2 (its conversion)
-    id: 'rubert-tiny2', title: 'rubert-tiny2 (cointegrated)', size: '≈120 МБ', query: '{}', passage: '{}',
-    spec: { name: 'cointegrated/rubert-tiny2', dtype: 'fp32', pooling: 'cls' },
-  },
-  {
-    // a Russian model (deepvk, 2025, Apache 2.0; USER's next version, Russian and English): its own ONNX
-    // (full precision, ≈600 МБ), a question and a text each with its mark, by the mean
-    id: 'user2', title: 'USER2-base (deepvk)', size: '≈600 МБ', query: 'search_query: {}', passage: 'search_document: {}',
-    spec: { name: 'deepvk/USER2-base', dtype: 'fp32', pooling: 'mean' },
-  },
-  {
     // a Russian model (sergeyzh, MIT; learnt from FRIDA), a question and a text each with its mark, by the
     // mean. No ONNX of its own: the files are laid in data/models/sergeyzh/BERTA by hand, from DaniShe/BERTA-onnx
     // (its fp32 export, the weights unchanged), the model into onnx/
@@ -61,9 +50,11 @@ export const MODELS = [
     spec: { name: 'sergeyzh/BERTA', dtype: 'fp32', pooling: 'mean' },
   },
   {
-    // a small multilingual model of paraphrases (sentence-transformers, Apache 2.0), by the mean
-    id: 'minilm', title: 'paraphrase-multilingual-MiniLM-L12-v2', size: '≈120 МБ', query: '{}', passage: '{}',
-    spec: { name: 'Xenova/paraphrase-multilingual-MiniLM-L12-v2', pooling: 'mean' },
+    // EmbeddingGemma's next version (Google, 2026, Apache 2.0; on Gemma 4): of text, pictures and sound — its
+    // text part alone (270M); the same marks. Full precision (≈1,1 ГБ): on the video card as fast as the
+    // first one at 8 bits on the processor
+    id: 'gemma2', title: 'EmbeddingGemma 2 (Google)', size: '≈1,1 ГБ', query: 'task: search result | query: {}', passage: 'title: none | text: {}',
+    spec: { name: 'onnx-community/embeddinggemma-2-ONNX', dtype: 'fp32', external: true, textOnly: true, pooling: 'sentence' },
   },
 ];
 /** A text marked as the model wants it. @param {string} template @param {string} text */
