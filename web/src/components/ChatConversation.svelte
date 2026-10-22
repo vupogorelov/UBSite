@@ -10,7 +10,7 @@
   import Icon from './Icon.svelte';
   import ChatMessages from './ChatMessages.svelte';
   import ChatComposer from './ChatComposer.svelte';
-  import BookAiBar from './BookAiBar.svelte';
+  import BookAiMenu from './BookAiMenu.svelte';
   import ChatPost from './ChatPost.svelte';
   import ChatAvatar from './ChatAvatar.svelte';
   import { visibility } from '../lib/visibility.js';
@@ -496,6 +496,7 @@
     </div>
     <span class="spacer"></span>
     <button class="icon-btn tg-find" onclick={openSearch} aria-label="Поиск в чате" title="Поиск в чате"><Icon name="search" /></button>
+    {#if info?.kind === 'dm'}<BookAiMenu answers={messages.filter((m) => m.authorAgent && !m.post).length} />{/if}
     {#if info?.kind === 'para'}
       <!-- A paragraph's thread: follow it (notifications) and go to its place in the book -->
       <button class="icon-btn tg-follow" class:on={info.following} onclick={toggleFollow}
@@ -601,7 +602,6 @@
   {:else if info?.archived}
     <div class="tg-archived muted">Канал в архиве — только чтение</div>
   {:else}
-    {#if info?.kind === 'dm'}<BookAiBar answers={messages.filter((m) => m.authorAgent && !m.post).length} />{/if}
     <ChatComposer bind:this={composer} onsend={send} {reply} oncancelreply={() => (reply = null)} ontyping={() => sendTyping(key)}
       placeholder={info?.kind === 'dm' ? 'Спросите Книгу…' : 'Сообщение'} />
   {/if}
