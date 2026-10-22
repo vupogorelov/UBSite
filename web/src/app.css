@@ -6477,14 +6477,41 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     white-space: nowrap;
   }
   /* «Сжимать нижнюю панель при прокрутке»: while reading down the bar shrinks — its labels fade out, it and its
-     icons grow smaller in proportion (the reading line and the text's room follow --m-nav); it stays, the
-     header goes («Прятать панели»), the bar does not */
+     icons grow smaller in proportion, it grows narrower; the reading line (the share read and its slider) folds
+     away, its element staying the bar's surface (the text's room follows --m-nav); it stays, the header goes
+     («Прятать панели»), the bar does not. --mini-side: how far in from each edge it draws then. */
   .nav-mini {
     --m-nav: 40px;
+    --mini-side: 14vw;
   }
-  .bottom-nav,
+  .bottom-nav {
+    transition: transform 0.25s ease, min-height 0.25s ease, left 0.25s ease, right 0.25s ease;
+  }
   .bottom-nav button {
-    transition: transform 0.25s ease, min-height 0.25s ease;
+    transition: min-height 0.25s ease;
+  }
+  .read-progress.tts-progress {
+    transition: transform 0.25s ease, left 0.25s ease, right 0.25s ease, padding 0.25s ease, border-radius 0.25s ease;
+  }
+  .read-progress.tts-progress > * {
+    max-height: 40px;
+    transition: opacity 0.2s ease, max-height 0.25s ease;
+  }
+  .nav-mini .read-progress.tts-progress > * {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+    pointer-events: none;
+  }
+  /* narrower: the plain bar draws in from the edges, rounded on top (Air glass: by its own side, below) */
+  :root:not([data-nav-style='air']) .nav-mini :is(.bottom-nav, .read-progress.tts-progress) {
+    left: var(--mini-side);
+    right: var(--mini-side);
+  }
+  :root:not([data-nav-style='air']) .nav-mini .read-progress.tts-progress {
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: 24px 24px 0 0;
   }
   .bottom-nav button > span:not(.bn-icon) {
     max-height: 14px;
@@ -6503,6 +6530,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   }
   .nav-mini .bottom-nav button {
     gap: 0;
+    /* (narrower than its faded label: the columns share the narrow bar) */
+    min-width: 0;
+  }
+  .nav-mini .bottom-nav {
+    grid-auto-columns: minmax(0, 1fr);
   }
   .chrome-hidden.nav-mini .bottom-nav,
   :root[data-nav-style='air'] .chrome-hidden.nav-mini .bottom-nav,
@@ -6895,10 +6927,15 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   :root[data-nav-style='air'] .nav-mini {
     --air-h: 40px;
     --air-pad: 4px;
+    --air-side: var(--mini-side);
     --m-nav: calc(var(--air-h) + var(--air-gap));
   }
   :root[data-nav-style='air'] .bottom-nav {
-    transition: transform 0.25s ease, height 0.25s ease, padding 0.25s ease;
+    transition: transform 0.25s ease, height 0.25s ease, padding 0.25s ease, left 0.25s ease, right 0.25s ease;
+  }
+  /* (the reading line folded: its element no more than the bar's surface) */
+  :root[data-nav-style='air'] .nav-mini .read-progress.tts-progress {
+    padding-top: 0;
   }
   /* the reading line: the block's upper part, its element the surface under the buttons too */
   :root[data-nav-style='air'] .read-progress.tts-progress {
