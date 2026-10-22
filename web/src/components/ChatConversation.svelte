@@ -176,6 +176,31 @@
     }
   }
 
+  // The conversation keeps its bottom edge when its height changes — the keyboard comes up (the
+  // viewport shrinks, interactive-widget=resizes-content), the field grows a line: what was just
+  // above the field stays just above it, as in Telegram (overflow-anchor does not cover a resize)
+  // (the distance to the bottom: taken on a scroll and when the messages change, kept when the frame does)
+  $effect(() => {
+    const el = scroller;
+    const column = el?.firstElementChild;
+    if (!el || !column) return;
+    const below = () => el.scrollHeight - el.scrollTop - el.clientHeight;
+    let height = el.clientHeight;
+    let fromBottom = below();
+    const ro = new ResizeObserver(() => {
+      const now = el.clientHeight;
+      // (0 — hidden under the search's results: its place is kept as it was)
+      if (height && now && now !== height) el.scrollTop = el.scrollHeight - now - fromBottom;
+      if (now) height = now;
+      fromBottom = below();
+    });
+    ro.observe(el);
+    ro.observe(column);
+    const onscroll = () => el.clientHeight === height && (fromBottom = below());
+    el.addEventListener('scroll', onscroll, { passive: true });
+    return () => (ro.disconnect(), el.removeEventListener('scroll', onscroll));
+  });
+
   function scrollToBottom() {
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
     newBelow = 0;
