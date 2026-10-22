@@ -396,7 +396,7 @@
     <aside class="toc-pane" aria-hidden={!ui.sidebarOpen}>
       <div class="tabs" role="tablist" hidden={!shownTabs.length}>
         {#each shownTabs as [id, label, icon] (id)}
-          <button role="tab" aria-selected={ui.tab === id} class:active={ui.tab === id} onclick={() => setTab(id)}
+          <button role="tab" class="tab-btn" aria-selected={ui.tab === id} class:active={ui.tab === id} onclick={() => setTab(id)}
             title={id === 'translate' && notify.queue ? `${label} · ждут вашего голоса: ${notify.queue}` : label}
             aria-label={id === 'search' && search.query ? `${label}: ${search.total}` : id === 'translate' && notify.queue ? `${label}: ждут вашего голоса ${notify.queue}` : label}>
             <Icon name={icon} /><span class="tab-label">{label}</span>

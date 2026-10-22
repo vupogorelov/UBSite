@@ -425,6 +425,9 @@
     },
   };
 
+  /** The phone's reading line under the text (ReadProgress below; the text leaves room for it: app.css .with-progress). */
+  const withProgress = $derived(device.mobile && !tts.open && !ui.sidebarOpen && !background);
+
   let ticking = false;
   function onScroll() {
     if (background) return; // (hidden: its place is kept as it was)
@@ -757,7 +760,7 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="reader">
-  <div class="reader-scroll" bind:this={scroller} onscroll={onScroll}
+  <div class="reader-scroll" class:with-progress={withProgress} bind:this={scroller} onscroll={onScroll}
     use:swipeOpen={{ onleft: () => (bookNotes = true), onright: () => (bookSearch = true), enabled: canSwipe }}
     use:pinchFont={{ get: () => settings.fontSize, set: (px) => setSetting('fontSize', px), min: 14, max: 26, anchor: '.pair, h2, h3' }}
     use:edgePull={pullOpts}>
@@ -832,7 +835,8 @@
               {@const tasksN = taskCounts.get(p.ref) ?? 0}
               <div class="pair" class:flash={flashRef === p.ref} class:para-active={paraNote && paraNote.id === notes.activeId}
                 class:para-draft={notes.draft?.ref === p.ref && notes.draft.lang === null} id="p-{p.ref}">
-                <div class="gutter">
+                <!-- (with-marks: set here, not by :has() — app.css .gutter.with-marks) -->
+                <div class="gutter" class:with-marks={(settings.showNotes && (mk?.bookmark || mk?.tags.size)) || mk?.comments || proposalsN || messagesN || tasksN}>
                   <div class="gutter-head">
                     <button class="para-menu" title="Закладка, комментарий, перевод или обсуждение всего абзаца"
                       aria-label="Действия с абзацем {p.ref}" onclick={(e) => openParagraphMenu(e, p.ref)}><Icon name="more" size={14} /></button>
@@ -944,7 +948,7 @@
     <TranslationPopover {...pop} onclose={() => (pop = null)} />
   {/if}
   <!-- the phone: where in the book (the audio player has its own line while it is open) -->
-  {#if device.mobile && !tts.open && !ui.sidebarOpen && !background}
+  {#if withProgress}
     <ReadProgress paper={data?.paper.id ?? null} {scroller} {article} />
   {/if}
   <!-- the side panels: at the page's top level (over the bars), the book's layer untouched under them -->

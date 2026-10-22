@@ -79,14 +79,14 @@
         clearTimeout(settle);
         settle = window.setTimeout(() => {
           const nav = /** @type {HTMLElement | null} */ (document.querySelector('.bottom-nav'))?.offsetHeight ?? 0;
-          document.documentElement.style.setProperty('--tts-h', `${p.offsetHeight - nav}px`);
+          publishHeight(p.offsetHeight - nav);
         }, ready ? 180 : 0);
         return;
       }
       const h = d.offsetHeight;
       const open = tts.settingsOpen;
       p.style.transform = open ? '' : `translateY(${h}px)`;
-      document.documentElement.style.setProperty('--tts-h', `${p.offsetHeight - (open ? 0 : h)}px`);
+      publishHeight(p.offsetHeight - (open ? 0 : h));
     };
     place();
     const ro = new ResizeObserver(place); // e.g. the "no voices" hint appears; Air glass: the form grows
@@ -96,7 +96,16 @@
     requestAnimationFrame(() => (ready = true));
     return () => (ro.disconnect(), stop());
   });
-  $effect(() => () => document.documentElement.style.removeProperty('--tts-h'));
+  /**
+   * --tts-h on the root, only when it changes — and left there when the player closes (only `.app.listening`
+   * reads it): a custom property is inherited, so each change restyles every element of the page, the
+   * paper's thousands (≈0.2 s on a phone at each opening and closing).
+   * @param {number} px
+   */
+  function publishHeight(px) {
+    const root = document.documentElement.style;
+    if (root.getPropertyValue('--tts-h') !== `${px}px`) root.setProperty('--tts-h', `${px}px`);
+  }
 
   // "Back" (Android edge swipe) while the player is open pauses reading instead of leaving the app.
   // (false: nothing to do — "back" goes on to the leave warning)

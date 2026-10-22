@@ -5477,7 +5477,9 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   .chrome-hidden .read-progress.tts-progress {
     transform: translateY(calc(100% + var(--m-nav) + var(--safe-bottom)));
   }
-  .reading .reader-scroll:has(~ .read-progress) {
+  /* (with-progress: set by the reader with its line, not :has(~ .read-progress) — that restyled the whole
+     paper each time the line came or went, as when the player closes: ≈0.2 s on a phone) */
+  .reading .reader-scroll.with-progress {
     padding-bottom: calc(var(--m-nav) + var(--safe-bottom) + 24px + var(--space-4));
   }
 
@@ -6400,7 +6402,7 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   position: fixed;
   z-index: 60;
   left: 50%;
-  bottom: calc(var(--m-nav, 0px) + var(--safe-bottom, 0px) + var(--tts-h, 0px) + var(--space-4));
+  bottom: calc(var(--m-nav, 0px) + var(--safe-bottom, 0px) + var(--space-4));
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -6413,6 +6415,10 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   box-shadow: var(--shadow);
   font: 14px/20px var(--sans);
   transform: translateX(-50%);
+}
+/* (--tts-h stays on the root after the player closes — only the player open reads it: AudioPlayer.svelte) */
+.app.listening .exit-prompt {
+  bottom: calc(var(--m-nav, 0px) + var(--safe-bottom, 0px) + var(--tts-h, 0px) + var(--space-4));
 }
 .exit-prompt .btn {
   flex: none;
@@ -6945,7 +6951,7 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     border-radius: var(--air-r);
     box-shadow: var(--air-shadow);
   }
-  :root[data-nav-style='air'] .reading .reader-scroll:has(~ .read-progress) {
+  :root[data-nav-style='air'] .reading .reader-scroll.with-progress {
     padding-bottom: calc(var(--m-nav) + var(--safe-bottom) + 28px + var(--space-4));
   }
   /* The player: the upper part of the bar's own form — one glass, the player an inner card in it
@@ -7510,14 +7516,16 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     border-bottom: 0;
     background: var(--bg);
   }
-  .app:has(.topbar.screen-head) .tabs button {
+  /* (by its class, not "button": a :has() on .app re-checked on any change in the app would restyle every
+     button of the paper — its ▶ and ⋮, hundreds — ≈0.2 s on a phone, e.g. when the player closes) */
+  .app:has(.topbar.screen-head) .tabs .tab-btn {
     height: 40px;
     border: 0;
     border-radius: 20px;
     background: var(--ui-fill);
     color: var(--text);
   }
-  .app:has(.topbar.screen-head) .tabs button.active {
+  .app:has(.topbar.screen-head) .tabs .tab-btn.active {
     background: var(--text);
     color: var(--bg);
   }
@@ -8639,7 +8647,9 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   .gutter > .para-play {
     margin: 0;
   }
-  .gutter:has(.gutter-marks) > .para-play {
+  /* (a class from the reader, not :has(.gutter-marks): Blink merges the :has() invalidations, so it restyled
+     every ▶ of the paper on any change in the app — the player closing took ≈0.2 s on a phone) */
+  .gutter.with-marks > .para-play {
     order: 0;
   }
 }
