@@ -257,7 +257,9 @@
 <svelte:window onkeydown={onKeydown} />
 
 <div class="app" class:toc-open={ui.sidebarOpen && !fullPage} class:tasks-mode={fullPage} class:resizing style:--toc-width="{sidebarWidth}px"
-  class:mobile={device.mobile} class:reading class:chrome-hidden={reading && chrome.hidden && !ui.sidebarOpen && !listening} class:header-hidden={listening && chrome.hidden && !ui.sidebarOpen}
+  class:mobile={device.mobile} class:reading class:chrome-hidden={reading && chrome.hidden && settings.barsAutoHide && !ui.sidebarOpen && !listening}
+  class:header-hidden={listening && chrome.hidden && settings.barsAutoHide && !ui.sidebarOpen}
+  class:nav-mini={reading && chrome.hidden && settings.navMinify && !ui.sidebarOpen && !listening}
   class:in-conversation={device.mobile && chatOpen} class:listening>
   <header class="topbar" class:screen-head={sectionHead} class:scrolled={chrome.scrolled}>
     {#if sectionHead}

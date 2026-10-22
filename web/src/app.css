@@ -6476,6 +6476,39 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     clip-path: inset(50%);
     white-space: nowrap;
   }
+  /* «Сжимать нижнюю панель при прокрутке»: while reading down the bar shrinks — its labels fade out, it and its
+     icons grow smaller in proportion (the reading line and the text's room follow --m-nav); it stays, the
+     header goes («Прятать панели»), the bar does not */
+  .nav-mini {
+    --m-nav: 40px;
+  }
+  .bottom-nav,
+  .bottom-nav button {
+    transition: transform 0.25s ease, min-height 0.25s ease;
+  }
+  .bottom-nav button > span:not(.bn-icon) {
+    max-height: 14px;
+    transition: opacity 0.2s ease, max-height 0.25s ease;
+  }
+  .nav-mini .bottom-nav button > span:not(.bn-icon) {
+    max-height: 0;
+    overflow: hidden;
+    opacity: 0;
+  }
+  .bottom-nav button > :first-child {
+    transition: transform 0.25s ease;
+  }
+  .nav-mini .bottom-nav button > :first-child {
+    transform: scale(0.84);
+  }
+  .nav-mini .bottom-nav button {
+    gap: 0;
+  }
+  .chrome-hidden.nav-mini .bottom-nav,
+  :root[data-nav-style='air'] .chrome-hidden.nav-mini .bottom-nav,
+  .chrome-hidden.nav-mini .read-progress.tts-progress {
+    transform: none;
+  }
 }
 /* Glass: the header, the bottom bar, the reading line and the player let the text show through,
    blurred (where the browser cannot blur, they stay solid). */
@@ -6858,6 +6891,14 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   }
   :root[data-nav-style='air'] .chrome-hidden .bottom-nav {
     transform: translateY(calc(100% + var(--air-gap) + var(--safe-bottom) + 2px));
+  }
+  :root[data-nav-style='air'] .nav-mini {
+    --air-h: 40px;
+    --air-pad: 4px;
+    --m-nav: calc(var(--air-h) + var(--air-gap));
+  }
+  :root[data-nav-style='air'] .bottom-nav {
+    transition: transform 0.25s ease, height 0.25s ease, padding 0.25s ease;
   }
   /* the reading line: the block's upper part, its element the surface under the buttons too */
   :root[data-nav-style='air'] .read-progress.tts-progress {

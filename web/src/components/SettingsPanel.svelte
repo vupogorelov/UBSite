@@ -101,7 +101,7 @@
   }
   /** The row's summary: the first values, and how many switches are on. @param {SettingGroup} g */
   function summary(g) {
-    if (g.title === NAV_GROUP) return [['Книга', ...parseNav(values.phoneNav).map((id) => NAV_POOL.find((x) => x.id === id)?.label), 'Ещё'].join(' · '), values.navStyle === 'air' && 'Air glass', values.glassBars && 'стекло', !values.navLabels && 'без подписей', !values.barsAutoHide && 'панели не прячутся'].filter(Boolean).join(' · ');
+    if (g.title === NAV_GROUP) return [['Книга', ...parseNav(values.phoneNav).map((id) => NAV_POOL.find((x) => x.id === id)?.label), 'Ещё'].join(' · '), values.navStyle === 'air' && 'Air glass', values.glassBars && 'стекло', !values.navLabels && 'без подписей', !values.barsAutoHide && 'панели не прячутся', values.navMinify && 'панель сжимается'].filter(Boolean).join(' · ');
     const items = g.items.filter((i) => !i.hidden && (!i.when || i.when.values.includes(values[i.when.key]))); // only what applies now
     const parts = items.filter((i) => i.type !== 'toggle').slice(0, 3).map(shown).filter(Boolean);
     const toggles = items.filter((i) => i.type === 'toggle');

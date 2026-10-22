@@ -51,6 +51,7 @@
  *   glassBars: boolean,
  *   navLabels: boolean,
  *   barsAutoHide: boolean,
+ *   navMinify: boolean,
  *   navStyle: 'bar' | 'air',
  * }} Settings
  *
@@ -272,6 +273,10 @@ export const SETTINGS_GROUPS = [
       {
         key: 'barsAutoHide', label: 'Прятать панели при прокрутке', type: 'toggle', default: true,
         hint: 'Листаете вниз — шапка и нижняя панель уходят, вверх или касание текста — возвращаются. Выключено — панели всегда на месте.',
+      },
+      {
+        key: 'navMinify', label: 'Сжимать нижнюю панель при прокрутке', type: 'toggle', default: false,
+        hint: 'Листаете вниз — подписи гаснут, панель становится ниже, а разделы остаются под рукой; вверх или касание текста — снова полная. Вместе с «Прятать панели» нижняя панель сжимается, а не уходит.',
       },
     ],
   },

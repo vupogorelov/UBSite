@@ -12,7 +12,10 @@ export const device = $state({ mobile: query.matches, touch: coarse.matches });
 query.addEventListener('change', (e) => (device.mobile = e.matches));
 coarse.addEventListener('change', (e) => (device.touch = e.matches));
 
-/** The header and the bottom navigation slide away while the reader scrolls down a text. */
+/**
+ * The reader scrolls down a text: `hidden` — the bars step back («Прятать панели»: the header and the bottom
+ * navigation slide away; «Сжимать нижнюю панель»: the bottom one shrinks instead — Shell's classes).
+ */
 export const chrome = $state({ hidden: false, scrolled: false });
 
 let lastY = 0;
@@ -20,7 +23,7 @@ let holdUntil = 0;
 /** Called on every scroll of the reader. @param {number} y */
 export function trackScroll(y) {
   if (!device.mobile) return;
-  if (!settings.barsAutoHide) return void (chrome.hidden = false);
+  if (!settings.barsAutoHide && !settings.navMinify) return void (chrome.hidden = false);
   const dy = y - lastY;
   lastY = y;
   chrome.scrolled = y > 8; // the text has gone under the header: its line shows
