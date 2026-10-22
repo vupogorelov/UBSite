@@ -194,6 +194,11 @@
   /** The audio reader's panel is over the book (phone); a section screen covers it, reading goes on. */
   /** A page of its own covers the book (the reader may stay under it while reading aloud). */
   const otherPage = $derived(page !== null);
+  /** The book was on screen once: it is kept from then on (not made anew on each return). */
+  let bookSeen = $state(false);
+  $effect(() => {
+    if (!otherPage) bookSeen = true;
+  });
   const listening = $derived(reading && tts.open && !ui.sidebarOpen);
   /** «Сжимать нижнюю панель при прокрутке»: the bar shrunk now. */
   const navMini = $derived(reading && chrome.hidden && settings.navMinify && !ui.sidebarOpen && !listening);
@@ -425,8 +430,9 @@
     <button class="toc-scrim" aria-label="Закрыть панель" onclick={() => (ui.sidebarOpen = false)}></button>
     <main class="reader-pane">
       {#if page}{#key page.id}{#await page.load() then m}<m.default {...page.props?.(route.path)} />{/await}{/key}{/if}
-      <!-- the book: while it is read aloud it stays under another page (hidden) — the voice goes on until ■ -->
-      {#if !otherPage || tts.open}
+      <!-- the book, once opened, stays under another page (hidden), as a tab of a phone's app: back to it —
+           the same paper at the same place at once; the voice goes on until ■ -->
+      {#if bookSeen || !otherPage || tts.open}
         <div class="reader-host" class:behind={otherPage}><Reader background={otherPage} /></div>
       {/if}
     </main>

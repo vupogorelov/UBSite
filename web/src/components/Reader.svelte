@@ -172,11 +172,26 @@
     });
   });
 
+  // Another page over the book: the reader stays (Shell.svelte), its paper and place with it — back to the
+  // place it left (its own address), the book is on screen at once, where it was, nothing asked for
+  /** Where the text was scrolled to, and the address it wrote for it (syncView). */
+  let keptTop = 0;
+  let ownPath = '';
+  let returning = false;
   $effect(() => {
     const target = { paper: route.paper, section: route.section, ref: route.ref };
     void route.nav;
-    if (background) return; // (another page is open: the book stays where the voice is)
-    untrack(() => show(target));
+    if (background) {
+      returning = true;
+      return; // (another page is open: the book stays where the voice is)
+    }
+    untrack(() => {
+      const back = returning && !!data && data.paper.id === target.paper && location.pathname + location.search === ownPath;
+      returning = false;
+      if (!back) return void show(target);
+      if (scroller.scrollTop !== keptTop) scroller.scrollTop = keptTop;
+      syncView();
+    });
   });
 
   $effect(() => {
@@ -389,7 +404,8 @@
     if (first && session.user) noteRead({ paper: id, key: first.ref, lang: main, progress: bookShare(id, first.inside) });
     const keep = inUrl.paper === id && (inUrl.section ?? 0) === current;
     // (a shared quote's "?sel=" stays while its paragraph's address does: signing in keeps the place)
-    replaceUrl(keep ? location.pathname + location.search : current ? `/${id}:${current}` : `/${id}`);
+    ownPath = keep ? location.pathname + location.search : current ? `/${id}:${current}` : `/${id}`;
+    replaceUrl(ownPath);
   }
 
   // ---- Pulling on past the paper's end (or beginning): the next paper from its start, the previous at its end ----
@@ -411,7 +427,9 @@
 
   let ticking = false;
   function onScroll() {
-    if (scroller) trackScroll(scroller.scrollTop); // the phone's bars slide away while reading
+    if (background) return; // (hidden: its place is kept as it was)
+    keptTop = scroller.scrollTop;
+    trackScroll(scroller.scrollTop); // the phone's bars slide away while reading
     if (ticking) return;
     ticking = true;
     requestAnimationFrame(() => {
@@ -925,7 +943,7 @@
     <TranslationPopover {...pop} onclose={() => (pop = null)} />
   {/if}
   <!-- the phone: where in the book (the audio player has its own line while it is open) -->
-  {#if device.mobile && !tts.open && !ui.sidebarOpen}
+  {#if device.mobile && !tts.open && !ui.sidebarOpen && !background}
     <ReadProgress paper={data?.paper.id ?? null} {scroller} {article} />
   {/if}
   <!-- the side panels: at the page's top level (over the bars), the book's layer untouched under them -->

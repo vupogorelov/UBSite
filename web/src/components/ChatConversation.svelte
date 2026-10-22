@@ -1,7 +1,7 @@
 <script>
-  import { tick } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { api } from '../lib/api.js';
-  import { chat, chatUi, onChatEvent, markRead, sendTyping, plainBody, toggleReaction } from '../lib/chat.svelte.js';
+  import { chat, chatUi, onChatEvent, markRead, sendTyping, plainBody, toggleReaction, keptChat, keepChat } from '../lib/chat.svelte.js';
   import { session } from '../lib/session.svelte.js';
   import { navigate, onBack } from '../lib/router.svelte.js';
   import { MARKS } from '../lib/marks.js';
@@ -56,6 +56,8 @@
   /** @type {HTMLElement | undefined} */ let scroller = $state();
   /** @type {ChatMessages | undefined} */ let list = $state();
   let atBottom = $state(true);
+  /** Where the conversation was scrolled to (kept when it is left). */
+  let lastTop = 0;
   let newBelow = $state(0);
   /** @type {ChatComposer | undefined} */ let composer = $state();
 
@@ -132,49 +134,131 @@
     reply = null;
     hasMore = true;
     newBelow = 0;
-    void open(k);
+    untrack(() => void open(k)); // (what it reads — the chat list, the copy — does not open it again)
     const off = onChatEvent((e) => e.key === k && onEvent(e));
     return () => {
       off();
       if (chat.active === k) chat.active = null;
+      // left as it is: back to it — at once, at the same place (lib/chat.svelte.js)
+      if (info) keepChat(k, { info, messages, hasMore, top: lastTop, atBottom });
     };
   });
 
-  /** @param {string} k */
+  /**
+   * A conversation is on screen at once from what the device has — this session's copy (where it was
+   * left), else the last answer it kept — and the network's answer follows: what is new is added, as in a
+   * messenger. "Загрузка" only for a conversation never seen here.
+   * @param {string} k
+   */
   async function open(k) {
+    // (the unread count before the conversation counts as read)
+    const n = chat.list.find((c) => c.key === k)?.unread ?? 0;
+    const mem = keptChat(k);
+    let shown = false;
+    if (mem) {
+      info = mem.info;
+      messages = mem.messages;
+      hasMore = mem.hasMore;
+      shown = true;
+      if (focus || chatUi.draft?.key === k || chatUi.reply?.key === k) await place(k, n);
+      else {
+        await tick();
+        if (mem.atBottom) scrollToBottom();
+        else if (scroller) scroller.scrollTop = mem.top;
+        atBottom = mem.atBottom;
+      }
+    } else {
+      const [i, list] = await Promise.all([api.seenChatInfo(k), api.seenChatMessages(k)]);
+      if (k !== key) return;
+      if (i && list && !info) {
+        info = i;
+        messages = list;
+        hasMore = list.length >= 60;
+        shown = true;
+        await place(k, n);
+      }
+    }
     try {
       const [i, list] = await Promise.all([api.chatInfo(k), api.chatMessages(k)]);
       if (k !== key) return;
       info = i;
-      messages = list;
-      hasMore = list.length >= 60;
-      // Where the unread part begins: after the reader's last read (taken from the chat list).
-      const n = chat.list.find((c) => c.key === k)?.unread ?? 0;
-      const others = list.filter((m) => m.authorId !== me && m.kind === 'message');
-      unreadAfter = n > 0 && others.length >= n ? others[others.length - n].id - 1 : null;
+      if (!shown) {
+        messages = list;
+        hasMore = list.length >= 60;
+        await place(k, n);
+        if (chatUi.reply?.key === k) chatUi.reply = null;
+        return;
+      }
+      // the network's answer over the copy: the older pages seen stay, unless there is a gap
+      const wasBottom = atBottom;
+      const lastBefore = messages.filter((m) => m.id > 0).at(-1)?.id ?? 0;
+      const first = list[0]?.id ?? Infinity;
+      if (first > lastBefore + 1 && list.length >= 60) {
+        messages = list;
+        hasMore = true;
+      } else {
+        const older = messages.filter((m) => m.id < first);
+        messages = [...older, ...list];
+        if (!older.length) hasMore = list.length >= 60;
+      }
+      // the message asked for, or the one to answer, was not in the copy: placed now
+      if ((focus && !focusShown) || chatUi.reply?.key === k) {
+        await place(k, n);
+        if (chatUi.reply?.key === k) chatUi.reply = null;
+        return;
+      }
+      const added = list.some((m) => m.id > lastBefore);
+      if (!added || !wasBottom || focus) return;
+      // new since the copy, at its end: to the first unread (else to the end), as on the first opening
+      unreadAfter = unreadFrom(list, n);
       await tick();
       const divider = scroller?.querySelector('.tg-unread');
-      const wanted = focus ? document.getElementById(`msg-${focus}`) : null;
-      // "Обсудить" from the book: the quote waits in the input, the conversation shows its latest
-      const draft = chatUi.draft?.key === k ? chatUi.draft.text : null;
-      chatUi.draft = null;
-      // "Обсудить" under the Book's post: the answer to it is ready in the input
-      const answer = chatUi.reply?.key === k ? list.find((m) => m.id === chatUi.reply?.id) : null;
-      chatUi.reply = null;
-      if (answer) reply = { id: answer.id, authorName: answer.authorName, body: plainBody(answer.body).slice(0, 200) };
-      if (wanted) {
-        // a message taller than the screen (the Book's post) — from its beginning
-        const tall = scroller && wanted.offsetHeight > scroller.clientHeight * 0.8;
-        wanted.scrollIntoView({ block: tall ? 'start' : 'center' });
-        wanted.classList.add('flash');
-      } else if (divider && !draft) divider.scrollIntoView({ block: 'center' });
+      if (divider) divider.scrollIntoView({ block: 'center' });
       else scrollToBottom();
-      if (draft) composer?.fill(draft);
       readIfAtBottom();
     } catch (err) {
-      showToast(/** @type {Error} */ (err).message);
+      if (!shown) showToast(/** @type {Error} */ (err).message);
     }
   }
+
+  /** Where the unread part begins: after the reader's last read (`n` — from the chat list). @param {import('../lib/api.js').PublicMessage[]} list @param {number} n */
+  function unreadFrom(list, n) {
+    const others = list.filter((m) => m.authorId !== me && m.kind === 'message');
+    return n > 0 && others.length >= n ? others[others.length - n].id - 1 : null;
+  }
+
+  /**
+   * The conversation's first place on screen: the message asked for, the first unread, else the end; a
+   * quote or an answer waiting for the input put in.
+   * @param {string} k @param {number} n
+   */
+  async function place(k, n) {
+    unreadAfter = unreadFrom(messages, n);
+    await tick();
+    const divider = scroller?.querySelector('.tg-unread');
+    const wanted = focus ? document.getElementById(`msg-${focus}`) : null;
+    focusShown = !!wanted;
+    // "Обсудить" from the book: the quote waits in the input, the conversation shows its latest
+    const draft = chatUi.draft?.key === k ? chatUi.draft.text : null;
+    chatUi.draft = null;
+    // "Обсудить" under the Book's post: the answer to it is ready in the input (once it is in the list)
+    const answer = chatUi.reply?.key === k ? messages.find((m) => m.id === chatUi.reply?.id) : null;
+    if (answer) {
+      chatUi.reply = null;
+      reply = { id: answer.id, authorName: answer.authorName, body: plainBody(answer.body).slice(0, 200) };
+    }
+    if (wanted) {
+      // a message taller than the screen (the Book's post) — from its beginning
+      const tall = scroller && wanted.offsetHeight > scroller.clientHeight * 0.8;
+      wanted.scrollIntoView({ block: tall ? 'start' : 'center' });
+      wanted.classList.add('flash');
+    } else if (divider && !draft) divider.scrollIntoView({ block: 'center' });
+    else scrollToBottom();
+    if (draft) composer?.fill(draft);
+    readIfAtBottom();
+  }
+  /** The message asked for (`focus`) was found and shown. */
+  let focusShown = false;
 
   // The conversation keeps its bottom edge when its height changes — the keyboard comes up (the
   // viewport shrinks, interactive-widget=resizes-content), the field grows a line: what was just
@@ -211,6 +295,7 @@
   }
   async function onScroll() {
     if (!scroller) return;
+    lastTop = scroller.scrollTop;
     atBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 60;
     if (atBottom) {
       newBelow = 0;

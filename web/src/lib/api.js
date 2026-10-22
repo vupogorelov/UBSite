@@ -201,6 +201,21 @@ export async function request(method, url, body) {
   return data;
 }
 
+/**
+ * The last answer to a read the device keeps (public/sw.js, "ub-last"), at once and without the network —
+ * shown first, the network's answer after it (as a messenger shows its own copy, then what is new).
+ * Null: none kept (never seen here, no service worker, signed out since).
+ * @template T @param {string} url @returns {Promise<T | null>}
+ */
+export async function seen(url) {
+  try {
+    const hit = typeof caches === 'undefined' ? null : await caches.match(url, { cacheName: 'ub-last' });
+    return hit ? await hit.json() : null;
+  } catch {
+    return null;
+  }
+}
+
 export const api = {
   /** @returns {Promise<Toc>} */
   toc: () => request('GET', '/api/toc'),
@@ -365,6 +380,13 @@ export const api = {
   chatInfo: (key) => request('GET', `/api/chat/c/${encodeURIComponent(key)}`),
   /** @param {string} key @param {number} [before] @returns {Promise<PublicMessage[]>} */
   chatMessages: (key, before) => request('GET', `/api/chat/c/${encodeURIComponent(key)}/messages${before ? `?before=${before}` : ''}`),
+  // (the same, as the device last saw them — at once, before the network: see `seen`)
+  /** @returns {Promise<ChatSummary[] | null>} */
+  seenChats: () => seen('/api/chat'),
+  /** @param {string} key @returns {Promise<ChatInfo | null>} */
+  seenChatInfo: (key) => seen(`/api/chat/c/${encodeURIComponent(key)}`),
+  /** @param {string} key @returns {Promise<PublicMessage[] | null>} */
+  seenChatMessages: (key) => seen(`/api/chat/c/${encodeURIComponent(key)}/messages`),
   /** @param {string} key @param {string} body @param {number | null} [replyTo] @returns {Promise<PublicMessage>} */
   chatPost: (key, body, replyTo = null) => request('POST', `/api/chat/c/${encodeURIComponent(key)}/messages`, { body, replyTo }),
   /** @param {string} key @param {number} upTo */

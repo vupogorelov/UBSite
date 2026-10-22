@@ -41,6 +41,24 @@ export function discussInChat(ref, quote = null) {
   navigate(`/chat?c=${encodeURIComponent(ref)}`);
 }
 
+/**
+ * The conversations seen in this session, as they were left: their messages (older pages too) and the
+ * place — opened again, one is on screen at once, where it was; the network brings what is new after
+ * (components/ChatConversation.svelte). The last 20; one's own (another user's are not shown).
+ * @typedef {{ info: import('./api.js').ChatInfo, messages: import('./api.js').PublicMessage[], hasMore: boolean, top: number, atBottom: boolean }} KeptChat
+ * @type {Map<string, KeptChat>}
+ */
+const kept = new Map();
+const keptKey = (/** @type {string} */ key) => `${session.user?.id ?? 0}:${key}`;
+/** @param {string} key */
+export const keptChat = (key) => kept.get(keptKey(key)) ?? null;
+/** @param {string} key @param {KeptChat} c */
+export function keepChat(key, c) {
+  kept.delete(keptKey(key));
+  kept.set(keptKey(key), c);
+  for (const k of [...kept.keys()].slice(0, -20)) kept.delete(k);
+}
+
 /** @type {Set<(e: ChatEvent) => void>} */
 const listeners = new Set();
 /** @param {(e: ChatEvent) => void} fn */
@@ -96,6 +114,14 @@ export async function muteChat(key, muted) {
 }
 
 export async function loadChats() {
+  // the list as the device last saw it, at once (the network's answer follows)
+  if (!chat.loaded) {
+    const kept = await api.seenChats();
+    if (kept && !chat.loaded) {
+      chat.list = kept;
+      recount();
+    }
+  }
   try {
     chat.list = await api.chats();
     chat.loaded = true;
