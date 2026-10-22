@@ -6459,16 +6459,18 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     clip-path: inset(50%);
     white-space: nowrap;
   }
-  /* «Сжимать нижнюю панель при прокрутке»: while reading down the bar shrinks — its labels fade out, it and its
-     icons grow smaller in proportion, it grows narrower; the reading line (the share read and its slider) folds
-     away, its element staying the bar's surface (the text's room follows --m-nav); it stays, the header goes
-     («Прятать панели»), the bar does not. --mini-side: how far in from each edge it draws then.
+  /* «Сжимать нижнюю панель при прокрутке»: while reading down the bar grows compact — its labels fade out, the
+     reading line (the share read and its slider) folds away, its element staying the bar's surface; the card
+     grows a little lower and narrower, its icons as they are. It stays, the header goes («Прятать панели»).
+     --mini-side: how far in from each edge it draws then.
      Only transform and opacity are animated (the GPU's, no layout per frame): the new size is laid at once, and
-     the way from the old one is played by transform (Shell.svelte, lib/flip.js); what goes is taken out of the
-     layout at once and fades. */
-  .nav-mini {
-    --m-nav: 40px;
-    --mini-side: 14vw;
+     the way from the old one is played by transform (Shell.svelte, lib/flip.js, 125 ms); what goes is taken out
+     of the layout at once and fades. The sizes change on the bar's own elements — not on .app: a custom property
+     is inherited, and changed there it restyled the whole paper (≈0.2 s frozen on a phone at each shrink). The
+     text's room under the bar stays as for the full bar. */
+  .nav-mini :is(.bottom-nav, .read-progress.tts-progress) {
+    --m-nav: 44px;
+    --mini-side: 8vw;
   }
   /* (layers of their own from the start: they move while the text scrolls) */
   .bottom-nav,
@@ -6477,13 +6479,12 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   }
   /* (the share read and its slider ride on the surface, which is scaled unequally on the way: they go at once
      before it, and come back only after it — a stretched dot otherwise) */
-  .read-progress.tts-progress > * {
-    transition: opacity 0.2s ease 0.25s;
+  /* (every rule under .nav-mini names its elements by class — never a tag or "*": .nav-mini is on .app, and a
+     rule ending in "button", "span" or "*" there restyles every such element of the paper at each shrink) */
+  .read-progress.tts-progress > :is(.tts-pct, .rp-line, .tts-mark) {
+    transition: opacity 0.1s ease 0.125s;
   }
-  .read-progress.tts-progress > .tts-seek-tip {
-    transition: none;
-  }
-  .nav-mini .read-progress.tts-progress > * {
+  .nav-mini .read-progress.tts-progress > :is(.tts-pct, .rp-line, .tts-mark, .tts-seek-tip) {
     position: absolute;
     opacity: 0;
     pointer-events: none;
@@ -6501,14 +6502,14 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   }
   /* the label: out of the shrunk bar's layout, but where it was to its icon — under it (the icon's centre + 14px,
      as in the full bar), sliding a little down as it fades; never over the icon */
-  .bottom-nav button > span:not(.bn-icon) {
+  .bottom-nav .bn-label {
     /* (back: once the surface has grown under it) */
-    transition: opacity 0.2s ease 0.15s, transform 0.25s ease;
+    transition: opacity 0.1s ease 0.08s, transform 0.125s ease;
   }
-  .nav-mini .bottom-nav button {
+  .nav-mini .bottom-nav .bn-btn {
     position: relative;
   }
-  .nav-mini .bottom-nav button > span:not(.bn-icon) {
+  .nav-mini .bottom-nav .bn-label {
     position: absolute;
     top: calc(50% + 14px);
     left: 0;
@@ -6520,15 +6521,9 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     transform: translateY(4px);
     pointer-events: none;
     /* (gone before the surface has shrunk under it: never over the text below) */
-    transition: opacity 0.1s ease, transform 0.25s ease;
+    transition: opacity 0.06s ease, transform 0.125s ease;
   }
-  .bottom-nav button > :first-child {
-    transition: transform 0.25s ease;
-  }
-  .nav-mini .bottom-nav button > :first-child {
-    transform: scale(0.84);
-  }
-  .nav-mini .bottom-nav button {
+  .nav-mini .bottom-nav .bn-btn {
     gap: 0;
     /* (narrower than its faded label: the columns share the narrow bar) */
     min-width: 0;
@@ -6931,10 +6926,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   :root[data-nav-style='air'] .chrome-hidden .bottom-nav {
     transform: translateY(calc(100% + var(--air-gap) + var(--safe-bottom) + 2px));
   }
-  :root[data-nav-style='air'] .nav-mini {
-    --air-h: 40px;
+  /* (on the bar's own elements, not .app: see «Сжимать нижнюю панель» above) */
+  :root[data-nav-style='air'] .nav-mini :is(.bottom-nav, .read-progress.tts-progress) {
+    --air-h: 48px;
     --air-pad: 4px;
-    --air-side: var(--mini-side);
+    --air-side: calc(12px + 6vw);
     --m-nav: calc(var(--air-h) + var(--air-gap));
   }
   /* (the reading line folded: its element no more than the bar's surface) */

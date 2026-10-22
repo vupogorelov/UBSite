@@ -229,8 +229,9 @@
   $effect(() => {
     void navMini;
     if (navWas) {
-      play(navWas.surface);
-      play(navWas.buttons, { scale: false });
+      // (quick: a glance, not a show — 125 ms)
+      play(navWas.surface, { ms: 125 });
+      play(navWas.buttons, { scale: false, ms: 125 });
     }
     navWas = null;
   });

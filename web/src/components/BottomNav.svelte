@@ -122,28 +122,29 @@
 
 <nav class="bottom-nav" aria-label="Разделы">
   <!-- held: «Книга» — a bookmark on the paragraph read; «Слушать» — a note to it (the reader does it) -->
-  <button class:active={current === 'book'} onclick={book} aria-label="Книга: чтение и оглавление" use:longPress={session.user ? () => here('bookmark') : undefined}>
-    <Icon name="book-open" size={24} /><span>Книга</span>
+  <!-- (bn-btn, bn-label: the shrunk bar's rules name them by class — app.css «Сжимать нижнюю панель») -->
+  <button class="bn-btn" class:active={current === 'book'} onclick={book} aria-label="Книга: чтение и оглавление" use:longPress={session.user ? () => here('bookmark') : undefined}>
+    <Icon name="book-open" size={24} /><span class="bn-label">Книга</span>
   </button>
   {#each bar as id (id)}
     {@const sec = info(id)}
     {@const n = badge(id)}
     {#if id === 'listen'}
-      <button class:active={tts.open} onclick={listen} aria-pressed={tts.open} aria-label={tts.open ? 'Слушать: закрыть плеер' : 'Слушать: читать вслух'}
+      <button class="bn-btn" class:active={tts.open} onclick={listen} aria-pressed={tts.open} aria-label={tts.open ? 'Слушать: закрыть плеер' : 'Слушать: читать вслух'}
         use:longPress={session.user ? () => here('note') : undefined}>
         <span class="bn-icon"><Icon name="headphones" size={24} />{#if tts.playing}<span class="bn-dot"></span>{/if}</span>
-        <span>Слушать</span>
+        <span class="bn-label">Слушать</span>
       </button>
     {:else}
-      <button class:active={current === id} onclick={() => go(id)}>
+      <button class="bn-btn" class:active={current === id} onclick={() => go(id)}>
         <span class="bn-icon"><Icon name={/** @type {any} */ (sec.icon)} size={24} />{#if n && id !== 'search'}<span class="bn-badge">{n > 99 ? '99+' : n}</span>{/if}</span>
-        <span>{sec.label}</span>
+        <span class="bn-label">{sec.label}</span>
       </button>
     {/if}
   {/each}
-  <button class:active={inSheet || more} onclick={() => (more = !more)} aria-expanded={more} aria-haspopup="dialog">
+  <button class="bn-btn" class:active={inSheet || more} onclick={() => (more = !more)} aria-expanded={more} aria-haspopup="dialog">
     <span class="bn-icon"><Icon name="dots" size={24} />{#if moreBadge}<span class="bn-dot"></span>{/if}</span>
-    <span>Ещё</span>
+    <span class="bn-label">Ещё</span>
   </button>
 </nav>
 
