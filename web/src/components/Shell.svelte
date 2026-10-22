@@ -39,6 +39,7 @@
   import { showToast } from '../lib/toast.svelte.js';
   import { noticeAiReturn } from '../lib/ai.svelte.js';
   import { hyphenates } from '../lib/hyphens.js';
+  import { measure, play } from '../lib/flip.js';
   import { log } from '../lib/log.js';
   import Reader from './Reader.svelte';
   import { PAGES, pageOf } from '../lib/pages.js';
@@ -194,6 +195,29 @@
   /** A page of its own covers the book (the reader may stay under it while reading aloud). */
   const otherPage = $derived(page !== null);
   const listening = $derived(reading && tts.open && !ui.sidebarOpen);
+  /** «Сжимать нижнюю панель при прокрутке»: the bar shrunk now. */
+  const navMini = $derived(reading && chrome.hidden && settings.navMinify && !ui.sidebarOpen && !listening);
+  // …its change animated by transform alone (lib/flip.js): where its surface (the reading line's element, under
+  // the bar — else the bar) and its buttons were, measured before the new layout; played after it
+  // (the buttons moved only: their icons are not squashed)
+  /** @type {{ surface: [Element, DOMRect][], buttons: [Element, DOMRect][] } | null} */
+  let navWas = null;
+  $effect.pre(() => {
+    void navMini;
+    const nav = document.querySelector('.bottom-nav');
+    const line = document.querySelector('.read-progress.tts-progress');
+    navWas = device.mobile && nav
+      ? { surface: measure([line ?? nav]), buttons: line ? measure([...nav.querySelectorAll(':scope > button')]) : [] }
+      : null;
+  });
+  $effect(() => {
+    void navMini;
+    if (navWas) {
+      play(navWas.surface);
+      play(navWas.buttons, { scale: false });
+    }
+    navWas = null;
+  });
   // The bars come back whenever a panel is opened.
   $effect(() => {
     if (ui.sidebarOpen || quick || drawer !== 'none') chrome.hidden = false;
@@ -259,7 +283,7 @@
 <div class="app" class:toc-open={ui.sidebarOpen && !fullPage} class:tasks-mode={fullPage} class:resizing style:--toc-width="{sidebarWidth}px"
   class:mobile={device.mobile} class:reading class:chrome-hidden={reading && chrome.hidden && settings.barsAutoHide && !ui.sidebarOpen && !listening}
   class:header-hidden={listening && chrome.hidden && settings.barsAutoHide && !ui.sidebarOpen}
-  class:nav-mini={reading && chrome.hidden && settings.navMinify && !ui.sidebarOpen && !listening}
+  class:nav-mini={navMini}
   class:in-conversation={device.mobile && chatOpen} class:listening>
   <header class="topbar" class:screen-head={sectionHead} class:scrolled={chrome.scrolled}>
     {#if sectionHead}
