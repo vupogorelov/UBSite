@@ -3,10 +3,12 @@
   import { navigate } from '../lib/router.svelte.js';
   import { bookMap, loadBook, bookShare, locate } from '../lib/bookmap.svelte.js';
   import { firstParagraph } from '../lib/onscreen.js';
+  import Icon from './Icon.svelte';
 
   /**
    * The phone's reading progress line above the bottom navigation, like the audio player's: the share
-   * of the book up to the first paragraph on screen; dragging the knob opens that place.
+   * of the book up to the first paragraph on screen; dragging the knob opens that place; at its right — a
+   * bookmark on that paragraph (the player's button, here).
    * @type {{ paper: number | null, scroller: HTMLElement | undefined, article: HTMLElement | undefined }}
    */
   let { paper, scroller, article } = $props();
@@ -83,5 +85,8 @@
       oninput={(e) => (drag = Number(e.currentTarget.value) / 1000)}
       onchange={(e) => drop(Number(e.currentTarget.value) / 1000)} />
     {#if drag !== null && target}<span class="tts-seek-tip" style:left="clamp(56px, {shown * 100}%, calc(100% - 96px))">Текст {target.paper} · {pct(shown)}%</span>{/if}
+    <!-- a bookmark on the paragraph on screen, in one tap — the player's own (and «Книга» held): the reader makes it -->
+    <button class="icon-btn small-btn tts-mark" onclick={() => window.dispatchEvent(new CustomEvent('ub-here', { detail: { what: 'bookmark' } }))}
+      aria-label="Закладка на абзац на экране" title="Закладка на абзац на экране"><Icon name="bookmark" size={16} /></button>
   </div>
 {/if}

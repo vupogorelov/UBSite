@@ -6331,6 +6331,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   flex: none;
   margin: -6px -6px -6px 0;
 }
+/* the reader's line: its items on the top 24px line (the bar below) — the button's middle on it */
+.read-progress.tts-progress .tts-mark {
+  align-self: flex-start;
+  margin: -2px -6px -2px 0;
+}
 .tts-seek-tip {
   position: absolute;
   bottom: calc(100% + 4px);
