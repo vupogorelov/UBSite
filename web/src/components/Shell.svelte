@@ -38,7 +38,7 @@
   import ReadingQuick from './ReadingQuick.svelte';
   import { showToast } from '../lib/toast.svelte.js';
   import { noticeAiReturn } from '../lib/ai.svelte.js';
-  import { hyphenates, PROBE_WORDS } from '../lib/hyphens.js';
+  import { hyphenates } from '../lib/hyphens.js';
   import { log } from '../lib/log.js';
   import Reader from './Reader.svelte';
   import { PAGES, pageOf } from '../lib/pages.js';
@@ -62,12 +62,7 @@
   onMount(() => {
     noticeAiReturn(); // (back from an AI service's sign-in: how it went)
     // «Переносы слов» on: whether this browser can (Android's WebView: by the system's dictionaries) — in the journal
-    if (settings.hyphens) {
-      setTimeout(() => {
-        const words = Object.fromEntries(PROBE_WORDS.map((w) => [w, hyphenates('ru', w)]));
-        log('ui', 'hyphens', { ru: hyphenates('ru'), en: hyphenates('en'), words, ua: navigator.userAgent });
-      }, 3000);
-    }
+    if (settings.hyphens) setTimeout(() => log('ui', 'hyphens', { ru: hyphenates('ru'), en: hyphenates('en'), ua: navigator.userAgent }), 3000);
     const ahead = setTimeout(() => [...PAGES, ...DRAWERS].forEach((x) => x.load().catch(() => {})), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
