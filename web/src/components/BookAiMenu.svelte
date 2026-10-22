@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { myAi, loadMyAi, connectMyAi, disconnectMyAi } from '../lib/ai.svelte.js';
+  import { myAi, loadMyAi, connectMyAi, disconnectMyAi, newTopic } from '../lib/ai.svelte.js';
   import { device } from '../lib/mobile.svelte.js';
   import { portal } from '../lib/portal.js';
   import { swipeClose } from '../lib/swipe.js';
@@ -59,6 +59,11 @@
           <p class="muted small">{s.shared ? 'Сейчас Книга отвечает абзацами. ' : ''}Подключите свой ИИ — бесплатно, вход через OpenRouter в браузере —
             и Книга будет отвечать своими словами: коротко, со ссылками на абзацы.</p>
           <button class="ui-chip on" onclick={connectMyAi}>Подключить свой ИИ</button>
+        {/if}
+        {#if s && !none}
+          <!-- the conversation: the Book keeps it (the last questions, the paragraphs it answered from) — or begins anew -->
+          <p class="muted small book-ai-topic">Книга помнит разговор: уточняйте и переспрашивайте. После получаса тишины разговор начинается заново — или сразу:</p>
+          <button class="ui-chip" onclick={() => ((open = false), newTopic())}><Icon name="plus" size={14} />Новая тема</button>
         {/if}
       </div>
     {/snippet}

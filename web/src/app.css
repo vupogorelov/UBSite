@@ -10774,6 +10774,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .book-ai .ui-chip {
   margin-top: var(--space-3);
 }
+.book-ai .book-ai-topic {
+  margin-top: var(--space-5);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--ui-line);
+}
 
 /* ==== A conversation as in Telegram: fewer lines and frames ==== */
 /* a calm plain background (the dots were noise under the text) */

@@ -43,22 +43,19 @@ export const MODELS = [
   },
 ];
 /**
- * The small generative models to try for «Я и Книга»'s answers in the Book's own words (server/reply.js): each answers the
- * saved questions from the paragraphs the Book's model found; the administrator judges — true to the text or not.
- * 4-bit, on the processor (on DirectML they write nonsense): ≈5–12 words a second. `book`: the one «Я и Книга»
- * answers with.
- * Chosen (2026-10-19, 17 questions): Gemma 4 E2B — true to the text in 14 of 17, ≈9 s an answer (two of its three
- * misses — the paragraphs found were not about it; the third — «not directly» where something close was there).
- * Tried and dropped: Gemma 4 E4B — 13 of 17, ≈17 s; Qwen3.5-4B — 13 of 17, ≈27 s.
- * `remote`: a model of a service reached through the application's AI connection (server/ai.js) — nothing on
- * this server; its free ones (OpenRouter: ≈50 requests a day for the whole account).
- * @typedef {{ id: string, title: string, size: string, book?: boolean } & ({ spec: import('./engine-client.js').Writer, remote?: undefined } | { remote: { model: string }, spec?: undefined })} WriterModel
+ * The generative models to compare for «Я и Книга»'s answers in words (server/reply.js; the Book itself writes with
+ * server/bookwords.js's list): each answers the saved questions from the paragraphs the Book's model found; the
+ * administrator judges — true to the text or not. Remote: through the application's AI connection (server/ai.js),
+ * nothing on this server; free ones of OpenRouter (≈50 requests a day for the whole account).
+ * Tried before, here (2026-10-19, 17 questions, on this server's processor, 4-bit) and dropped — no generation on
+ * the server: Gemma 4 E2B — 14 of 17, ≈9 s; Gemma 4 E4B — 13, ≈17 s; Qwen3.5-4B — 13, ≈27 s.
+ * @typedef {{ id: string, title: string, size: string, remote: { model: string } }} WriterModel
  * @type {WriterModel[]}
  */
 export const WRITERS = [
-  { id: 'gemma4-e2b', title: 'Gemma 4 E2B (Google)', size: '≈3,9 ГБ', book: true, spec: { name: 'onnx-community/gemma-4-E2B-it-ONNX', cls: 'Gemma4ForConditionalGeneration' } },
-  { id: 'or-gemma4-31b', title: 'Gemma 4 31B (Google) · OpenRouter', size: 'удалённо', remote: { model: 'google/gemma-4-31b-it:free' } },
-  { id: 'or-nemotron-ultra', title: 'Nemotron 3 Ultra 550B (NVIDIA) · OpenRouter', size: 'удалённо', remote: { model: 'nvidia/nemotron-3-ultra-550b-a55b:free' } },
+  { id: 'or-nemotron-ultra', title: 'Nemotron 3 Ultra 550B (NVIDIA)', size: 'OpenRouter', remote: { model: 'nvidia/nemotron-3-ultra-550b-a55b:free' } },
+  { id: 'or-nemotron-35-super', title: 'Nemotron 3.5 Super (NVIDIA)', size: 'OpenRouter', remote: { model: 'nvidia/nemotron-3.5-super-vl:free' } },
+  { id: 'or-gemma4-31b', title: 'Gemma 4 31B (Google)', size: 'OpenRouter', remote: { model: 'google/gemma-4-31b-it:free' } },
 ];
 /** How many paragraphs a written answer is made from (as many as «Я и Книга» answers with). */
 const FROM = 3;
@@ -135,7 +132,9 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
   lab.exec(`DELETE FROM replies WHERE model NOT IN (${writers.map((w) => `'${w.id}'`).join(', ') || "''"})`);
   // (a model dropped from the list: its vectors and answers go — the judgements stay, they are the reader's)
   const kept = list.map((m) => `'${m.id}'`).join(', ');
-  lab.exec(`DELETE FROM vectors WHERE model NOT IN (${kept}); DELETE FROM answers WHERE col NOT IN (${kept}, 'mix', 'words');`);
+  // (and a follow-up searched with the question before it — two lines — is no question of the score)
+  lab.exec(`DELETE FROM vectors WHERE model NOT IN (${kept}); DELETE FROM answers WHERE col NOT IN (${kept}, 'mix', 'book', 'words');
+    DELETE FROM answers WHERE instr(question, char(10)) > 0;`);
   // (the first marks were per column: one judgement where they agree; where they differ — left to judge again)
   if (lab.prepare("SELECT 1 FROM sqlite_master WHERE name = 'marks'").get()) {
     lab.exec(`
@@ -183,31 +182,17 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
   const jobs = /** @type {Map<string, { stop: boolean, rate: number }>} */ (new Map());
   let queue = /** @type {string[]} */ ([]);
   const errors = /** @type {Record<string, string>} */ ({});
-  /** The writing in the background: one model at a time (gigabytes each), the saved questions in turn. */
+  /** The writing in the background: one model at a time, the saved questions in turn. */
   const writing = { model: /** @type {string | null} */ (null), stop: false, done: 0, of: 0, error: /** @type {Record<string, string>} */ ({}) };
-  /** A writing model answers one at a time — the Laboratory's questions and «Я и Книга»'s alike. */
-  let line = Promise.resolve();
-  /** @template T @param {() => Promise<T>} fn @returns {Promise<T>} */
-  const serial = (fn) => {
-    const run = line.then(fn, fn);
-    line = run.then(() => {}, () => {});
-    return run;
-  };
   /** The paragraphs to answer from, in the question's language. @param {string} question @param {string[]} refs */
   const paragraphsFor = (question, refs) => {
     const lang = langOf(question);
     return refs.map((ref) => ({ ref, text: /** @type {any} */ (q.paragraph.get(ref))[lang] }));
   };
-  /** A writing model's answer to a question from the paragraphs. @param {typeof WRITERS[number]} w @param {string} question @param {string[]} refs */
+  /** A writing model's answer to a question from the paragraphs (a thinking model's thoughts count too: room for them). @param {typeof WRITERS[number]} w @param {string} question @param {string[]} refs */
   const writeFrom = (w, question, refs) => {
-    const messages = messagesFor(question, paragraphsFor(question, refs));
-    if (w.remote) {
-      // (a thinking model's thoughts count too: room for them)
-      if (!where.ai) throw new HttpError(409, 'Нейросеть приложения не подключена');
-      return where.ai(w.remote.model, messages, MAX_TOKENS * 4);
-    }
-    const spec = w.spec;
-    return serial(() => engine.write(spec, messages, { threads: settings.threads, max: MAX_TOKENS }));
+    if (!where.ai) throw new HttpError(409, 'Нейросеть приложения не подключена');
+    return where.ai(w.remote.model, messagesFor(question, paragraphsFor(question, refs)), MAX_TOKENS * 4);
   };
 
   /** The spec as the engine is to run it now: on the video card when chosen and the model can. @param {typeof MODELS[number]} m @returns {Spec} */
@@ -366,8 +351,7 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
           const rows = /** @type {any[]} */ (q.replies.all()).filter((r) => r.model === w.id && saved.has(r.question));
           return {
             id: w.id, title: w.title, size: w.size,
-            downloaded: w.spec ? existsSync(`${where.models}/${w.spec.name}`) : true,
-            remote: !!w.remote, ready: w.remote ? !!where.aiReady?.() : true,
+            ready: !!where.aiReady?.(),
             answered: rows.length, of: saved.size,
             good: rows.filter((r) => r.good === 1).length, bad: rows.filter((r) => r.good === 0).length,
             ms: rows.length ? Math.round(rows.reduce((s, r) => s + r.ms, 0) / rows.length) : 0,
@@ -518,15 +502,14 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
 
     /**
      * A writing model answers the saved questions in the Book's words (those it has not answered; `again` — all),
-     * each from the paragraphs the Book's model finds for it; in the background, one model at a time. Its
-     * process is let go at the end (gigabytes).
+     * each from the paragraphs the Book's model finds for it; in the background, one model at a time.
      * @param {string} id @param {boolean} [again]
      */
     write(id, again = false) {
       const w = writers.find((x) => x.id === id);
       if (!w) throw new HttpError(404, 'Нет такой модели');
       if (!engine.installed()) throw new HttpError(503, 'Движок модели не установлен (server/features/lab/engine: npm install)');
-      if (w.remote && !where.aiReady?.()) throw new HttpError(409, 'Сначала подключите нейросеть приложения');
+      if (!where.aiReady?.()) throw new HttpError(409, 'Сначала подключите нейросеть приложения');
       const book = list.find((x) => x.book);
       if (!book || !(/** @type {{ n: number }} */ (q.done.get(book.id)).n)) throw new HttpError(409, 'Сначала посчитайте модель поиска по смыслу');
       if (writing.model) throw new HttpError(409, 'Сейчас отвечает другая модель — дождитесь или поставьте на паузу');
@@ -548,18 +531,8 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
           writing.error[id] = /** @type {Error} */ (err).message;
         } finally {
           writing.model = null;
-          if (w.spec) engine.release(w.spec.name);
         }
       })();
-    },
-    /**
-     * «Я и Книга»'s answer in the Book's own words, by its writing model (`book`), from the paragraphs found;
-     * null — no such model or engine. @param {string} question @param {string[]} refs
-     */
-    async bookWrite(question, refs) {
-      const w = writers.find((x) => x.book);
-      if (!w || !engine.installed() || !refs.length) return null;
-      return (await writeFrom(w, question, refs)).text || null;
     },
     /** The writing stops after the answer in hand. */
     pauseWriting() {

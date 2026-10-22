@@ -95,8 +95,8 @@ export const FEATURES = [
     setup(c) {
       // «Я и Книга» in the Book's own words: the reader's AI, else the application's shared answers of the day
       const words = createBookWords(c.db, c.ai);
-      c.voice.useWriter((question, refs, ownerId) => words.write(question, refs, ownerId));
-      registerAiRoutes(c.router, c.ai, words);
+      c.voice.useWriter((question, refs, ownerId, history) => words.write(question, refs, ownerId, history));
+      registerAiRoutes(c.router, c.ai, words, c.voice);
       // the way back from a sign-in may come in a browser not signed in here (the phone's own): its one-time
       // state is what admits it
       c.guest(/^\/api\/ai\/callback\/[a-z]+$/);

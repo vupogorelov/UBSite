@@ -157,21 +157,10 @@ test('the Laboratory: a writing model answers the saved questions from the parag
   try {
     /** @type {any[]} */
     const asked = [];
-    const engine = {
-      ...fakeEngine(),
-      released: /** @type {string[]} */ ([]),
-      /** @param {any} spec @param {{ role: string, content: string }[]} messages */
-      async write(spec, messages) {
-        asked.push(messages);
-        return { text: 'Дети растут в мирах (47:2.7).', tokens: 9 };
-      },
-      /** @param {string} name */
-      release(name) {
-        this.released.push(name);
-      },
-    };
-    const WRITERS = [{ id: 'w', title: 'W', size: '', spec: { name: 'x/w', cls: 'X' } }];
-    const lab = createLab(db, /** @type {any} */ (engine), { file: join(dir, 'lab.db'), models: dir }, MODELS, WRITERS);
+    // the remote AI (server/ai.js), connected: the model's name, the conversation
+    const ai = async (/** @type {string} */ model, /** @type {any[]} */ messages) => (asked.push({ model, messages }), { text: 'Дети растут в мирах (47:2.7).', tokens: 9 });
+    const WRITERS = [{ id: 'w', title: 'W', size: 'OpenRouter', remote: { model: 'x/w:free' } }];
+    const lab = createLab(db, /** @type {any} */ (fakeEngine()), { file: join(dir, 'lab.db'), models: dir, ai, aiReady: () => true }, MODELS, WRITERS);
     assert.throws(() => lab.write('w'), /Сначала посчитайте/, 'without the vectors there is nothing to answer from');
     lab.run('gemma');
     for (let i = 0; i < 200 && lab.status().models.some((m) => m.running); i++) await new Promise((r) => setTimeout(r, 20));
@@ -180,9 +169,9 @@ test('the Laboratory: a writing model answers the saved questions from the parag
     for (let i = 0; i < 200 && lab.status().writers[0].running; i++) await new Promise((r) => setTimeout(r, 20));
     const r = lab.replies();
     assert.equal(r[0].refs[0], '47:2.7', 'from the paragraphs the Book finds, the closest first');
-    assert.match(asked[0][1].content, /\[47:2\.7\] Дети после смерти/, 'the paragraphs given, with their numbers, in the question\'s language');
+    assert.equal(asked[0].model, 'x/w:free');
+    assert.match(asked[0].messages.at(-1).content, /\[47:2\.7\] Дети после смерти/, 'the paragraphs given, with their numbers, in the question\'s language');
     assert.equal(r[0].answers.w.text, 'Дети растут в мирах (47:2.7).');
-    assert.deepEqual(engine.released, ['x/w'], 'the model let go at the end');
     lab.judgeReply({ question: 'что с детьми после смерти', model: 'w', good: true });
     assert.deepEqual([lab.status().writers[0].answered, lab.status().writers[0].good], [1, 1]);
     lab.close();

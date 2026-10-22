@@ -11,9 +11,9 @@ import { request } from '../../lib/api.js';
  * good, bad, open: of the paragraphs its columns answered — judged answering, not, not yet judged
  * @typedef {{ col: string, asked: number, good: number, bad: number, open: number, top3: number, answered: number }} Score
  * a column's score over the questions it was asked: hits, misses, not judged; questions with a hit among its first three, at all
- * @typedef {{ id: string, title: string, size: string, downloaded: boolean, remote: boolean, ready: boolean, answered: number, of: number, good: number, bad: number, ms: number, running: boolean, progress: { done: number, of: number } | null, error: string | null }} Writer
- * a writing model: how many saved questions it answered (of), judged true (good) or not (bad), its mean time;
- * remote — through the application's AI connection (ready: it is connected)
+ * @typedef {{ id: string, title: string, size: string, ready: boolean, answered: number, of: number, good: number, bad: number, ms: number, running: boolean, progress: { done: number, of: number } | null, error: string | null }} Writer
+ * a writing model (remote, through the application's AI connection — ready: it is connected): how many saved
+ * questions it answered (of), judged true (good) or not (bad), its mean time
  * @typedef {{ provider: string, title: string, since: string }} AiConnection the application's AI: which service, since when
  * @typedef {{ question: string, refs: string[], answers: Record<string, { text: string, ms: number, tokens: number, good: boolean | null }> }} Reply
  * the written answers to a saved question: the paragraphs they were made from, each model's

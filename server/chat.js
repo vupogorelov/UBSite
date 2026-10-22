@@ -194,6 +194,7 @@ export function createChat(db, auth) {
     unpin: db.prepare('DELETE FROM chat_pins WHERE chat = ?'),
     setMark: db.prepare("UPDATE public_messages SET mark = ?, mark_by = ?, mark_at = CASE WHEN ? IS NULL THEN NULL ELSE datetime('now') END WHERE id = ?"),
     markNote: db.prepare("INSERT INTO public_messages (ref, kind, author_id, body, reply_to) VALUES (?, 'event', ?, ?, ?) RETURNING id"),
+    notice: db.prepare("INSERT INTO public_messages (ref, kind, author_id, body) VALUES (?, 'event', ?, ?) RETURNING id"),
     // a conversation's messages for its search (the words are matched in JS: SQLite's lower() is ASCII only)
     search: db.prepare(`${MESSAGE} WHERE m.ref = :key AND m.kind = 'message' AND m.hidden_at IS NULL AND (:mark IS NULL OR m.mark = :mark) ORDER BY m.id DESC`),
     marked: db.prepare(`${MESSAGE} WHERE m.mark IS NOT NULL AND (:mark IS NULL OR m.mark = :mark) ORDER BY m.mark_at DESC LIMIT 200`),
@@ -478,6 +479,18 @@ export function createChat(db, auth) {
       const all = /** @type {any[]} */ (q.reactions.all({ ids: JSON.stringify([id]), user: 0 }));
       hub.publish(msg.chat, { type: 'reactions', id, reactions: all.map(({ messageId, mine, ...x }) => x), by: user.id, emoji });
       return fetchOne(id, user).reactions;
+    },
+
+    /**
+     * A service line in the conversation («Новая тема» in «Я и Книга»: the Book's context begins anew after it).
+     * @param {string} key @param {User} user @param {string} body
+     */
+    notice(key, user, body) {
+      access(key, user, true);
+      const { id } = /** @type {{ id: number }} */ (q.notice.get(key, user.id, body));
+      const msg = fetchOne(id, user);
+      hub.publish(key, { type: 'message', message: { ...msg, reactions: [] } });
+      return msg;
     },
 
     /** @param {string} key @param {User} user @param {number} upTo */

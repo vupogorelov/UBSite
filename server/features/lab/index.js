@@ -90,7 +90,8 @@ export default {
     // ---- «Я и Книга»: the paragraphs found by meaning (EmbeddingGemma), for everyone — kept for the score when the
     // administrator asks; the words then, if the model is not worked out (server/bookvoice.js). Its own words — by
     // the remote AI (server/bookwords.js) ----
-    core.voice.useFinder(async (text, ownerId, limit) => open().bookAnswer(text, limit, !!core.auth.userById(ownerId)?.isAdmin));
+    // (kept: the question alone — not a follow-up searched with the question before it, two lines)
+    core.voice.useFinder(async (text, ownerId, limit) => open().bookAnswer(text, limit, !!core.auth.userById(ownerId)?.isAdmin && !text.includes('\n')));
     // ---- the search by meaning and the hybrid one, for everyone (the search's modes; server/meaning.js) ----
     core.meaning.use((text, mode, limit) => open().find(text, mode, limit, (t, l) => core.voice.find(t, l)));
     const q = {

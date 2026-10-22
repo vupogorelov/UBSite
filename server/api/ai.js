@@ -8,8 +8,9 @@ import { publicOrigin } from '../auth.js';
  * @param {ReturnType<typeof import('../http.js').createRouter>} router
  * @param {ReturnType<typeof import('../ai.js').createAi>} ai
  * @param {ReturnType<typeof import('../bookwords.js').createBookWords>} words «Я и Книга»'s own words: what a reader sees of them
+ * @param {ReturnType<typeof import('../bookvoice.js').createBookVoice>} voice «Я и Книга»: «Новая тема»
  */
-export function registerAiRoutes(router, ai, words) {
+export function registerAiRoutes(router, ai, words, voice) {
   // ---- a reader's own AI: connected by the same sign-in, used before the shared answers ----
   /** @param {import('../auth.js').User | null} user @returns {import('../auth.js').User} */
   const signedIn = (user) => {
@@ -25,6 +26,8 @@ export function registerAiRoutes(router, ai, words) {
     return { url: ai.begin(`user:${u.id}`, String(b.provider ?? 'openrouter'), publicOrigin(req), String(b.back ?? '/')) };
   });
   router.on('DELETE', '/api/ai/me', ({ user }) => (ai.disconnect(`user:${signedIn(user).id}`), words.state(signedIn(user).id)));
+  // «Новая тема» in one's «Я и Книга»: the Book's next answer begins a conversation anew (a line in the chat marks it)
+  router.on('POST', '/api/ai/me/new-topic', ({ user }) => voice.newTopic(`dm:${signedIn(user).id}`));
 
   /** @param {import('../auth.js').User | null} user */
   const requireAdmin = (user) => {

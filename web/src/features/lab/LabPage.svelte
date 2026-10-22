@@ -16,6 +16,8 @@
   let text = $state('');
   let asking = $state(false);
   let answer = $state(/** @type {import('./api.js').Answer | null} */ (null));
+  /** The judged questions unfolded (else one pill holds them). */
+  let allQ = $state(false);
 
   const load = () => labApi.status().then((s) => ((status = s), (error = '')), (e) => (error = e.message));
   load();
@@ -249,14 +251,20 @@
         <button type="button" class="ui-chip" disabled={!text.trim()} onclick={() => act(() => labApi.addQuestion(text))} title="В набор вопросов для проверки">Сохранить</button>
       </form>
       {#if status.questions.length}
+        <!-- the saved questions: those with paragraphs still to judge in sight; the judged ones folded into one pill -->
+        {@const judgedQs = status.questions.filter((q) => !q.open)}
         <div class="ui-chips lab-questions">
-          {#each status.questions as q (q.id)}
+          {#each status.questions.filter((q) => q.open || allQ) as q (q.id)}
             <span class="ui-chip lab-q">
               <button class="lab-q-text" onclick={() => ask(q.text)} title={q.open ? `Не отмечено: ${q.open}` : 'Все ответы отмечены'}>{q.text}{#if q.good || q.bad || q.open}<span class="lab-q-n">
                 {#if q.good}<span class="lab-good">✓{q.good}</span>{/if}{#if q.bad}<span class="lab-bad">✗{q.bad}</span>{/if}{#if q.open}<span class="muted">·{q.open}</span>{/if}</span>{/if}</button>
               <button class="lab-q-x" aria-label="Убрать вопрос" onclick={() => act(() => labApi.removeQuestion(q.id))}><Icon name="close" size={12} /></button>
             </span>
           {/each}
+          {#if judgedQs.length}
+            <button class="ui-chip lab-q-more" onclick={() => (allQ = !allQ)} aria-expanded={allQ}>
+              {allQ ? 'Свернуть отмеченные' : `Отмеченные вопросы · ${judgedQs.length}`}<Icon name={allQ ? 'up' : 'down'} size={14} /></button>
+          {/if}
         </div>
         <button class="ui-chip lab-again" onclick={askAll} disabled={!!again}>
           <Icon name="reset" size={14} />{again ? `Задаю ${again.done} из ${again.of}…` : 'Задать все вопросы заново'}</button>
@@ -309,7 +317,7 @@
           {#each status.writers as w (w.id)}
             <li class="ui-card lab-model">
               <span class="lab-model-text">
-                <b>{w.title} <span class="muted lab-size">{w.size}{w.downloaded ? '' : ' · скачается при запуске'}</span></b>
+                <b>{w.title} <span class="muted lab-size">{w.size}</span></b>
                 <span class="muted small">
                   {#if w.progress}Отвечает: {w.progress.done} из {w.progress.of}…{:else}Ответила на {w.answered} из {w.of}{/if}
                   {#if w.good || w.bad} · <span class="lab-good">✓{w.good}</span> <span class="lab-bad">✗{w.bad}</span>{/if}
@@ -556,6 +564,10 @@
   }
   .lab-q-x:hover {
     background: var(--ui-fill-2);
+  }
+  .lab-q-more {
+    gap: 4px;
+    color: var(--muted);
   }
   .lab-columns {
     display: grid;

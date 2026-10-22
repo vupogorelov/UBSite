@@ -19,11 +19,6 @@ const IDLE = 10 * 60_000;
  * @typedef {{ name: string, dtype?: string, file?: string, external?: boolean, textOnly?: boolean, pooling: 'mean' | 'cls' | 'last_token' | 'sentence', device?: 'cpu' | 'dml' }} Spec
  */
 
-/**
- * A model that writes («Я и Книга»'s answers; engine/embed.js): its name, its class, which files.
- * @typedef {{ name: string, cls: string, dtype?: string }} Writer
- */
-
 /** @typedef {{ child: import('node:child_process').ChildProcess, threads: number, waiting: Map<number, { resolve: (v: any) => void, reject: (e: Error) => void }>, idle?: ReturnType<typeof setTimeout> }} Proc */
 
 /** @param {string} models where the models are kept (data/models) */
@@ -99,18 +94,6 @@ export function createEngine(models) {
      */
     embed(spec, texts, { threads, exact } = { threads: 8 }) {
       return ask(`${spec.name} ${spec.device ?? 'cpu'}`, threads, !!exact, { spec, texts }).then((m) => ({ vectors: m.vectors, dims: m.dims }));
-    },
-    /**
-     * A writing model's answer to a conversation (on the processor, `threads` of it).
-     * @param {Writer} spec @param {{ role: string, content: string }[]} messages @param {{ threads: number, max: number }} opts
-     * @returns {Promise<{ text: string, tokens: number }>}
-     */
-    write(spec, messages, { threads, max }) {
-      return ask(`${spec.name} cpu`, threads, true, { op: 'write', spec, messages, max }).then((m) => ({ text: m.text, tokens: m.tokens }));
-    },
-    /** A model's process stopped (a writing model holds gigabytes: let go when its work is done). @param {string} name */
-    release(name) {
-      for (const [key, p] of procs) if (key.startsWith(`${name} `) && !p.waiting.size) p.child.kill();
     },
     stop() {
       for (const p of procs.values()) {

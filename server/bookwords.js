@@ -7,15 +7,19 @@ import { langOf, messagesFor, MAX_TOKENS } from './reply.js';
 
 /**
  * The models the Book writes with, in turn — another when one is busy or failing at its source (free models share
- * their source's pool: Google's Gemma is often busy). Free ones of OpenRouter. Tried 2026-10-22: Nemotron 3 Ultra —
- * the finer reading (≈7 s); MiniMax M3.1 Flash — the quickest (≈3 s), plainer; Nemotron 3 Super — not served.
+ * their source's pool, and come and go). Free ones of OpenRouter. Tried 2026-10-22: Nemotron 3 Ultra — the finer
+ * reading (≈7–50 s, sometimes overloaded); Nemotron 3.5 Super — as good (≈30 s); Google's Gemma 4 — often busy;
+ * gone or unfit: MiniMax M3.1 Flash (free no more), Nemotron 3 Super (not served), Nemotron 3.5 Lightning (thinks
+ * past its room), Inkling (refused).
  */
 export const BOOK_MODELS = [
-  'google/gemma-4-31b-it:free',
   'nvidia/nemotron-3-ultra-550b-a55b:free',
-  'minimax/minimax-m3.1-flash:free',
+  'nvidia/nemotron-3.5-super-vl:free',
+  'google/gemma-4-31b-it:free',
   'google/gemma-4-26b-a4b-it:free',
 ];
+/** All busy: once more after this, the whole list again. */
+const AGAIN_AFTER = 3000;
 
 /**
  * @param {import('node:sqlite').DatabaseSync} db
@@ -25,21 +29,26 @@ export function createBookWords(db, ai) {
   const paragraph = db.prepare('SELECT plain_ru AS ru, plain_en AS en FROM paragraphs WHERE ref = ?');
 
   /**
-   * The answer through an owner's connection, by the first model that serves. The limit reached or no access —
-   * another model would not help: said at once. @param {string} owner @param {{ role: string, content: string }[]} messages
+   * The answer through an owner's connection, by the first model that serves — all busy: the list once more a moment
+   * later. The day's limit reached or the key refused — another model would not help: said at once.
+   * @param {string} owner @param {{ role: string, content: string }[]} messages
    */
   async function ask(owner, messages) {
-    /** @type {any} */
-    let last = null;
-    for (const model of BOOK_MODELS) {
-      try {
-        return (await ai.chat(owner, model, messages, { max: MAX_TOKENS * 4 })).text;
-      } catch (err) {
-        last = err;
-        if (/** @type {any} */ (err).status === 429 || /** @type {any} */ (err).status === 409) break;
+    /** @type {string[]} */
+    const why = [];
+    for (let round = 0; round < 2; round++) {
+      if (round) await new Promise((r) => setTimeout(r, AGAIN_AFTER));
+      for (const model of BOOK_MODELS) {
+        try {
+          return (await ai.chat(owner, model, messages, { max: MAX_TOKENS * 4 })).text;
+        } catch (err) {
+          const e = /** @type {any} */ (err);
+          if (e.status === 429 || e.status === 409) throw err;
+          why.push(`${model}: ${e.message}`);
+        }
       }
     }
-    throw last;
+    throw new Error(`Ни одна модель не ответила — ${why.join('; ')}`);
   }
 
   return {
@@ -47,14 +56,15 @@ export function createBookWords(db, ai) {
      * The Book's own words for a reader's question from the paragraphs found (server/bookvoice.js: its Writer), or
      * null — no AI for this reader now.
      * @param {string} question @param {string[]} refs @param {number} ownerId
+     * @param {{ role: 'user' | 'assistant', content: string }[]} [history] the conversation so far (server/bookvoice.js)
      */
-    async write(question, refs, ownerId) {
+    async write(question, refs, ownerId, history = []) {
       const lang = langOf(question);
       const paragraphs = refs
         .map((ref) => ({ ref, text: /** @type {Record<string, string> | undefined} */ (paragraph.get(ref))?.[lang] ?? '' }))
         .filter((p) => p.text);
       if (!paragraphs.length) return null;
-      const messages = messagesFor(question, paragraphs);
+      const messages = messagesFor(question, paragraphs, history);
       const own = `user:${ownerId}`;
       if (ai.status(own)) {
         try {

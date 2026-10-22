@@ -38,6 +38,15 @@ export async function disconnectMyAi() {
   }
 }
 
+/** «Новая тема»: the Book's next answer begins a conversation anew (a line in «Я и Книга» marks it). */
+export async function newTopic() {
+  try {
+    await request('POST', '/api/ai/me/new-topic');
+  } catch (e) {
+    showToast(/** @type {Error} */ (e).message);
+  }
+}
+
 /** Back from a service's sign-in (?ai=connected, or why not): said, and the address cleaned. */
 export function noticeAiReturn() {
   const how = new URLSearchParams(location.search).get('ai');

@@ -137,6 +137,17 @@ test('"Я и Книга": one\'s own conversation; the Book answers with the par
   const q4 = chat.post('dm:10', anna, { body: 'Где живёт Настройщик Мысли?' });
   await voice.answer('dm:10', q4);
   assert.deepEqual([chat.page('dm:10', anna).at(-1)?.post?.ref, chat.page('dm:10', anna).at(-1)?.replyTo], ['5:1.2', q4.id]);
+
+  // a conversation: «Новая тема» begins it anew; a follow-up goes on with the talk so far and the last answer's paragraphs
+  voice.newTopic('dm:10');
+  assert.equal(chat.page('dm:10', anna).at(-1)?.body, 'Новая тема');
+  /** @type {any[]} */ const calls = [];
+  voice.useWriter(async (question, refs, owner, history) => (calls.push({ question, refs, history }), `Ответ ${calls.length} (${refs[0]}).`));
+  await voice.answer('dm:10', chat.post('dm:10', anna, { body: 'Что такое молитва?' }));
+  assert.deepEqual([calls[0].refs, calls[0].history], [['5:1.1'], []], 'a new topic: nothing before it');
+  await voice.answer('dm:10', chat.post('dm:10', anna, { body: 'А подробнее?' }));
+  assert.deepEqual(calls[1].history, [{ role: 'user', content: 'Что такое молитва?' }, { role: 'assistant', content: 'Ответ 1 (5:1.1).' }], 'the talk so far');
+  assert.ok(calls[1].refs.includes('5:1.1'), "the last answer's paragraphs go on (the follow-up alone finds nothing)");
 });
 
 test('"Я и Книга" in English: an English question is answered from the English text', async () => {

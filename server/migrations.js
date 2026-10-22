@@ -829,4 +829,12 @@ export const MIGRATIONS = [
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   ) WITHOUT ROWID;
   `,
+  // 40: «Я и Книга»: the paragraphs an answer in the Book's words was made from (JSON refs) — the next question in the
+  // same conversation goes on from them (server/bookvoice.js)
+  `
+  CREATE TABLE book_answers (
+    message_id INTEGER PRIMARY KEY REFERENCES public_messages(id) ON DELETE CASCADE,
+    refs       TEXT NOT NULL
+  );
+  `,
 ];

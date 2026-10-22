@@ -111,6 +111,7 @@ POST /api/admin/invites direct
 POST /api/admin/users/:uid/reset direct
 POST /api/ai/app/connect direct
 POST /api/ai/me/connect direct
+POST /api/ai/me/new-topic direct
 POST /api/aliases direct
 POST /api/auth/email/resend direct
 POST /api/auth/forgot direct

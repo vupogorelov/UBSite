@@ -16,8 +16,12 @@ const MAX = 900;
 /** How many paragraphs answer a question in "Я и Книга". */
 const ANSWERS = 3;
 const NOTHING = 'Такой информации не нашлось. Спросите иначе — другими словами или о понятии из книги.';
-/** How long the Book's own words are waited for (the model writes ≈10 s; a queue of questions — longer). */
-const WRITE_WITHIN = Number(process.env.UB_WRITE_WITHIN_MS ?? 90_000);
+/** «Я и Книга»'s conversation: a pause longer than this begins it anew; so many last questions (and the answers) go with a question; from so many paragraphs at most an answer is made (the found and the last answer's). */
+const PAUSE = 30 * 60_000;
+const HISTORY = 4;
+const FROM = 6;
+/** How long the Book's own words are waited for (a free remote model writes in ≈10–80 s; busy — the list again). */
+const WRITE_WITHIN = Number(process.env.UB_WRITE_WITHIN_MS ?? 150_000);
 /** The words of a question that say nothing about its subject. */
 const STOP = new Set(
   ('кто что как где когда зачем почему какой какая какое какие каков такой такая такое такие это этот эта эти ' +
@@ -123,20 +127,72 @@ export function createBookVoice(db, auth, chat) {
   /** @type {Finder | null} */
   let finder = null;
   /**
-   * The Book's answer in its own words (the Laboratory's small generative model, for whom it is tried): written
-   * from the paragraphs found, each thought with its paragraph's number — or null (not this one's, or not able
-   * now: the paragraphs alone then, as always).
-   * @typedef {(question: string, refs: string[], ownerId: number) => Promise<string | null>} Writer
+   * The answer in words (the remote AI, server/bookwords.js): written from the paragraphs found, each thought with its
+   * paragraph's number, the conversation so far before it (`history`) — or null (no AI for this reader now: the
+   * paragraphs alone then, as always).
+   * @typedef {{ role: 'user' | 'assistant', content: string }} Turn
+   * @typedef {(question: string, refs: string[], ownerId: number, history: Turn[]) => Promise<string | null>} Writer
    */
   /** @type {Writer | null} */
   let writer = null;
   const paragraphText = db.prepare('SELECT ref, plain_ru AS text FROM paragraphs WHERE ref = ?');
+  const talk = {
+    // the conversation before a question, newest first
+    before: db.prepare(`SELECT m.id, m.kind, m.body, m.created_at AS at, m.anchor_ref AS ref, u.is_agent AS agent, b.refs
+      FROM public_messages m JOIN users u ON u.id = m.author_id LEFT JOIN book_answers b ON b.message_id = m.id
+      WHERE m.ref = ? AND m.id < ? AND m.hidden_at IS NULL ORDER BY m.id DESC LIMIT 60`),
+    keep: db.prepare('INSERT OR REPLACE INTO book_answers (message_id, refs) VALUES (?, ?)'),
+  };
+
+  /**
+   * The conversation a question goes on (its context): back to «Новая тема» or a pause of over half an hour — the
+   * last questions and the Book's words to them (`history`, oldest first), the question before this one, the
+   * paragraphs the Book's last answer was made from (its words' — or the paragraphs it answered with).
+   * @param {string} key @param {{ id: number, created_at?: string }} question
+   */
+  function context(key, question) {
+    const rows = /** @type {any[]} */ (talk.before.all(key, question.id));
+    /** @type {Turn[]} */
+    const history = [];
+    /** @type {string[]} */
+    let lastRefs = [];
+    let previous = '';
+    let later = Date.now(); // (the Book answers as soon as asked)
+    /** @type {string[]} an answer of paragraphs alone: theirs, gathered back to its question */
+    let pieces = [];
+    for (const r of rows) {
+      const at = Date.parse(`${String(r.at).replace(' ', 'T')}Z`);
+      if (r.kind === 'event' || later - at > PAUSE) break;
+      later = at;
+      if (r.agent) {
+        if (r.ref) pieces.unshift(r.ref);
+        else if (r.kind === 'message') {
+          history.unshift({ role: 'assistant', content: r.body });
+          if (!lastRefs.length && r.refs) lastRefs = JSON.parse(r.refs);
+        }
+        continue;
+      }
+      if (r.kind !== 'message') continue;
+      // a question: the paragraphs it was answered with (no words) — in the talk as their numbers
+      if (pieces.length) {
+        history.unshift({ role: 'assistant', content: `Абзацы: ${pieces.join(', ')}` });
+        if (!lastRefs.length) lastRefs = pieces;
+        pieces = [];
+      }
+      history.unshift({ role: 'user', content: r.body });
+      if (!previous) previous = r.body;
+      if (history.filter((t) => t.role === 'user').length >= HISTORY) break;
+    }
+    while (history[0]?.role === 'assistant') history.shift(); // (an answer whose question is before the context)
+    return { history, previous, lastRefs };
+  }
 
   /**
    * The words for the answer, while «Книга печатает…» stays on (the model writes for seconds); none — in time
-   * or at all — the paragraphs answer alone. @param {string} key @param {string} question @param {string[]} refs @param {number} owner
+   * or at all — the paragraphs answer alone.
+   * @param {string} key @param {string} question @param {string[]} refs @param {number} owner @param {Turn[]} history
    */
-  async function written(key, question, refs, owner) {
+  async function written(key, question, refs, owner, history) {
     if (!writer) return null;
     const book = bookUser();
     const typing = setInterval(() => chat.typing(key, book), 4000);
@@ -145,7 +201,7 @@ export function createBookVoice(db, auth, chat) {
     try {
       /** @type {Promise<null>} */
       const timeout = new Promise((resolve) => (late = setTimeout(() => resolve(null), WRITE_WITHIN)));
-      return await Promise.race([writer(question, refs, owner), timeout]);
+      return await Promise.race([writer(question, refs, owner, history), timeout]);
     } catch (err) {
       console.error('The Book could not answer in its words, the paragraphs do:', err);
       return null;
@@ -163,32 +219,58 @@ export function createBookVoice(db, auth, chat) {
   async function answer(key, question) {
     const book = bookUser();
     const owner = Number(key.split(':')[1]);
-    /** @type {string[] | null} */
-    let refs = null;
-    try {
-      refs = finder ? await finder(question.body, owner, ANSWERS) : null;
-    } catch (err) {
-      console.error('The other search could not answer, the words do:', err);
+    // the conversation it goes on: a follow-up («уточни…», «а что это значит?») is searched for with the question
+    // before it, and answered from the last answer's paragraphs too, the talk so far before it
+    const ctx = context(key, question);
+    /** The paragraphs that speak of a text most: by meaning (the Laboratory's model), else by the words. @param {string} text */
+    const search = async (text) => {
+      /** @type {string[] | null} */
+      let refs = null;
+      try {
+        refs = finder ? await finder(text, owner, ANSWERS) : null;
+      } catch (err) {
+        console.error('The other search could not answer, the words do:', err);
+      }
+      return refs
+        ? refs.map((ref) => /** @type {{ ref: string, text: string } | undefined} */ (paragraphText.get(ref))).filter((p) => !!p).map((p) => /** @type {{ ref: string, text: string }} */ (p))
+        : find(text);
+    };
+    // the question alone (what the paragraphs answer it with, no AI); with the one before it (a follow-up's subject)
+    const found = await search(question.body);
+    const withBefore = ctx.previous ? await search(`${ctx.previous}\n${question.body}`) : [];
+    // its own words, as the reply — from the paragraphs found now, with the question before it, and the last answer's
+    // (up to six; nothing on it there — the model says so); their numbers in it open each in the book (checked in
+    // one tap). No AI now: the paragraphs found for the question, as quotes
+    // (the last answer's first: a follow-up — «подробнее про второе» — is about them, whatever its own words find)
+    const from = [...new Set([...ctx.lastRefs, ...withBefore.map((p) => p.ref), ...found.map((p) => p.ref)])].slice(0, FROM);
+    if (!from.length) {
+      chat.post(key, book, { body: NOTHING, replyTo: question.id });
+      return [];
     }
-    const found = refs
-      ? refs.map((ref) => /** @type {{ ref: string, text: string } | undefined} */ (paragraphText.get(ref))).filter((p) => !!p).map((p) => /** @type {{ ref: string, text: string }} */ (p))
-      : find(question.body);
+    const words = await written(key, question.body, from, owner, ctx.history);
+    if (words) {
+      const msg = chat.post(key, book, { body: words, replyTo: question.id });
+      talk.keep.run(msg.id, JSON.stringify(from));
+      return from;
+    }
     if (!found.length) {
       chat.post(key, book, { body: NOTHING, replyTo: question.id });
       return [];
     }
-    // its own words, as the reply — the paragraphs' numbers in them open each in the book (checked in one tap); no AI
-    // now: the paragraphs themselves, as quotes
-    const words = await written(key, question.body, found.map((p) => p.ref), owner);
-    if (words) chat.post(key, book, { body: words, replyTo: question.id });
-    else found.forEach((p, i) => chat.post(key, book, { body: p.text, anchor: { ref: p.ref }, replyTo: i === 0 ? question.id : null }));
+    found.forEach((p, i) => chat.post(key, book, { body: p.text, anchor: { ref: p.ref }, replyTo: i === 0 ? question.id : null }));
     return found.map((p) => p.ref);
+  }
+
+  /** «Новая тема» in one's «Я и Книга»: the next question begins a conversation anew. @param {string} key */
+  function newTopic(key) {
+    return chat.notice(key, bookUser(), 'Новая тема');
   }
 
   return {
     post,
     answer,
     find,
+    newTopic,
 
     /** Another way to find the answer (the Laboratory's): see `finder`. @param {Finder | null} fn */
     useFinder(fn) {

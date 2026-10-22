@@ -158,7 +158,8 @@ export function createAi(db) {
       const raw = `${data?.error?.message ?? ''} ${data?.error?.metadata?.raw ?? ''}`;
       if (res.status === 429 && /per-day|per day|daily/i.test(raw)) throw new HttpError(429, 'Запас ответов на сегодня закончился');
       if (res.status === 429) throw new HttpError(503, `${model}: модель сейчас перегружена`);
-      if (res.status === 401 || res.status === 403) throw new HttpError(409, `${PROVIDERS[row.provider].title}: доступ закрыт — подключите заново`);
+      // (401: the key itself refused — connect again; 403 and the rest: this model not served — another may be)
+      if (res.status === 401) throw new HttpError(409, `${PROVIDERS[row.provider].title}: доступ закрыт — подключите заново`);
       if (!res.ok || data?.error) throw new HttpError(502, `${PROVIDERS[row.provider].title}: ${data?.error?.message ?? `ошибка ${res.status}`}`);
       const text = String(data?.choices?.[0]?.message?.content ?? '').trim();
       if (!text) throw new HttpError(502, `${PROVIDERS[row.provider].title}: пустой ответ`);
