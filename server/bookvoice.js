@@ -15,7 +15,7 @@ const MIN = 200;
 const MAX = 900;
 /** How many paragraphs answer a question in "Я и Книга". */
 const ANSWERS = 3;
-const NOTHING = 'Прямых слов об этом во мне не нашлось. Спросите иначе — другими словами или о понятии из книги.';
+const NOTHING = 'Такой информации не нашлось. Спросите иначе — другими словами или о понятии из книги.';
 /** How long the Book's own words are waited for (the model writes ≈10 s; a queue of questions — longer). */
 const WRITE_WITHIN = Number(process.env.UB_WRITE_WITHIN_MS ?? 90_000);
 /** The words of a question that say nothing about its subject. */
