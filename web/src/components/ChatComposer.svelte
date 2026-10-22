@@ -2,10 +2,12 @@
   import { api } from '../lib/api.js';
   import { blurOnRemove } from '../lib/focus.js';
   import Icon from './Icon.svelte';
+  import { settings } from '../lib/settings.svelte.js';
 
   /**
    * Telegram's input bar: a rounded field that grows with the text, the reply bar above it, @name
-   * suggestions, Enter to send (Shift+Enter — a new line; on a touch screen Enter is a new line), the round send button.
+   * suggestions, Enter or Ctrl/⌘+Enter to send (as set; on a touch screen Enter is a new line), the round send
+   * button (an arrow up), all in one pill.
    * @type {{
    *   onsend: (body: string) => Promise<unknown>, placeholder?: string,
    *   reply?: { id: number, authorName: string | null, body: string } | null, oncancelreply?: () => void,
@@ -20,6 +22,8 @@
   } = $props();
 
   const touch = matchMedia('(pointer: coarse)').matches;
+  /** Apple's (Mac, iPhone, iPad): ⌘ in the send button's hint. */
+  const apple = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
   let text = $state('');
   let sending = $state(false);
   /** @type {HTMLTextAreaElement | undefined} */ let field = $state();
@@ -122,8 +126,12 @@
       if (reply) oncancelreply?.();
       else onescape?.();
     }
-    // A computer: Enter sends (Shift+Enter — a new line); a touch screen: Enter is a new line, the button sends (as Telegram)
-    if (e.key === 'Enter' && !e.shiftKey && !e.isComposing && !touch) {
+    // Settings → «Чаты» → «Отправка сообщения»: Enter (Shift+Enter — a new line) or Ctrl+Enter (⌘ on Apple's) —
+    // the other, a new line; Ctrl/⌘+Enter sends always. A touch screen: Enter is a new line, the button sends (as
+    // Telegram) — with a keyboard (an iPad's), ⌘+Enter
+    if (e.key !== 'Enter' || e.isComposing) return;
+    const mod = e.ctrlKey || e.metaKey;
+    if (mod || (settings.chatSend !== 'mod' && !e.shiftKey && !touch)) {
       e.preventDefault();
       void send();
     }
@@ -151,8 +159,9 @@
     <textarea bind:this={field} bind:value={text} rows="1" {placeholder} {disabled} aria-label={placeholder} use:blurOnRemove
       oninput={() => (grow(), suggest(), text.trim() && ontyping?.())} onkeydown={onKeydown} onclick={suggest}></textarea>
     <button class="tg-send" class:ready={text.trim().length > 0} onclick={send} disabled={!text.trim() || sending || disabled}
-      aria-label="Отправить" title="Отправить (Enter)">
-      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="currentColor" d="M3.4 20.4 21 12 3.4 3.6 3.4 10l12.6 2-12.6 2z" /></svg>
+      aria-label="Отправить" title={settings.chatSend === 'mod' ? `Отправить (${apple ? '⌘' : 'Ctrl'}+Enter)` : 'Отправить (Enter)'}>
+      <!-- an arrow up (the paper plane was) -->
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7" /></svg>
     </button>
   </div>
 </div>

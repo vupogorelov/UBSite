@@ -208,8 +208,15 @@
 
   /** @param {import('../lib/chat.svelte.js').ChatEvent} e */
   async function onEvent(e) {
+    if (e.type === 'read') {
+      // another has read up to here: one's messages so far — two checks
+      if (info && e.userId !== me) info.readUpTo = Math.max(info.readUpTo ?? 0, e.id);
+      return;
+    }
     if (e.type === 'message') {
       if (messages.some((m) => m.id === e.message.id)) return;
+      // «Я и Книга»: the Book's answer — it has read what came before
+      if (info?.kind === 'dm' && e.message.authorAgent) info.readUpTo = Math.max(info.readUpTo ?? 0, e.message.id);
       const stick = atBottom || e.message.authorId === me;
       messages = [...messages, e.message];
       await tick();
@@ -491,7 +498,7 @@
     <ChatAvatar chat={info} />
     <div class="tg-chat-title">
       <b>{#if info?.voice}<span class="tg-chan-mark" title="Канал" role="img" aria-label="Канал:"><Icon name="megaphone" size={15} /></span>{/if}{info?.title ?? '…'}</b>
-      {#if typing}<span class="tg-typing">{typing.name} печатает<span class="tg-dots"><i></i><i></i><i></i></span></span>
+      {#if typing}<span class="tg-typing">{info?.kind === 'dm' ? 'Печатает' : `${typing.name} печатает`}<span class="tg-dots"><i></i><i></i><i></i></span></span>
       {:else if vis}<span class="muted tg-vis-line"><span class="tg-vis" title={vis.full}><Icon name={vis.icon} size={13} />{vis.short}</span>{#if info?.kind !== 'ws' && info?.subtitle}<span class="ellipsis">· {info.subtitle}</span>{/if}</span>{/if}
     </div>
     <span class="spacer"></span>
@@ -567,6 +574,7 @@
         </span></div>
       {:else if info && !messages.length}<div class="tg-empty" class:after-post={info.kind === 'para'}><span>Сообщений пока нет — напишите первое.</span></div>{/if}
       <ChatMessages bind:this={list} messages={shown} {me} {unreadAfter} reactions={REACTIONS} chatKey={key}
+        solo={info?.kind === 'dm'} readUpTo={info?.readUpTo ?? 0}
         onretry={(m) => m.op && retry(m.op)} ondiscard={(m) => m.op && discard(m.op)}
         onreply={(m) => (reply = { id: m.id, authorName: m.authorName, body: plainBody(m.body).slice(0, 200) })}
         onreact={react} onedit={edit} ondelete={remove} onhide={hide} canhide={coordinator && info?.kind !== 'ws'}

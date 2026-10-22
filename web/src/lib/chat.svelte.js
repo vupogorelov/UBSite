@@ -6,7 +6,7 @@ import { session } from './session.svelte.js';
 import { notify, refreshCounts } from './notify.svelte.js';
 import { navigate } from './router.svelte.js';
 
-/** @typedef {{ type: 'message' | 'edit' | 'delete' | 'reactions' | 'typing' | 'reload' | 'pin' | 'mark' | 'changed', key: string } & Record<string, any>} ChatEvent */
+/** @typedef {{ type: 'message' | 'edit' | 'delete' | 'reactions' | 'typing' | 'reload' | 'pin' | 'mark' | 'changed' | 'read', key: string } & Record<string, any>} ChatEvent */
 
 export const chat = $state({
   /** @type {import('./api.js').ChatSummary[]} */ list: [],

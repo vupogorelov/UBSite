@@ -4065,42 +4065,7 @@ fieldset.group:disabled {
 :root[data-theme='dark'] .own .tg-bubble {
   color: #fff;
 }
-/* Corners and tails: a run is rounded on the outside; its last bubble gets the tail. */
-.tg-row:not(.own):not(.first) .tg-bubble {
-  border-top-left-radius: 6px;
-}
-.tg-row:not(.own):not(.last) .tg-bubble {
-  border-bottom-left-radius: 6px;
-}
-.tg-row.own:not(.first) .tg-bubble {
-  border-top-right-radius: 6px;
-}
-.tg-row.own:not(.last) .tg-bubble {
-  border-bottom-right-radius: 6px;
-}
-.tg-bubble.tail {
-  border-bottom-left-radius: 0;
-}
-.own .tg-bubble.tail {
-  border-bottom-left-radius: 14px;
-  border-bottom-right-radius: 0;
-}
-.tg-bubble.tail::before {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: -8px;
-  width: 9px;
-  height: 17px;
-  background: inherit;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='17'%3E%3Cpath d='M9 0v17H0c3.6-1.3 6.4-3.8 7.8-7.5C8.7 7 9 3.7 9 0z'/%3E%3C/svg%3E") no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='9' height='17'%3E%3Cpath d='M9 0v17H0c3.6-1.3 6.4-3.8 7.8-7.5C8.7 7 9 3.7 9 0z'/%3E%3C/svg%3E") no-repeat;
-}
-.own .tg-bubble.tail::before {
-  left: auto;
-  right: -8px;
-  transform: scaleX(-1);
-}
+/* Corners: all alike, in every chat (Settings → «Чаты» → «Скругление сообщений»); no tails */
 .tg-row.flash .tg-bubble {
   animation: tg-flash 1.2s ease-out;
 }
@@ -4225,6 +4190,13 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .tg-meta .tg-mark {
   margin-right: 0.25rem;
   font-size: 10px;
+}
+/* one's message: sent — a check; read by another — two, green (as Telegram) */
+.tg-check {
+  display: inline-flex;
+}
+.tg-check.read {
+  color: var(--success, #3f8f4f);
 }
 /* room for the mark by the time at the end of the last line */
 .tg-bubble:has(.tg-meta .tg-mark) .tg-meta-space {
@@ -11398,36 +11370,39 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     z-index: 3; /* (over the sticky dates of the list: they pass under it) */
   }
 }
-/* the frame */
+/* the field: one pill — its one rim, the text and the send button inside, no inner layer (the reply above them) */
 .tg-chat .tg-composer {
   max-width: calc(var(--column-width) + 2rem - 1.5rem);
   margin: 0 auto calc(var(--space-3) + var(--safe-bottom, 0px));
-  padding: 8px;
+  padding: 4px;
   border: 1px solid var(--ui-line);
-  border-radius: 28px;
+  border-radius: 26px;
   background: var(--ui-card);
   box-shadow: 0 10px 28px -16px rgb(0 0 0 / 0.35);
+}
+.tg-chat .tg-composer:focus-within {
+  border-color: color-mix(in srgb, var(--text) 25%, transparent);
 }
 @media (max-width: 767px) {
   .tg-chat .tg-composer {
     margin-left: var(--space-3);
     margin-right: var(--space-3);
-    padding: 8px;
+    padding: 4px;
   }
 }
-/* the reply: a quiet block inside the frame, above the field */
+/* the reply: a quiet block inside the pill, above the field */
 .tg-chat .tg-composer .tg-reply-bar {
-  margin: 0 0 8px;
+  margin: 4px 4px 8px;
   padding: var(--space-3) var(--space-2) var(--space-3) var(--space-4);
   border: 0;
   border-radius: 20px;
   background: var(--ui-fill);
 }
-/* the field: a pill in the frame, the send button in it */
+/* the field and the button: the pill's own content */
 .tg-chat .tg-composer .tg-input-row {
-  min-height: 48px;
-  padding: 4px;
-  border-radius: 24px;
+  min-height: 46px;
+  padding: 3px;
+  border-radius: 22px;
   box-shadow: none;
 }
 .tg-chat .tg-composer .tg-input-row textarea {
@@ -11442,14 +11417,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .tg-chat .tg-scroll {
   padding-bottom: 32px;
 }
-/* the field: a grey pill in the white frame, no rim (as the example's inner block) */
-.tg-chat .tg-composer .tg-input-row {
-  border: 0;
-  background: var(--ui-fill);
-}
+/* (no layer of its own in the pill: no rim, no grey) */
+.tg-chat .tg-composer .tg-input-row,
 .tg-chat .tg-composer .tg-input-row:focus-within {
   border: 0;
-  background: var(--ui-fill-2);
+  background: transparent;
 }
 /* ==== The pinned message: a floating card under the header (as the message field's frame);
    the conversation goes on under it ==== */

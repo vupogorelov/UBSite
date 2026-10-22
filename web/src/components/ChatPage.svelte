@@ -345,7 +345,7 @@
               </span>
               <span class="tg-chat-line">
                 <span class="tg-chat-preview ellipsis">
-                  {#if chat.typing[c.key]}<span class="tg-typing">{chat.typing[c.key].name} печатает…</span>
+                  {#if chat.typing[c.key]}<span class="tg-typing">{c.kind === 'dm' ? 'Печатает…' : `${chat.typing[c.key].name} печатает…`}</span>
                   {:else if c.last}
                     {#if c.last.kind === 'event'}<i>{c.last.body}</i>
                     {:else}<span class="tg-chat-author">{c.last.authorId === session.user?.id ? 'Вы' : c.last.authorName ?? ''}:</span> {plainBody(c.last.body)}{/if}

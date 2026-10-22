@@ -8,6 +8,9 @@
   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
   {#if name === 'menu'}
     <path d="M4 6h16M4 12h16M4 18h16" />
+  {:else if name === 'check-double'}
+    <!-- read: two checks -->
+    <path d="M18 6 7 17l-5-5M22 10l-7.5 7.5L13 16" />
   {:else if name === 'sparkles'}
     <!-- the AI's sign -->
     <path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.13-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.13a.5.5 0 0 1 .96 0l1.58 6.13a2 2 0 0 0 1.44 1.44l6.13 1.58a.5.5 0 0 1 0 .96l-6.13 1.58a2 2 0 0 0-1.44 1.44l-1.58 6.13a.5.5 0 0 1-.96 0z" />

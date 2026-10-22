@@ -82,8 +82,10 @@ import { log } from './log.js';
  *   key: string, kind: 'para' | 'chan' | 'ws' | 'note' | 'dm' | string, title: string, subtitle: string | null, members?: number, archived?: boolean, text?: string,
  *   link?: string, linkLabel?: string,
  *   post?: { ru: string, en: string, pageRef: string, paperId: number, paperTitle: string, paperTitleEn?: string } | null,
- *   pinned: PinnedMessage | null, canPin: boolean, following?: boolean, voice?: boolean, discussion?: string | null
+ *   pinned: PinnedMessage | null, canPin: boolean, following?: boolean, voice?: boolean, discussion?: string | null,
+ *   readUpTo?: number
  * }} ChatInfo
+ * readUpTo: how far the others have read (one's own messages up to it: two checks)
  * @typedef {{ id: number, authorName: string | null, body: string, hiddenAt: string | null }} PinnedMessage
  * @typedef {{
  *   id: number, ref: string, kind: 'message' | 'event', body: string, createdAt: string, proposalId: number | null,

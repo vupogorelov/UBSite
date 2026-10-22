@@ -65,3 +65,33 @@ test('chat: channels, workspace chats, replies, reactions, mentions and unread c
   assert.ok(chat.list(user(3)).some((c) => c.key === '5:1.1' && c.title === 'Абзац 5:1.1'));
   assert.throws(() => chat.post('9:9.9', user(3), { body: 'x' }), /не найден/);
 });
+
+test("chat: one's sent message read by another — how far the others have read (the second check), live", () => {
+  const db = openDb(':memory:');
+  db.exec(`
+    INSERT INTO users (id, username, username_key, created_at) VALUES
+      (1, 'anna', 'anna', datetime('now', '-1 day')), (2, 'boris', 'boris', datetime('now', '-1 day'));
+    INSERT INTO workspaces (id, name, kind) VALUES (2, 'Группа', 'group');
+    INSERT INTO workspace_members (workspace_id, user_id, role) VALUES (2, 1, 'owner'), (2, 2, 'commenter');
+  `);
+  const chat = createChat(db, createAuth(db));
+  const user = (/** @type {number} */ id) => /** @type {any} */ ({ id, username: ['', 'anna', 'boris'][id], displayName: null, isAdmin: false, isCoordinator: false, isTranslator: false });
+  /** @type {any[]} */
+  const events = [];
+  const publish = chat.hub.publish.bind(chat.hub);
+  chat.hub.publish = (/** @type {string} */ key, /** @type {any} */ e) => (events.push({ key, ...e }), publish(key, e));
+
+  const m = chat.post('ws:2', user(1), { body: 'Привет' });
+  assert.equal(chat.info('ws:2', user(1)).readUpTo, 0, 'sent: nobody else has read it');
+  chat.markRead('ws:2', user(2), m.id);
+  assert.equal(chat.info('ws:2', user(1)).readUpTo, m.id, 'read by boris: two checks');
+  assert.deepEqual(events.at(-1), { key: 'ws:2', type: 'read', userId: 2, id: m.id });
+
+  // «Я и Книга»: read when the Book has answered
+  db.exec("INSERT INTO users (username, username_key, display_name, is_agent) VALUES ('urantiabook', 'urantiabook', 'Книга Урантии', 1)");
+  const book = /** @type {any} */ ({ id: Number(/** @type {any} */ (db.prepare("SELECT id FROM users WHERE username = 'urantiabook'").get()).id), username: 'urantiabook', displayName: 'Книга Урантии', isAgent: true });
+  const q = chat.post('dm:1', user(1), { body: 'Что такое молитва?' });
+  assert.equal(chat.info('dm:1', user(1)).readUpTo, 0);
+  const a = chat.post('dm:1', book, { body: 'Молитва — дыхание души.' });
+  assert.ok(chat.info('dm:1', user(1)).readUpTo >= q.id && a.id > q.id);
+});

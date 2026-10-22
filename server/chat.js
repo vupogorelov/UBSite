@@ -163,6 +163,10 @@ export function createChat(db, auth) {
     written: db.prepare("SELECT ref AS chat, min(created_at) AS since FROM public_messages WHERE author_id = ? AND kind = 'message' AND ref GLOB '[a-z]*:[0-9]*' AND ref NOT GLOB 'chan:*' AND ref NOT GLOB 'ws:*' AND ref NOT GLOB 'note:*' AND ref NOT GLOB 'dm:*' GROUP BY ref"),
     last: db.prepare(`${MESSAGE} WHERE m.ref = ? AND m.hidden_at IS NULL ORDER BY m.id DESC LIMIT 1`),
     read: db.prepare('SELECT last_read_id AS id FROM chat_reads WHERE user_id = ? AND chat = ?'),
+    // how far the others have read (a sent message's second check): the people's marks; in «Я и Книга» the Book's
+    // last answer (it has read all before it)
+    othersRead: db.prepare('SELECT max(last_read_id) AS id FROM chat_reads WHERE chat = ? AND user_id <> ?'),
+    bookAnswered: db.prepare('SELECT max(m.id) AS id FROM public_messages m JOIN users u ON u.id = m.author_id WHERE m.ref = ? AND u.is_agent = 1'),
     setRead: db.prepare(`INSERT INTO chat_reads (user_id, chat, last_read_id) VALUES (?, ?, ?)
       ON CONFLICT (user_id, chat) DO UPDATE SET last_read_id = max(last_read_id, excluded.last_read_id)`),
     unread: db.prepare(`
@@ -480,6 +484,8 @@ export function createChat(db, auth) {
     markRead(key, user, upTo) {
       access(key, user, false);
       q.setRead.run(user.id, key, upTo);
+      // the writers' second check, live
+      hub.publish(key, { type: 'read', userId: user.id, id: upTo });
     },
 
     /** "печатает…" @param {string} key @param {User} user */
@@ -598,7 +604,9 @@ export function createChat(db, auth) {
 
     /** One chat's header info, with its pinned message and whether the user may pin. @param {string} key @param {User} user */
     info(key, user) {
-      return { ...this.header(key, user), pinned: pinnedOf(key, user), canPin: canPin(keyOf(key), user) };
+      const h = this.header(key, user);
+      const read = /** @type {{ id: number | null } | undefined} */ (h.kind === 'dm' ? q.bookAnswered.get(key) : q.othersRead.get(key, user.id));
+      return { ...h, pinned: pinnedOf(key, user), canPin: canPin(keyOf(key), user), readUpTo: read?.id ?? 0 };
     },
 
     /** @param {string} key @param {User} user */

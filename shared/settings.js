@@ -17,6 +17,7 @@
  *   chatFont: 'sans' | 'serif',
  *   chatRadius: number,
  *   chatFold: boolean,
+ *   chatSend: 'enter' | 'mod',
  *   fontWeight: number,
  *   lineHeight: number,
  *   columnWidth: number,
@@ -237,6 +238,11 @@ export const SETTINGS_GROUPS = [
         options: [['sans', 'Как в интерфейсе'], ['serif', 'Как в книге']],
       },
       { key: 'chatRadius', label: 'Скругление сообщений', type: 'range', min: 4, max: 22, step: 1, unit: 'px', default: 14 },
+      {
+        key: 'chatSend', label: 'Отправка сообщения', type: 'choice', default: 'enter',
+        hint: 'Другая клавиша — перенос строки. Ctrl+Enter (⌘+Enter на Mac, iPhone и iPad с клавиатурой) отправляет всегда. На экранной клавиатуре телефона Enter переносит строку, отправляет кнопка-стрелка.',
+        options: [['enter', 'Enter'], ['mod', 'Ctrl+Enter (⌘+Enter)']],
+      },
       {
         key: 'chatFold', label: 'Сворачивать длинные сообщения', type: 'toggle', default: false,
         hint: 'Длинное сообщение и абзац книги показываются первыми пятью строками; «Показать полностью» — развернуть прямо в чате.',

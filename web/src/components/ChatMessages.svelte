@@ -26,8 +26,9 @@
    */
 
   /**
-   * A conversation drawn like Telegram: bubbles (own on the right), grouped runs of one author with
-   * the avatar and the tail at the end, date pills, service messages, replies (also a swipe to the left), reactions.
+   * A conversation drawn like Telegram: bubbles (own on the right; all corners alike, no tails), grouped runs of one
+   * author with the avatar at the end, date pills, service messages, replies (also a swipe to the left), reactions;
+   * one's sent message — a check, read by another — two (`readUpTo`). `solo`: one on one — no avatars, no names (who writes is plain).
    * Used by the chat page, paragraph threads, proposal discussions and note comments.
    * `render`: the body as HTML instead of plain text with links (notes' comments: **bold**, #tags…);
    * `candeleteall`: delete others' messages too (the owner of a note's workspace);
@@ -48,11 +49,12 @@
    *   chatKey?: string | null, onpin?: (m: Msg | null) => void, pinnedId?: number | null,
    *   onquote?: (text: string) => void, onmark?: (m: Msg, mark: import('../lib/api.js').Mark | null) => void,
    *   ondiscuss?: (m: Msg) => void, onretry?: (m: Msg) => void, ondiscard?: (m: Msg) => void,
-   *   onjudge?: (m: Msg, good: boolean | null) => void, judged?: Record<number, boolean>
+   *   onjudge?: (m: Msg, good: boolean | null) => void, judged?: Record<number, boolean>,
+   *   solo?: boolean, readUpTo?: number
    * }}
    * `onjudge`, `judged`: the Book's answers in an administrator's «Я и Книга» marked hit / missed (the Laboratory).
    */
-  let { messages, me, compact = false, unreadAfter = null, reactions = [], onreply, onreact, onedit, ondelete, onhide, canhide = false, candeleteall = false, render, chatKey = null, onpin, pinnedId = null, onquote, onmark, ondiscuss, onretry, ondiscard, onjudge, judged = {} } = $props();
+  let { messages, me, compact = false, unreadAfter = null, reactions = [], onreply, onreact, onedit, ondelete, onhide, canhide = false, candeleteall = false, render, chatKey = null, onpin, pinnedId = null, onquote, onmark, ondiscuss, onretry, ondiscard, onjudge, judged = {}, solo = false, readUpTo = 0 } = $props();
 
   const toDate = (/** @type {string} */ s) => new Date(s.replace(' ', 'T') + 'Z');
   const dayKey = (/** @type {string} */ s) => toDate(s).toDateString();
@@ -265,7 +267,7 @@
       <div class="tg-row" class:own class:first class:last id="msg-{m.id}"
         use:swipeReply={onreply && editingId !== m.id && !m.pending ? () => onreply?.(m) : undefined}>
         {#if onreply}<span class="tg-swipe-icon" aria-hidden="true"><Icon name="back" size={16} /></span>{/if}
-        {#if !own && !compact}
+        {#if !own && !compact && !solo}
           <span class="tg-avatar-slot">
             {#if last && m.authorAgent}<span class="tg-avatar book" title={m.authorName ?? 'Книга'}><Icon name="book-open" size={17} /></span>
             {:else if last}<span class="tg-avatar" style:--c={userColor(m.authorId)} title={m.authorName ?? ''}>{initials(m.authorName)}</span>{/if}
@@ -273,10 +275,10 @@
         {/if}
         <!-- (a tap opens the message's menu on a touch screen; the keyboard has the context-menu key) -->
         <!-- svelte-ignore a11y_no_static_element_interactions, a11y_click_events_have_key_events -->
-        <div class="tg-bubble" class:tail={last} class:hidden-msg={!!m.hiddenAt} class:book={!!m.post}
+        <div class="tg-bubble" class:hidden-msg={!!m.hiddenAt} class:book={!!m.post}
           oncontextmenu={(e) => openMenu(e, m, own)} ondblclick={() => !m.pending && onreply?.(m)}
           onpointerdown={(e) => (pointer = e.pointerType)} onclick={(e) => tap(e, m, own)}>
-          {#if !own && first}<div class="tg-name" class:book={m.authorAgent} style:color={m.authorAgent ? null : userColor(m.authorId)}>{m.authorName ?? 'Участник'}</div>{/if}
+          {#if !own && first && !solo}<div class="tg-name" class:book={m.authorAgent} style:color={m.authorAgent ? null : userColor(m.authorId)}>{m.authorName ?? 'Участник'}</div>{/if}
           {#if m.reply && quoteShown}
             <button class="tg-quote" style:--c={userColor(null)} onclick={() => m.reply && reveal(m.reply.id)}>
               <b>{m.reply.authorName ?? 'Участник'}</b><span>{plainBody(m.reply.body) || 'Сообщение скрыто'}</span>
@@ -355,7 +357,8 @@
             {time(m.writtenAt ?? m.createdAt)}
             {#if m.pending === 'wait'}<span class="tg-wait" title="Отправится, когда будет связь"><Icon name="clock" size={13} /></span>
             {:else if m.pending === 'failed'}<span class="tg-failed" title={m.error}><Icon name="alert" size={13} /></span>
-            {:else if own}<Icon name="check" size={13} />{/if}
+            {:else if own && m.id <= readUpTo}<span class="tg-check read" title="Прочитано"><Icon name="check-double" size={15} /></span>
+            {:else if own}<span class="tg-check" title="Отправлено"><Icon name="check" size={13} /></span>{/if}
           </span>
         </div>
         {#if onreply && editingId !== m.id && !m.pending}
