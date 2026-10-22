@@ -925,7 +925,8 @@
 
   {#if sheetOpen}
     <!-- (phone: at the page's top level — the book's layer is not lifted or cut under it) -->
-    <div class="note-sheet" use:phonePortal>
+    <!-- (another page over the book: it waits, unseen — `away`) -->
+    <div class="note-sheet" class:away={background} use:phonePortal>
       {#if notes.draft}
         <NoteCard showQuote onclose={() => (notes.draft = null)} />
       {:else if activeNote}
@@ -952,5 +953,6 @@
 </div>
 
 {#if thread.ref}
-  <ThreadDrawer ru={threadTexts?.ru ?? ''} en={threadTexts?.en ?? ''} />
+  <!-- (hidden with the book under another page: app.css .reader-aside) -->
+  <div class="reader-aside"><ThreadDrawer ru={threadTexts?.ru ?? ''} en={threadTexts?.en ?? ''} /></div>
 {/if}

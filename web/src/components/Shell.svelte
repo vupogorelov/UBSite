@@ -64,7 +64,7 @@
     noticeAiReturn(); // (back from an AI service's sign-in: how it went)
     // «Переносы слов» on: whether this browser can (Android's WebView: by the system's dictionaries) — in the journal
     if (settings.hyphens) setTimeout(() => log('ui', 'hyphens', { ru: hyphenates('ru'), en: hyphenates('en'), ua: navigator.userAgent }), 3000);
-    const ahead = setTimeout(() => [...PAGES, ...DRAWERS].forEach((x) => x.load().catch(() => {})), 4000);
+    const ahead = setTimeout(() => (PAGES.forEach((p) => loadPage(p).catch(() => {})), DRAWERS.forEach((d) => d.load().catch(() => {}))), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
     const stopChat = connectChat();
@@ -180,6 +180,17 @@
 
   /** The page in place of the book (lib/pages.js); null — the book. */
   const page = $derived(pageOf(route.path));
+  /**
+   * The pages' code once loaded: drawn at once — not through the import's promise, which costs an empty
+   * frame on every opening (fetched ahead at start, below).
+   * @type {Record<string, any>}
+   */
+  const pageCode = $state({});
+  /** @param {import('../lib/pages.js').Page} p */
+  const loadPage = (p) => p.load().then((m) => (pageCode[p.id] ??= m.default));
+  $effect(() => {
+    if (page && !pageCode[page.id]) loadPage(page).catch((err) => showToast(`Раздел не загрузился: ${err.message}`));
+  });
   /** A page of its own: it covers the book and its sidebar. */
   const fullPage = $derived(page?.kind === 'page');
   const chatPage = $derived(page?.id === 'chat');
@@ -429,7 +440,7 @@
     {/if}
     <button class="toc-scrim" aria-label="Закрыть панель" onclick={() => (ui.sidebarOpen = false)}></button>
     <main class="reader-pane">
-      {#if page}{#key page.id}{#await page.load() then m}<m.default {...page.props?.(route.path)} />{/await}{/key}{/if}
+      {#if page && pageCode[page.id]}{#key page.id}{@const P = pageCode[page.id]}<P {...page.props?.(route.path)} />{/key}{/if}
       <!-- the book, once opened, stays under another page (hidden), as a tab of a phone's app: back to it —
            the same paper at the same place at once; the voice goes on until ■ -->
       {#if bookSeen || !otherPage || tts.open}

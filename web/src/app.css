@@ -12266,14 +12266,28 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   }
 }
 
-/* The book read aloud under another page: kept, unseen; its note sheet waits too */
+/* The book under another page: kept, unseen; its note sheet waits too. Hidden by content-visibility, not
+   display: none — the browser keeps its laid-out text (and its scroll), so back to the book is one frame,
+   not the whole paper laid out anew (≈0.4 s on a phone). Out of the flow, under the page (z-index — not
+   pointer-events: inherited, it would restyle every paragraph, ≈0.2 s each way). */
 .reader-host {
   display: contents;
 }
-.reader-host.behind {
+.reader-host.behind > .reader {
+  content-visibility: hidden;
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+/* (named, not ":not(.reader)": a selector without a class of its own restyles the whole paper on a switch) */
+.reader-aside {
+  display: contents;
+}
+.reader-host.behind > .reader-aside {
   display: none;
 }
-:root:has(.reader-host.behind) .note-sheet {
+/* (marked by the reader itself — a :has() on the root over the book's class would restyle the whole page) */
+.note-sheet.away {
   display: none;
 }
 /* over an open conversation the mini player stands above the message field */
