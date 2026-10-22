@@ -10690,6 +10690,25 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .tg-chan-note + .tg-voice-bar {
   border-top: 0;
 }
+/* «Я и Книга», over the field: who writes the Book's own words, how many shared answers are left today */
+.book-ai-bar {
+  position: relative;
+  z-index: 2;
+  /* (the field's frame rises 32px over the list: room for it under the line) */
+  margin: 0 0 32px;
+  padding: var(--space-2) var(--space-4) var(--space-1);
+  color: var(--muted);
+  font: 12px/17px var(--sans);
+  text-align: center;
+}
+.book-ai-bar .link-btn {
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.book-ai-bar .link-btn.strong {
+  font-weight: 600;
+}
 
 /* ==== A conversation as in Telegram: fewer lines and frames ==== */
 /* a calm plain background (the dots were noise under the text) */

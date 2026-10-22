@@ -32,15 +32,7 @@
   // ---- The application's AI: a service connected by a sign-in in the browser (OAuth); the remote models answer through it ----
   let ai = $state(/** @type {import('./api.js').AiConnection | null | undefined} */ (undefined));
   const loadAi = () => labApi.aiApp().then((a) => (ai = a), () => (ai = null));
-  loadAi();
-  {
-    // back from the service's sign-in: ?ai=connected, or why not
-    const back = new URLSearchParams(location.search).get('ai');
-    if (back) {
-      showToast(back === 'connected' ? 'Нейросеть подключена' : back);
-      history.replaceState(history.state, '', location.pathname);
-    }
-  }
+  loadAi(); // (back from the service's sign-in: the app says how it went — lib/ai.svelte.js)
   async function connectAi() {
     try {
       location.href = (await labApi.connectAi('openrouter', '/lab')).url;

@@ -7,8 +7,25 @@ import { publicOrigin } from '../auth.js';
  * service's sign-in page is opened, it comes back here with a code, the key is kept on the server.
  * @param {ReturnType<typeof import('../http.js').createRouter>} router
  * @param {ReturnType<typeof import('../ai.js').createAi>} ai
+ * @param {ReturnType<typeof import('../bookwords.js').createBookWords>} words «Я и Книга»'s own words: what a reader sees of them
  */
-export function registerAiRoutes(router, ai) {
+export function registerAiRoutes(router, ai, words) {
+  // ---- a reader's own AI: connected by the same sign-in, used before the shared answers ----
+  /** @param {import('../auth.js').User | null} user @returns {import('../auth.js').User} */
+  const signedIn = (user) => {
+    if (!user) throw new HttpError(401, 'Войдите');
+    return user;
+  };
+  // { own: their AI or null, shared: { left, of } today or null }
+  router.on('GET', '/api/ai/me', ({ user }) => words.state(signedIn(user).id));
+  // { provider, back } — the address of the service's sign-in page (the browser goes there, then back to `back`)
+  router.on('POST', '/api/ai/me/connect', async ({ req, user }) => {
+    const u = signedIn(user);
+    const b = /** @type {any} */ ((await readJson(req)) ?? {});
+    return { url: ai.begin(`user:${u.id}`, String(b.provider ?? 'openrouter'), publicOrigin(req), String(b.back ?? '/')) };
+  });
+  router.on('DELETE', '/api/ai/me', ({ user }) => (ai.disconnect(`user:${signedIn(user).id}`), words.state(signedIn(user).id)));
+
   /** @param {import('../auth.js').User | null} user */
   const requireAdmin = (user) => {
     if (!user?.isAdmin) throw new HttpError(403, 'Только для администратора');
@@ -27,14 +44,16 @@ export function registerAiRoutes(router, ai) {
   router.on('GET', '/api/ai/callback/:provider', async ({ res, url, params }) => {
     const code = url.searchParams.get('code') ?? '';
     const state = url.searchParams.get('state') ?? '';
-    let to;
+    // (back where the sign-in began, with how it went: the app shows it — web/src/lib/ai.svelte.js)
+    let back = ai.backOf(state);
+    let how = 'connected';
     try {
       if (!code) throw new HttpError(400, 'Вход не завершён');
-      const back = await ai.finish(params.provider, code, state);
-      to = `${back}${back.includes('?') ? '&' : '?'}ai=connected`;
+      back = await ai.finish(params.provider, code, state);
     } catch (err) {
-      to = `/lab?ai=${encodeURIComponent(/** @type {Error} */ (err).message)}`;
+      how = /** @type {Error} */ (err).message;
     }
+    const to = `${back}${back.includes('?') ? '&' : '?'}ai=${encodeURIComponent(how)}`;
     res.writeHead(302, { Location: to }).end();
     return STREAM;
   });

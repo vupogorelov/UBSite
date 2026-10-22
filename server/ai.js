@@ -21,6 +21,13 @@ export const PROVIDERS = {
 };
 /** @typedef {keyof typeof PROVIDERS} Provider */
 
+/**
+ * The application's own answers a day, for everyone together (its account's free models: ≈50 a day — a few kept
+ * for the Laboratory). The day is Moscow's, as the Book's daily voice.
+ */
+const perDay = () => Number(process.env.UB_AI_SHARED_PER_DAY ?? 45);
+const ZONE_HOURS = 3;
+const today = () => new Date(Date.now() + ZONE_HOURS * 3_600_000).toISOString().slice(0, 10);
 /** A sign-in begun and not finished: forgotten after this. */
 const PENDING = 15 * 60_000;
 /** A model's answer is waited for this long. */
@@ -33,7 +40,16 @@ export function createAi(db) {
     get: db.prepare('SELECT provider, secret, created_at AS since FROM ai_keys WHERE owner = ?'),
     put: db.prepare('INSERT OR REPLACE INTO ai_keys (owner, provider, secret) VALUES (?, ?, ?)'),
     del: db.prepare('DELETE FROM ai_keys WHERE owner = ?'),
+    meta: db.prepare('SELECT value FROM meta WHERE key = ?'),
+    setMeta: db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value'),
   };
+  /** The shared answers used today. */
+  const used = () => {
+    const v = /** @type {{ value: string } | undefined} */ (q.meta.get('ai.shared'))?.value?.split(' ');
+    return v && v[0] === today() ? Number(v[1]) : 0;
+  };
+  /** @param {number} n */
+  const setUsed = (n) => q.setMeta.run('ai.shared', `${today()} ${Math.max(0, Math.min(perDay(), n))}`);
   /** state → the sign-in it belongs to. @type {Map<string, { provider: Provider, verifier: string, owner: string, back: string, until: number }>} */
   const pending = new Map();
 
@@ -88,9 +104,35 @@ export function createAi(db) {
       return s.back;
     },
 
+    /** The page a sign-in began on ('/' — unknown). @param {string} state */
+    backOf(state) {
+      return pending.get(state)?.back ?? '/';
+    },
+
     /** @param {string} owner */
     disconnect(owner) {
       q.del.run(owner);
+    },
+
+    // ---- the shared answers of the day (the application's own connection, for everyone together) ----
+    /** How many are left today, of how many. */
+    shared() {
+      return { left: perDay() - used(), of: perDay() };
+    },
+    /** One taken (false — none left today). */
+    takeShared() {
+      const n = used();
+      if (n >= perDay()) return false;
+      setUsed(n + 1);
+      return true;
+    },
+    /** One given back (the answer did not come: not the service's limit). */
+    returnShared() {
+      setUsed(used() - 1);
+    },
+    /** None left today: the service said its limit is reached. */
+    spendShared() {
+      setUsed(perDay());
     },
 
     /**

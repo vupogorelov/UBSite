@@ -20,6 +20,7 @@ import { registerBookRoutes } from '../api/book.js';
 import { registerWorkspaceRoutes } from '../api/workspaces.js';
 import { registerSearchRoutes } from '../api/search.js';
 import { registerAiRoutes } from '../api/ai.js';
+import { createBookWords } from '../bookwords.js';
 import { registerAnnotationRoutes } from '../api/annotations.js';
 import { registerCollectionRoutes } from '../api/collections.js';
 import { createMarkTasks } from '../marktasks.js';
@@ -92,7 +93,10 @@ export const FEATURES = [
   {
     name: 'ai',
     setup(c) {
-      registerAiRoutes(c.router, c.ai);
+      // «Я и Книга» in the Book's own words: the reader's AI, else the application's shared answers of the day
+      const words = createBookWords(c.db, c.ai);
+      c.voice.useWriter((question, refs, ownerId) => words.write(question, refs, ownerId));
+      registerAiRoutes(c.router, c.ai, words);
       // the way back from a sign-in may come in a browser not signed in here (the phone's own): its one-time
       // state is what admits it
       c.guest(/^\/api\/ai\/callback\/[a-z]+$/);

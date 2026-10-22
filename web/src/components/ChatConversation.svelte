@@ -10,6 +10,7 @@
   import Icon from './Icon.svelte';
   import ChatMessages from './ChatMessages.svelte';
   import ChatComposer from './ChatComposer.svelte';
+  import BookAiBar from './BookAiBar.svelte';
   import ChatPost from './ChatPost.svelte';
   import ChatAvatar from './ChatAvatar.svelte';
   import { visibility } from '../lib/visibility.js';
@@ -559,7 +560,8 @@
         <!-- "Я и Книга": what it is, before the first question -->
         <div class="tg-empty dm-intro"><span>
           <b>Спросите Книгу</b> о том, что вас волнует — о Боге, душе, смысле жизни, о любом понятии.
-          Книга ответит своими словами: абзацами, которые говорят об этом больше всего. Каждый можно открыть в книге.
+          Книга ответит своими словами — коротко, со ссылками — и покажет абзацы, которые говорят об этом больше всего.
+          Каждый можно открыть в книге.
           Этот разговор видите только вы.
         </span></div>
       {:else if info && !messages.length}<div class="tg-empty" class:after-post={info.kind === 'para'}><span>Сообщений пока нет — напишите первое.</span></div>{/if}
@@ -599,6 +601,7 @@
   {:else if info?.archived}
     <div class="tg-archived muted">Канал в архиве — только чтение</div>
   {:else}
+    {#if info?.kind === 'dm'}<BookAiBar answers={messages.filter((m) => m.authorAgent && !m.post).length} />{/if}
     <ChatComposer bind:this={composer} onsend={send} {reply} oncancelreply={() => (reply = null)} ontyping={() => sendTyping(key)}
       placeholder={info?.kind === 'dm' ? 'Спросите Книгу…' : 'Сообщение'} />
   {/if}

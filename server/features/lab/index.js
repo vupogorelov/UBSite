@@ -87,17 +87,10 @@ export default {
     });
     r.on('DELETE', '/api/lab/questions/:id', ({ params, user }) => (requireAdmin(user), open().removeQuestion(Number(params.id)), open().status()));
 
-    // ---- «Я и Книга» answered by the search by meaning (EmbeddingGemma) — an administrator's own conversation, to try it
-    // in earnest; everyone else's Book answers by the words, as before (server/bookvoice.js) ----
-    core.voice.useFinder(async (text, ownerId, limit) => {
-      if (!core.auth.userById(ownerId)?.isAdmin) return null;
-      return open().bookAnswer(text, limit);
-    });
-    // …and in its own words (the writing model), from the paragraphs found — an administrator's, as the above
-    core.voice.useWriter(async (question, refs, ownerId) => {
-      if (!core.auth.userById(ownerId)?.isAdmin) return null;
-      return open().bookWrite(question, refs);
-    });
+    // ---- «Я и Книга»: the paragraphs found by meaning (EmbeddingGemma), for everyone — kept for the score when the
+    // administrator asks; the words then, if the model is not worked out (server/bookvoice.js). Its own words — by
+    // the remote AI (server/bookwords.js) ----
+    core.voice.useFinder(async (text, ownerId, limit) => open().bookAnswer(text, limit, !!core.auth.userById(ownerId)?.isAdmin));
     // ---- the search by meaning and the hybrid one, for everyone (the search's modes; server/meaning.js) ----
     core.meaning.use((text, mode, limit) => open().find(text, mode, limit, (t, l) => core.voice.find(t, l)));
     const q = {

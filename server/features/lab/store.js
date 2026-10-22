@@ -15,7 +15,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { existsSync } from 'node:fs';
 import { HttpError } from '../../http.js';
 import { transaction } from '../../db.js';
-import { langOf, messagesFor, MAX_TOKENS } from './reply.js';
+import { langOf, messagesFor, MAX_TOKENS } from '../../reply.js';
 
 /**
  * The models to try, each as its card says: `query` and `passage` — how it wants a question and a text
@@ -43,7 +43,7 @@ export const MODELS = [
   },
 ];
 /**
- * The small generative models to try for «Я и Книга»'s answers in the Book's own words (reply.js): each answers the
+ * The small generative models to try for «Я и Книга»'s answers in the Book's own words (server/reply.js): each answers the
  * saved questions from the paragraphs the Book's model found; the administrator judges — true to the text or not.
  * 4-bit, on the processor (on DirectML they write nonsense): ≈5–12 words a second. `book`: the one «Я и Книга»
  * answers with.
@@ -486,15 +486,16 @@ export function createLab(db, engine, where, list = MODELS, writers = WRITERS) {
     /**
      * «Я и Книга» answered by its model (`book`: EmbeddingGemma) alone: the refs, best first — null when the
      * model is not worked out yet (the Book answers by the words then). The answer is kept as the column
-     * 'book' (the score: how the Book itself does).
-     * @param {string} text @param {number} n
+     * 'book' (the score: how the Book itself does) — when `keep` (the administrator's).
+     * @param {string} text @param {number} n @param {boolean} [keep]
      */
-    async bookAnswer(text, n) {
+    async bookAnswer(text, n, keep = true) {
       text = text.trim();
       const m = list.find((x) => x.book);
       if (!text || text.length > 500 || !m || !/** @type {{ n: number }} */ (q.done.get(m.id)).n || !engine.installed()) return null;
       const refs = (await closest(m, text, n)).map((x) => x.ref);
-      transaction(lab, () => {
+      // (kept for the score: the administrator's own questions only — a reader's are theirs)
+      if (keep) transaction(lab, () => {
         q.clearAnswer.run(text, 'book');
         refs.forEach((ref, i) => q.putAnswer.run(text, 'book', i + 1, ref));
       });

@@ -1,4 +1,5 @@
 DELETE /api/ai/app direct
+DELETE /api/ai/me direct
 DELETE /api/aliases/:id direct
 DELETE /api/collections/:cid direct
 DELETE /api/collections/:cid/items/:iid direct
@@ -24,6 +25,7 @@ GET /api/admin/users last
 GET /api/admin/voting last
 GET /api/ai/app live
 GET /api/ai/callback/:provider live
+GET /api/ai/me live
 GET /api/aliases last
 GET /api/audio last
 GET /api/audio/:lang/:file live
@@ -108,6 +110,7 @@ POST /api/activity drop
 POST /api/admin/invites direct
 POST /api/admin/users/:uid/reset direct
 POST /api/ai/app/connect direct
+POST /api/ai/me/connect direct
 POST /api/aliases direct
 POST /api/auth/email/resend direct
 POST /api/auth/forgot direct

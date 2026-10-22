@@ -37,6 +37,7 @@
   import { SECTIONS } from '../lib/sections.svelte.js';
   import ReadingQuick from './ReadingQuick.svelte';
   import { showToast } from '../lib/toast.svelte.js';
+  import { noticeAiReturn } from '../lib/ai.svelte.js';
   import Reader from './Reader.svelte';
   import { PAGES, pageOf } from '../lib/pages.js';
   import { DRAWERS } from '../lib/drawers.js';
@@ -57,6 +58,7 @@
   $effect(applySettings);
 
   onMount(() => {
+    noticeAiReturn(); // (back from an AI service's sign-in: how it went)
     const ahead = setTimeout(() => [...PAGES, ...DRAWERS].forEach((x) => x.load().catch(() => {})), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
