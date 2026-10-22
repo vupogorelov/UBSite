@@ -6492,13 +6492,19 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   .read-progress.tts-progress {
     will-change: transform;
   }
+  /* (the share read and its slider ride on the surface, which is scaled unequally on the way: they go at once
+     before it, and come back only after it — a stretched dot otherwise) */
   .read-progress.tts-progress > * {
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease 0.25s;
+  }
+  .read-progress.tts-progress > .tts-seek-tip {
+    transition: none;
   }
   .nav-mini .read-progress.tts-progress > * {
     position: absolute;
     opacity: 0;
     pointer-events: none;
+    transition: none;
   }
   /* narrower: the plain bar draws in from the edges, rounded on top (Air glass: by its own side, below) */
   :root:not([data-nav-style='air']) .nav-mini :is(.bottom-nav, .read-progress.tts-progress) {
@@ -6535,6 +6541,13 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   :root[data-nav-style='air'] .chrome-hidden.nav-mini .bottom-nav,
   .chrome-hidden.nav-mini .read-progress.tts-progress {
     transform: none;
+  }
+}
+/* Solid (no glass), the plain bar: of the header's colour — the page's (Air glass: its own --air-bg, below) */
+@media (max-width: 767px) {
+  :where(:root[data-glass='off']:not([data-nav-style='air'])) .bottom-nav,
+  :where(:root[data-glass='off']:not([data-nav-style='air'])) .read-progress.tts-progress {
+    background: var(--bg);
   }
 }
 /* Glass: the header, the bottom bar, the reading line and the player let the text show through,
@@ -6876,9 +6889,9 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     --air-bg: rgba(var(--overlay-rgb), 0.06);
     --air-pill: rgba(var(--overlay-rgb), 0.12);
   }
-  /* «Стеклянные панели» off: the same floating form, solid */
+  /* «Стеклянные панели» off: the same floating form, solid — of the header's colour (the page's: --bg) */
   :root[data-nav-style='air'][data-glass='off'] {
-    --air-bg: var(--surface);
+    --air-bg: var(--bg);
     --air-blur: none;
   }
   /* the line's track: of the same tint (the theme's border is lost on this glass) */
