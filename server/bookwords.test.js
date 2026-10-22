@@ -40,8 +40,9 @@ test("«Я и Книга» in the Book's words: the reader's own AI first, then 
   assert.match(asked[0].text, /\[5:1\.1\] Молитва есть дыхание души/, 'from the paragraph, in the question\'s language');
   assert.deepEqual(words.state(10).shared, { left: 1, of: 2 });
 
-  // the first model not served now: the next one; a failure gives the answer back to the day
-  answer = (_k, model) => (model === BOOK_MODELS[0] ? { status: 503, json: { error: { message: 'no provider' } } } : { status: 200, json: { choices: [{ message: { content: 'Второй.' } }] } });
+  // the first model busy at its source (a 429 not of the day's limit): the next one, the day's answers not spent
+  const busy = { status: 429, json: { error: { message: 'Provider returned error', metadata: { raw: 'google/gemma-4-31b-it:free is temporarily rate-limited upstream.' } } } };
+  answer = (_k, model) => (model === BOOK_MODELS[0] ? busy : { status: 200, json: { choices: [{ message: { content: 'Второй.' } }] } });
   assert.equal(await words.write('Что такое молитва?', ['5:1.1'], 10), 'Второй.');
   assert.deepEqual(words.state(10).shared, { left: 0, of: 2 });
   assert.equal(await words.write('Что такое молитва?', ['5:1.1'], 10), null, 'none left today: the paragraphs alone');

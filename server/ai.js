@@ -153,7 +153,11 @@ export function createAi(db) {
         signal: AbortSignal.timeout(TIMEOUT),
       });
       const data = /** @type {any} */ (await res.json().catch(() => null));
-      if (res.status === 429) throw new HttpError(429, 'Запас ответов на сегодня закончился');
+      // 429: the account's free requests of the day spent — or only the model busy at its source (a free model's
+      // shared pool, a minute's rate): another model may answer then
+      const raw = `${data?.error?.message ?? ''} ${data?.error?.metadata?.raw ?? ''}`;
+      if (res.status === 429 && /per-day|per day|daily/i.test(raw)) throw new HttpError(429, 'Запас ответов на сегодня закончился');
+      if (res.status === 429) throw new HttpError(503, `${model}: модель сейчас перегружена`);
       if (res.status === 401 || res.status === 403) throw new HttpError(409, `${PROVIDERS[row.provider].title}: доступ закрыт — подключите заново`);
       if (!res.ok || data?.error) throw new HttpError(502, `${PROVIDERS[row.provider].title}: ${data?.error?.message ?? `ошибка ${res.status}`}`);
       const text = String(data?.choices?.[0]?.message?.content ?? '').trim();

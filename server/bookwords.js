@@ -5,8 +5,17 @@
 // alone, as before. Free models only.
 import { langOf, messagesFor, MAX_TOKENS } from './reply.js';
 
-/** The models the Book writes with, in turn (another — when the first is not served now). Free ones of OpenRouter. */
-export const BOOK_MODELS = ['google/gemma-4-31b-it:free', 'nvidia/nemotron-3-super-120b-a12b:free'];
+/**
+ * The models the Book writes with, in turn — another when one is busy or failing at its source (free models share
+ * their source's pool: Google's Gemma is often busy). Free ones of OpenRouter. Tried 2026-10-22: Nemotron 3 Ultra —
+ * the finer reading (≈7 s); MiniMax M3.1 Flash — the quickest (≈3 s), plainer; Nemotron 3 Super — not served.
+ */
+export const BOOK_MODELS = [
+  'google/gemma-4-31b-it:free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'minimax/minimax-m3.1-flash:free',
+  'google/gemma-4-26b-a4b-it:free',
+];
 
 /**
  * @param {import('node:sqlite').DatabaseSync} db
