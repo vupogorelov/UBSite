@@ -1,6 +1,6 @@
 // @ts-check
 // Collections ("подборки") of the current workspace: the list, the open one, adding to them.
-import { api, current } from './api.js';
+import { api, current, shown } from './api.js';
 import { showToast } from './toast.svelte.js';
 
 export const collections = $state({
@@ -14,11 +14,18 @@ export const collections = $state({
 
 export async function loadCollections(force = false) {
   if (!force && collections.ws === current.ws) return;
+  const ws = current.ws;
   try {
-    const r = await api.collections();
-    collections.own = r.own;
-    collections.subscribed = r.subscribed;
-    collections.ws = current.ws;
+    // (what the device saw last, at once; the network's answer over it)
+    /** @param {{ own: import('./api.js').Collection[], subscribed: import('./api.js').Collection[] }} r */
+    const apply = (r) => {
+      collections.own = r.own;
+      collections.subscribed = r.subscribed;
+      collections.ws = ws;
+    };
+    // (asked again after a change: the network's answer alone, not the copy from before it)
+    if (force) apply(await api.collections());
+    else await shown(api.collections(), apply);
   } catch (err) {
     showToast(/** @type {Error} */ (err).message);
   }

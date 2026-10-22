@@ -1,5 +1,5 @@
 <script>
-  import { api } from '../lib/api.js';
+  import { api, shown } from '../lib/api.js';
   import { collections, loadCollections, changeCollections, createCollection } from '../lib/collections.svelte.js';
   import { session, can } from '../lib/session.svelte.js';
   import { navigate } from '../lib/router.svelte.js';
@@ -20,15 +20,21 @@
     void session.workspace?.id;
     if (visible) void loadCollections();
   });
+  let openedId = /** @type {number | null} */ (null);
+  let openedAt = -1;
   // The open collection follows changes made anywhere.
   $effect(() => {
     const id = collections.openId;
     void collections.version;
     if (!visible || id === null) return;
-    api.collection(id).then(
-      (c) => ((open = c), (error = '')),
-      (err) => ((open = null), (error = err.message)),
-    );
+    // (opened: the copy first; changed since — the network's answer alone, not the copy from before the change)
+    const changed = openedId === id && openedAt !== collections.version;
+    openedId = id;
+    openedAt = collections.version;
+    /** @param {import('../lib/api.js').CollectionFull} c */
+    const apply = (c) => ((open = c), (error = ''));
+    const read = api.collection(id);
+    (changed ? read.then(apply) : shown(read, apply)).catch((err) => ((open = null), (error = err.message)));
   });
 
   async function create() {

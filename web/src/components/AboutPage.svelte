@@ -1,6 +1,6 @@
 <script>
   import { onMount, tick } from 'svelte';
-  import { api } from '../lib/api.js';
+  import { api, shown } from '../lib/api.js';
   import { renderMarkdown } from '../lib/markdown.js';
   import { navigate } from '../lib/router.svelte.js';
   import Icon from './Icon.svelte';
@@ -21,8 +21,9 @@
   const heads = [];
   onMount(() => {
     if (native) void checkVersion(); // (the newest Android app, for the version below)
-    api.about().then(
-      (r) => split(renderMarkdown(r.markdown, '/api/')), // "about/x.webp" in about.md → /api/about/x.webp
+    // "about/x.webp" in about.md → /api/about/x.webp; the copy first, the network's answer over it
+    let last = '';
+    shown(api.about(), (r) => r.markdown !== last && ((last = r.markdown), split(renderMarkdown(r.markdown, '/api/')))).catch(
       (err) => (error = err.message),
     );
   });

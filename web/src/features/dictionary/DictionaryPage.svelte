@@ -6,6 +6,7 @@
   import { plural } from '../../lib/format.js';
   import { showToast } from '../../lib/toast.svelte.js';
   import { dictApi, KINDS, kindName } from './api.js';
+  import { shown as fromCopy } from '../../lib/api.js';
   import Icon from '../../components/Icon.svelte';
 
   /**
@@ -23,7 +24,7 @@
   let tab = $state(/** @type {'articles' | 'candidates'} */ ('articles'));
 
   onMount(() => {
-    dictApi.list(coordinator).then((r) => (items = r), (e) => (error = e.message));
+    fromCopy(dictApi.list(coordinator), (r) => (items = r)).catch((e) => (error = e.message));
   });
   $effect(() => {
     if (coordinator && candidates === null) dictApi.candidates().then((r) => (candidates = r), () => (candidates = []));

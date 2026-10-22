@@ -1,7 +1,7 @@
 // @ts-check
 // Chat state shared by the app: the chat list, unread counters, "печатает…", and the live event
 // stream (Server-Sent Events) that open conversations and paragraph threads listen to.
-import { api } from './api.js';
+import { api, shown } from './api.js';
 import { session } from './session.svelte.js';
 import { notify, refreshCounts } from './notify.svelte.js';
 import { navigate } from './router.svelte.js';
@@ -114,18 +114,17 @@ export async function muteChat(key, muted) {
 }
 
 export async function loadChats() {
-  // the list as the device last saw it, at once (the network's answer follows)
-  if (!chat.loaded) {
-    const kept = await api.seenChats();
-    if (kept && !chat.loaded) {
-      chat.list = kept;
-      recount();
-    }
-  }
   try {
-    chat.list = await api.chats();
+    // the list as the device last saw it, at once; the network's answer over it (the first time only:
+    // later the list on screen is newer than any copy — the live stream keeps it)
+    /** @param {import('./api.js').ChatSummary[]} list */
+    const apply = (list) => {
+      chat.list = list;
+      recount();
+    };
+    if (chat.loaded) apply(await api.chats());
+    else await shown(api.chats(), apply);
     chat.loaded = true;
-    recount();
   } catch {}
 }
 

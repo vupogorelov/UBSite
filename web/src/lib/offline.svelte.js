@@ -8,6 +8,7 @@
 // network does not. Only what changed is downloaded again.
 
 import { log } from './log.js';
+import { forgetSeen } from './api.js';
 
 const BOOK = 'ub-book';
 const LAST = 'ub-last';
@@ -185,5 +186,6 @@ export function startOffline() {
 
 /** Signing out: what was seen of the person's own data is forgotten on this device (the book stays). */
 export async function forgetPersonal() {
+  forgetSeen(); // (and this run's, in memory: lib/api.js)
   if (possible) await caches.delete(LAST).catch(() => {});
 }

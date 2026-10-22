@@ -2,6 +2,7 @@
 import { orOnDevice } from './offline-search.js';
 import { enqueue, policyFor, outboxHooks } from './outbox.svelte.js';
 import { log } from './log.js';
+import { readPolicy } from '../../../shared/api-policy.js';
 
 /**
  * @typedef {{ id: number, titleRu: string, titleEn: string, subtitleRu: string | null, subtitleEn?: string | null }} Part
@@ -167,9 +168,20 @@ outboxHooks.unauthorized = () => hooks.unauthorized();
  * Every exchange with the server. A change that can wait goes to the device's queue (outbox.svelte.js:
  * sent in order, with or without a network now, never twice); the others are sent directly. A feature
  * in a folder of its own (web/src/features/) calls it from its own api.js.
+ * A read's promise carries its address (`url`): `shown` finds its copy by it.
  * @param {string} method @param {string} url @param {unknown} [body]
  */
-export async function request(method, url, body) {
+export function request(method, url, body) {
+  const p = send(method, url, body);
+  if (method !== 'GET') return p;
+  return Object.assign(
+    p.then((data) => (keep(url, data), data)),
+    { url },
+  );
+}
+
+/** @param {string} method @param {string} url @param {unknown} [body] */
+async function send(method, url, body) {
   const policy = method === 'GET' ? null : policyFor(method, url);
   if (policy?.mode === 'queue') return enqueue(method, url, body, policy);
   const path = `${method} ${url.split('?')[0]}`; // (for the journal: no query — searches stay private)
@@ -201,19 +213,77 @@ export async function request(method, url, body) {
   return data;
 }
 
+// ---- What the device has, on screen first; the network's answer after it ----
+// As a messenger shows its own copy at once and then what is new (stale-while-revalidate): a page shows
+// the last answer to its read — this run's, kept in memory, else the one the device keeps — and the
+// network's answer over it when it comes. "Загрузка" only for what was never seen here.
+
+/** This run's last answers to the reads (the book's text and the live ones aside: the copy has them / they are not kept). @type {Map<string, unknown>} */
+const memo = new Map();
+/** @param {string} url @param {unknown} data */
+function keep(url, data) {
+  const mode = readPolicy(url.split('?')[0]);
+  if (mode === 'live' || mode === 'text') return;
+  memo.delete(url);
+  memo.set(url, data);
+  for (const k of [...memo.keys()].slice(0, -150)) memo.delete(k);
+}
+/** Signing out: this run's answers are forgotten (lib/offline.svelte.js forgets the device's). */
+export const forgetSeen = () => memo.clear();
+
 /**
- * The last answer to a read the device keeps (public/sw.js, "ub-last"), at once and without the network —
- * shown first, the network's answer after it (as a messenger shows its own copy, then what is new).
- * Null: none kept (never seen here, no service worker, signed out since).
+ * The last answer to a read the device keeps, without the network: the service worker's (public/sw.js —
+ * "ub-last"; the dictionary and the rest of the book: "ub-book", gzipped). Null: none kept (never seen
+ * here, no service worker, signed out since).
  * @template T @param {string} url @returns {Promise<T | null>}
  */
 export async function seen(url) {
   try {
-    const hit = typeof caches === 'undefined' ? null : await caches.match(url, { cacheName: 'ub-last' });
-    return hit ? await hit.json() : null;
+    if (typeof caches === 'undefined') return null;
+    const last = await caches.match(url, { cacheName: 'ub-last' });
+    if (last) return await last.json();
+    const path = url.split('?')[0];
+    const book = path === url && readPolicy(path) === 'book' ? await caches.match(path, { cacheName: 'ub-book' }) : null;
+    return book?.body ? await new Response(book.body.pipeThrough(new DecompressionStream('gzip'))).json() : null;
   } catch {
     return null;
   }
+}
+
+/**
+ * A read on screen at once from what the device has, then from the network: `apply` is given this run's
+ * last answer at once (before the next frame), else the device's when it is read, and the network's when
+ * it comes. The promise: the network's answer; its failure is the caller's only when nothing was shown
+ * (else undefined — the copy stays).
+ * @template T @param {Promise<T>} read a read of `api` (its promise knows its address) @param {(data: T) => void} apply
+ * @returns {Promise<T | undefined>}
+ */
+export function shown(read, apply) {
+  const url = /** @type {{ url?: string }} */ (read).url;
+  let got = false;
+  let copy = false;
+  if (url && memo.has(url)) {
+    copy = true;
+    apply(/** @type {T} */ (structuredClone(memo.get(url)))); // (a page changes what it is given)
+  } else if (url) {
+    void seen(url).then((d) => {
+      if (d == null || got) return;
+      copy = true;
+      apply(/** @type {T} */ (d));
+    });
+  }
+  return read.then(
+    (d) => {
+      got = true;
+      apply(d);
+      return d;
+    },
+    (err) => {
+      got = true;
+      if (copy) return undefined;
+      throw err;
+    },
+  );
 }
 
 export const api = {
@@ -381,8 +451,6 @@ export const api = {
   /** @param {string} key @param {number} [before] @returns {Promise<PublicMessage[]>} */
   chatMessages: (key, before) => request('GET', `/api/chat/c/${encodeURIComponent(key)}/messages${before ? `?before=${before}` : ''}`),
   // (the same, as the device last saw them — at once, before the network: see `seen`)
-  /** @returns {Promise<ChatSummary[] | null>} */
-  seenChats: () => seen('/api/chat'),
   /** @param {string} key @returns {Promise<ChatInfo | null>} */
   seenChatInfo: (key) => seen(`/api/chat/c/${encodeURIComponent(key)}`),
   /** @param {string} key @returns {Promise<PublicMessage[] | null>} */

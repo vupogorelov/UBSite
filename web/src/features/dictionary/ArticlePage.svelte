@@ -1,11 +1,12 @@
 <script>
+  import { untrack } from 'svelte';
   import { navigate, route } from '../../lib/router.svelte.js';
   import { session } from '../../lib/session.svelte.js';
   import { book } from '../../lib/lang.svelte.js';
   import { plural, paperLabel } from '../../lib/format.js';
   import { renderBody } from '../../lib/markup.js';
   import { showToast } from '../../lib/toast.svelte.js';
-  import { api } from '../../lib/api.js';
+  import { api, shown } from '../../lib/api.js';
   import { discussInChat } from '../../lib/chat.svelte.js';
   import { askLogin } from '../../lib/guest.svelte.js';
   import { dictApi, KINDS, kindName } from './api.js';
@@ -30,15 +31,17 @@
     const current = id;
     a = null;
     error = '';
-    dictApi.get(current, coordinator).then(
-      (r) => {
-        if (id !== current) return;
-        a = r;
-        editing = coordinator && new URLSearchParams(route.path.split('?')[1] ?? '').get('edit') === '1';
-        if (editing) startEdit(r);
-      },
-      (e) => (error = e.message),
-    );
+    // (the copy first, the network's answer over it — the editing begun once)
+    let begun = false;
+    const drafts = coordinator;
+    untrack(() => shown(dictApi.get(current, drafts), (r) => {
+      if (id !== current) return;
+      a = r;
+      if (begun || editing) return;
+      begun = true;
+      editing = coordinator && new URLSearchParams(route.path.split('?')[1] ?? '').get('edit') === '1';
+      if (editing) startEdit(r);
+    }).catch((e) => id === current && (error = e.message)));
   });
 
   /** How many messages its discussion has (null — not known). */
@@ -46,7 +49,7 @@
   $effect(() => {
     const current = id;
     messages = null;
-    dictApi.discussion(current).then((r) => id === current && (messages = r.messages), () => {});
+    shown(dictApi.discussion(current), (r) => id === current && (messages = r.messages)).catch(() => {});
   });
   function discuss() {
     if (!session.user) return askLogin('обсуждение');

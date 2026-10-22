@@ -6,8 +6,9 @@
 //   "ub-book" cache (gzipped as the server sent it) first: a paper opens at once. The rest of the book
 //   (terms, the glossary, the pronunciation dictionary — editable) comes from the network, the copy
 //   answering when the network fails, is silent for WAIT ms or the server errs (5xx).
-// - Other API reads are answered by the network too, and their last answer is kept ("ub-last") for
-//   the same cases: the app starts and shows what was seen before. Signing out clears it.
+// - Other API reads are answered by the network too, and their last answer is kept ("ub-last", the rest
+//   of the book's too): the app shows it first and the network's answer over it (lib/api.js `shown`), and
+//   it answers for the network in the same cases. Signing out clears it.
 // - The recorded reading's files the person chose to keep ("ub-audio") are played from the device,
 //   seeking included (Range).
 // The registration URL carries the build id (sw.js?v=…), so every new build installs a new worker
@@ -155,7 +156,8 @@ self.addEventListener('fetch', (/** @type {any} */ event) => {
     const mode = readPolicy(url.pathname);
     if (mode === 'live') return;
     if (mode === 'text') event.respondWith(fromBook(url.pathname).then((r) => r || fetch(req)));
-    else if (mode === 'book') event.respondWith(networkFirst(req, () => fromBook(url.pathname), false));
+    // (its last answer kept too: shown first next time — lib/api.js `shown`; a coordinator's drafts are not in the copy)
+    else if (mode === 'book') event.respondWith(networkFirst(req, () => fromBook(url.pathname), true));
     else event.respondWith(networkFirst(req, () => caches.match(req, { cacheName: LAST }), true));
     return;
   }

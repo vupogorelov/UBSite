@@ -2,7 +2,7 @@
 // In-app notifications (the bell) and the vote queue counter. Refreshed at once when a message comes
 // over the live stream (lib/chat.svelte.js), on navigation, when the tab gets focus again, and — for what
 // the stream does not carry (votes, the queue, a newer build) — every five minutes while it is visible.
-import { api } from './api.js';
+import { api, shown } from './api.js';
 import { checkVersion } from './version.svelte.js';
 
 const POLL_MS = 5 * 60_000;
@@ -34,10 +34,9 @@ export async function refreshCounts() {
 export async function openList() {
   notify.loading = true;
   try {
-    const r = await api.notifications();
-    notify.items = r.items;
-    notify.queue = r.queue;
-    if (r.unread) notify.unread = (await api.notificationsSeen()).unread;
+    // (what the device saw last, at once; the network's answer over it)
+    const r = await shown(api.notifications(), (x) => ((notify.items = x.items), (notify.queue = x.queue)));
+    if (r?.unread) notify.unread = (await api.notificationsSeen()).unread;
   } catch {
     notify.items = [];
   } finally {

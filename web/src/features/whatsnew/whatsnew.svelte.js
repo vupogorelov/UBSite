@@ -2,7 +2,7 @@
 // «Что нового»: the entries of whatsnew.md (server/features/whatsnew.js), by date, the newest first; the
 // newest one not seen yet is offered by the bell. What was seen is a setting of one's own (the same on
 // every device).
-import { request } from '../../lib/api.js';
+import { request, shown } from '../../lib/api.js';
 import { settings, setSetting } from '../../lib/settings.svelte.js';
 import { parse, dateText } from './entries.js';
 
@@ -19,8 +19,11 @@ export async function loadWhatsNew() {
   if (asked) return;
   asked = true;
   try {
-    const r = /** @type {{ markdown: string }} */ (await request('GET', '/api/whatsnew'));
-    whatsNew.entries = parse(r.markdown);
+    // (what the device saw last, at once; the network's answer over it)
+    await shown(request('GET', '/api/whatsnew'), (/** @type {{ markdown: string }} */ r) => {
+      whatsNew.entries = parse(r.markdown);
+      whatsNew.loaded = true;
+    });
   } catch {
     asked = false; // (offline: next time)
   } finally {

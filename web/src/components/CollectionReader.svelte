@@ -1,7 +1,7 @@
 <script>
   import { book, inLang } from '../lib/lang.svelte.js';
   import { tick } from 'svelte';
-  import { api } from '../lib/api.js';
+  import { api, shown } from '../lib/api.js';
   import { collections } from '../lib/collections.svelte.js';
   import { settings } from '../lib/settings.svelte.js';
   import { linkClick, navigate, lastPath } from '../lib/router.svelte.js';
@@ -21,11 +21,15 @@
   let data = $state(/** @type {import('../lib/api.js').CollectionFull | null} */ (null));
   let error = $state('');
   /** @type {HTMLElement | undefined} */ let article = $state();
+  const openedAt = collections.version;
 
   $effect(() => {
-    void collections.version;
-    api.collection(id).then(
-      (c) => ((data = c), (error = ''), (document.title = `${c.title} — Urantia Papers Explorer`)),
+    // (opened: the copy first; changed since — the network's answer alone, not the copy from before the change)
+    const changed = collections.version !== openedAt;
+    /** @param {import('../lib/api.js').CollectionFull} c */
+    const apply = (c) => ((data = c), (error = ''), (document.title = `${c.title} — Urantia Papers Explorer`));
+    const read = api.collection(id);
+    (changed ? read.then(apply) : shown(read, apply)).catch(
       (err) => ((data = null), (error = err.message)),
     );
     return () => (document.title = 'Urantia Papers Explorer');
