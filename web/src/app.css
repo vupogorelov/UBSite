@@ -6516,12 +6516,28 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
     border-bottom: 0;
     border-radius: 24px 24px 0 0;
   }
+  /* the label: out of the shrunk bar's layout, but where it was to its icon — under it (the icon's centre + 14px,
+     as in the full bar), sliding a little down as it fades; never over the icon */
   .bottom-nav button > span:not(.bn-icon) {
-    transition: opacity 0.2s ease;
+    /* (back: once the surface has grown under it) */
+    transition: opacity 0.2s ease 0.15s, transform 0.25s ease;
+  }
+  .nav-mini .bottom-nav button {
+    position: relative;
   }
   .nav-mini .bottom-nav button > span:not(.bn-icon) {
     position: absolute;
+    top: calc(50% + 14px);
+    left: 0;
+    right: 0;
+    overflow: hidden;
+    text-align: center;
+    white-space: nowrap;
     opacity: 0;
+    transform: translateY(4px);
+    pointer-events: none;
+    /* (gone before the surface has shrunk under it: never over the text below) */
+    transition: opacity 0.1s ease, transform 0.25s ease;
   }
   .bottom-nav button > :first-child {
     transition: transform 0.25s ease;
