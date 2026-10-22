@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { startActivity } from '../lib/activity.js';
   import { api } from '../lib/api.js';
-  import { applySettings, setSetting, theme } from '../lib/settings.svelte.js';
+  import { applySettings, setSetting, theme, settings } from '../lib/settings.svelte.js';
   import { linkClick, route, navigate, lastPath, exitPrompt, onBack, back } from '../lib/router.svelte.js';
   import { notify, startPolling, refreshCounts } from '../lib/notify.svelte.js';
   import NotificationsMenu from './NotificationsMenu.svelte';
@@ -38,6 +38,8 @@
   import ReadingQuick from './ReadingQuick.svelte';
   import { showToast } from '../lib/toast.svelte.js';
   import { noticeAiReturn } from '../lib/ai.svelte.js';
+  import { hyphenates } from '../lib/hyphens.js';
+  import { log } from '../lib/log.js';
   import Reader from './Reader.svelte';
   import { PAGES, pageOf } from '../lib/pages.js';
   import { DRAWERS } from '../lib/drawers.js';
@@ -59,6 +61,8 @@
 
   onMount(() => {
     noticeAiReturn(); // (back from an AI service's sign-in: how it went)
+    // «Переносы слов» on: whether this browser can (Android's WebView: by the system's dictionaries) — in the journal
+    if (settings.hyphens) setTimeout(() => log('ui', 'hyphens', { ru: hyphenates('ru'), en: hyphenates('en'), ua: navigator.userAgent }), 3000);
     const ahead = setTimeout(() => [...PAGES, ...DRAWERS].forEach((x) => x.load().catch(() => {})), 4000);
     api.toc().then((t) => (toc = t), (err) => (tocError = err.message));
     const stopPolling = startPolling();
