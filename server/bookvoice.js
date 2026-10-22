@@ -177,10 +177,11 @@ export function createBookVoice(db, auth, chat) {
       chat.post(key, book, { body: NOTHING, replyTo: question.id });
       return [];
     }
-    // its own words first, as the reply; the paragraphs after them, as quotes to check them by
+    // its own words, as the reply — the paragraphs' numbers in them open each in the book (checked in one tap); no AI
+    // now: the paragraphs themselves, as quotes
     const words = await written(key, question.body, found.map((p) => p.ref), owner);
     if (words) chat.post(key, book, { body: words, replyTo: question.id });
-    found.forEach((p, i) => chat.post(key, book, { body: p.text, anchor: { ref: p.ref }, replyTo: i === 0 && !words ? question.id : null }));
+    else found.forEach((p, i) => chat.post(key, book, { body: p.text, anchor: { ref: p.ref }, replyTo: i === 0 ? question.id : null }));
     return found.map((p) => p.ref);
   }
 

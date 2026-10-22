@@ -119,16 +119,17 @@ test('"Я и Книга": one\'s own conversation; the Book answers with the par
   });
   assert.deepEqual(await voice.answer('dm:10', chat.post('dm:10', anna, { body: 'Кто такой Настройщик Мысли?' })), ['5:1.2']);
 
-  // in its own words (the Laboratory's writing model, for its owner): the words as the reply, the paragraphs after
+  // in its own words (the remote AI, for whom it is connected): the words alone, as the reply — the paragraphs'
+  // numbers in them are the way to the text
   voice.useFinder(null);
   /** @type {any[]} */ const wrote = [];
   voice.useWriter(async (question, refs, owner) => (wrote.push({ question, refs, owner }), owner === 10 ? 'Он живёт в разуме человека (5:1.2).' : null));
   const q3 = chat.post('dm:10', anna, { body: 'Где живёт Настройщик Мысли?' });
   await voice.answer('dm:10', q3);
-  const [words, quote] = chat.page('dm:10', anna).slice(-2);
+  const [asked3, words] = chat.page('dm:10', anna).slice(-2);
   assert.deepEqual(wrote[0], { question: 'Где живёт Настройщик Мысли?', refs: ['5:1.2'], owner: 10 });
+  assert.equal(asked3.id, q3.id, 'nothing more than the words after the question');
   assert.deepEqual([words.body, words.replyTo, words.post?.ref], ['Он живёт в разуме человека (5:1.2).', q3.id, undefined]);
-  assert.deepEqual([quote.post?.ref, quote.replyTo], ['5:1.2', null], 'the paragraph after the words, to check them by');
   // it fails: the paragraphs alone, as before
   voice.useWriter(async () => {
     throw new Error('no model');
