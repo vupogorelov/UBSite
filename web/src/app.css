@@ -787,6 +787,16 @@ button {
   padding: 0.15rem 0.5rem;
   border-radius: var(--radius-xs);
 }
+/* The phone: the paragraphs off screen are not styled or laid out (content-visibility: auto — found by the
+   browser's search, rendered when scrolled to or jumped to; "auto" remembers each one's real height once
+   seen). A switch of the theme restyled the whole paper: ≈1 s on an old Android WebView. Not on a computer:
+   the notes' margin there places its cards by the paragraphs' real places. */
+@media (max-width: 767px) {
+  .pair {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 260px;
+  }
+}
 .no-gutter .pair {
   grid-template-columns: 2rem 1fr;
 }
@@ -1730,17 +1740,21 @@ select.text-input:focus-visible {
   padding: 0.5rem 0;
   text-align: center;
 }
-::highlight(search) {
+/* Every ::highlight() rule is on the texts that can be lit — the book's paragraphs ([data-ref]: the reader,
+   a collection), the titles read aloud ([data-tts]), the Book's post in a chat — and what is in them; never
+   on every element: Chrome 114 (an Android WebView) then works out each highlight for each element of the
+   page at every restyle (a switch of the theme: ≈5 times longer, and the paragraphs off screen not skipped). */
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(search) {
   background-color: var(--mark);
   color: inherit;
 }
 /* A quote tapped in a paragraph's thread, shown in the paragraph at its top. */
-::highlight(chat-quote) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(chat-quote) {
   background-color: var(--hl-yellow);
   color: inherit;
 }
 /* The quote a shared link points at (lib/share.js), lit while its paragraph's address is open. */
-::highlight(shared-quote) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(shared-quote) {
   background-color: var(--hl-yellow);
   color: inherit;
 }
@@ -1806,14 +1820,15 @@ select.text-input:focus-visible {
   --hl-purple: rgb(160 110 255 / 0.28);
   --hl-active: color-mix(in srgb, var(--accent) 22%, transparent);
 }
-::highlight(note-yellow) { background-color: var(--hl-yellow); }
-::highlight(note-green) { background-color: var(--hl-green); }
-::highlight(note-blue) { background-color: var(--hl-blue); }
-::highlight(note-pink) { background-color: var(--hl-pink); }
-::highlight(note-purple) { background-color: var(--hl-purple); }
+/* (on the texts that can be lit only: see ::highlight(search)) */
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-yellow) { background-color: var(--hl-yellow); }
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-green) { background-color: var(--hl-green); }
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-blue) { background-color: var(--hl-blue); }
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-pink) { background-color: var(--hl-pink); }
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-purple) { background-color: var(--hl-purple); }
 /* In ::highlight() var() only in longhands: Chrome 114 (an Android WebView) loses a shorthand with
    var() — lib/highlight.js resolves the longhands for it */
-::highlight(note-mark) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-mark) {
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-color: var(--accent);
@@ -1821,10 +1836,10 @@ select.text-input:focus-visible {
   text-underline-offset: 3px;
 }
 /* The sentence being read aloud */
-::highlight(tts) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(tts) {
   background-color: color-mix(in srgb, var(--accent) 24%, transparent);
 }
-::highlight(note-active) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(note-active) {
   background-color: var(--hl-active);
   text-decoration-line: underline;
   text-decoration-style: solid;
@@ -3414,7 +3429,8 @@ select.text-input:focus-visible {
   flex: none;
   margin-left: auto;
 }
-::highlight(coll-frag) {
+/* (on the texts that can be lit only: see ::highlight(search)) */
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(coll-frag) {
   background-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 @media (max-width: 600px) {
@@ -3703,7 +3719,8 @@ fieldset.group:disabled {
   --tr-voting: #d08a1a;
   --tr-draft: #8b5cd6;
 }
-::highlight(tr-approved) {
+/* (on the texts that can be lit only: see ::highlight(search)) */
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(tr-approved) {
   /* (longhands: see ::highlight(note-mark)) */
   text-decoration-line: underline;
   text-decoration-style: solid;
@@ -3711,14 +3728,14 @@ fieldset.group:disabled {
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
-::highlight(tr-voting) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(tr-voting) {
   text-decoration-line: underline;
   text-decoration-style: dashed;
   text-decoration-color: var(--tr-voting);
   text-decoration-thickness: 2px;
   text-underline-offset: 4px;
 }
-::highlight(tr-draft) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(tr-draft) {
   text-decoration-line: underline;
   text-decoration-style: dotted;
   text-decoration-color: var(--tr-draft);
@@ -12459,11 +12476,12 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   --term-cur: color-mix(in srgb, #f59e0b 38%, transparent);
   --term-other: color-mix(in srgb, #3b82f6 22%, transparent);
 }
-::highlight(term-cur) {
+/* (on the texts that can be lit only: see ::highlight(search)) */
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(term-cur) {
   background-color: var(--term-cur);
   color: inherit;
 }
-::highlight(term-other) {
+:is([data-ref], [data-tts], .tg-post-text, .tg-post-en, [data-ref] *, [data-tts] *, .tg-post-text *, .tg-post-en *)::highlight(term-other) {
   background-color: var(--term-other);
   color: inherit;
 }

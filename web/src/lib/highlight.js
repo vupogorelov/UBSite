@@ -103,9 +103,20 @@ export function clearHighlights(name) {
 // ::highlight(): the colors come out transparent. There the rules are copied with their values resolved.
 const oldChrome = Number(/Chrome\/(\d+)/.exec(typeof navigator === 'undefined' ? '' : navigator.userAgent)?.[1] ?? 999) < 120;
 
-/** Writes the ::highlight() rules with plain colors (old Chrome only); call after the theme changed. */
+/** The themes whose colors are written already (each under its own :root[data-theme]). */
+const resolved = new Set();
+
+/**
+ * Writes the ::highlight() rules with plain colors (old Chrome only); call after the theme changed. Once a
+ * theme: its rules stay, scoped to it — a switch back changes no style sheet (a changed sheet restyles the
+ * whole page once more: ≈0.5 s on such a phone at each switch).
+ */
 export function resolveHighlightColors() {
   if (!oldChrome || !supported) return;
+  const theme = document.documentElement.dataset.theme ?? '';
+  if (resolved.has(theme)) return;
+  resolved.add(theme);
+  const scope = `:root[data-theme='${theme}']`;
   const probe = document.createElement('span');
   probe.style.display = 'none';
   document.body.append(probe);
@@ -131,7 +142,8 @@ export function resolveHighlightColors() {
         probe.style.setProperty(prop, value);
         decl += `${prop}:${getComputedStyle(probe).getPropertyValue(prop)};`;
       }
-      if (decl) css += `${rule.selectorText}{${decl}}\n`;
+      // (one selector a rule — its commas are inside :is(): app.css ::highlight(search))
+      if (decl) css += `${scope} ${rule.selectorText}{${decl}}\n`;
     }
   }
   probe.remove();
@@ -141,5 +153,5 @@ export function resolveHighlightColors() {
     style.id = 'hl-resolved';
     document.head.append(style);
   }
-  style.textContent = css;
+  style.textContent += css;
 }
