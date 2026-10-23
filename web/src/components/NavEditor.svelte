@@ -2,6 +2,7 @@
   import { settings, setSetting } from '../lib/settings.svelte.js';
   import { NAV_POOL, NAV_MAX, NAV_DEFAULT, parseNav } from '../lib/phonenav.js';
   import Icon from './Icon.svelte';
+  import InfoTip from './InfoTip.svelte';
   import { SETTINGS_GROUPS } from '../../../shared/settings.js';
 
   /**
@@ -13,7 +14,7 @@
   /** @typedef {import('../lib/phonenav.js').NavId} NavId */
   /** The two switches of the page (shared/settings.js: their labels and hints). */
   const ITEMS = /** @type {any[]} */ (SETTINGS_GROUPS.find((g) => g.title === 'Панели')?.items ?? []);
-  const SWITCHES = ITEMS.filter((i) => i.type === 'toggle');
+  const SWITCHES = ITEMS.filter((i) => i.type === 'toggle' && !i.hidden); // (hidden: changed elsewhere — the player's «Читать сразу»)
   /** «Вид нижней панели» */
   const STYLE = ITEMS.find((i) => i.key === 'navStyle');
   const values = /** @type {Record<string, any>} */ (settings);
@@ -38,31 +39,29 @@
 </script>
 
 <div class="nav-editor">
-  <p class="ui-hint nav-only">Только на телефоне.</p>
-
-  <div class="set-section">Вид</div>
+  <!-- (explanations in ⓘ, not as text under the settings) -->
+  <div class="set-section">Вид<InfoTip text="Панели настраиваются только на телефоне." /></div>
   <div class="set-card">
     <div class="set-item">
-      <b class="set-item-label">{STYLE.label}</b>
+      <b class="set-item-label set-item-name">{STYLE.label}<InfoTip text={STYLE.hint} /></b>
       <div class="ui-chips set-chips" role="radiogroup" aria-label={STYLE.label}>
         {#each STYLE.options as [value, label] (value)}
           <button class="ui-chip" class:on={settings.navStyle === value} role="radio" aria-checked={settings.navStyle === value}
             onclick={() => setSetting('navStyle', value)}>{label}</button>
         {/each}
       </div>
-      <span class="set-item-hint">{STYLE.hint}</span>
     </div>
     {#each SWITCHES as item (item.key)}
       {@const inactive = !!item.when && !item.when.values.includes(values[item.when.key])}
+      {@const tip = [item.hint, inactive ? item.whenHint : ''].filter(Boolean).join(' ')}
       <label class="set-item set-switch" class:inactive>
-        <span class="set-item-text"><b>{item.label}</b>{#if item.hint}<span>{item.hint}</span>{/if}{#if inactive && item.whenHint}<span>{item.whenHint}</span>{/if}</span>
+        <span class="set-item-text"><b class="set-item-name">{item.label}{#if tip}<InfoTip text={tip} />{/if}</b></span>
         <input type="checkbox" class="ui-switch" checked={values[item.key]} disabled={inactive} onchange={(e) => setSetting(item.key, e.currentTarget.checked)} />
       </label>
     {/each}
   </div>
 
-  <div class="set-section">Нижняя панель</div>
-  <p class="ui-hint nav-rule">«Книга» всегда первая, «Ещё» — последнее; разделы не из панели — в «Ещё».</p>
+  <div class="set-section">Нижняя панель<InfoTip text="«Книга» всегда первая, «Ещё» — последнее; разделы не из панели — в «Ещё»." /></div>
 
   <!-- the bar as it will look -->
   <div class="nav-preview" class:icons={!settings.navLabels} class:air={settings.navStyle === 'air'} aria-hidden="true">

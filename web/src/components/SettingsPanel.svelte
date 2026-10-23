@@ -14,6 +14,7 @@
   import { outbox } from '../lib/outbox.svelte.js';
   import { rec } from '../lib/recordings.svelte.js';
   import DevicePage from './DevicePage.svelte';
+  import InfoTip from './InfoTip.svelte';
 
   /**
    * Settings in two levels, as in phone settings apps: the sections list their groups as rows (an icon,
@@ -24,6 +25,11 @@
 
   /** @typedef {import('../../../shared/settings.js').SettingGroup} SettingGroup */
   /** @typedef {import('../../../shared/settings.js').SettingDef} SettingDef */
+  /**
+   * A setting's explanation, in its ⓘ (not as text under it): its hint, and why it is off now if it is.
+   * @param {SettingDef} item @param {boolean} inactive
+   */
+  const tipOf = (item, inactive) => [item.hint, inactive ? item.whenHint : ''].filter(Boolean).join(' ');
 
   /** The open group's page (its title), or null for the list. */
   let page = $state(/** @type {string | null} */ (null));
@@ -178,8 +184,10 @@
           </button>
         </div>
       {/if}
-      <button class="ui-btn set-reset" onclick={reset}><Icon name="reset" size={18} />Сбросить мои настройки</button>
-      <p class="ui-hint set-reset-hint">Только ваши личные настройки в этом пространстве; общие для пространства не меняются.</p>
+      <div class="set-reset-row">
+        <button class="ui-btn set-reset" onclick={reset}><Icon name="reset" size={18} />Сбросить мои настройки</button>
+        <InfoTip text="Только ваши личные настройки в этом пространстве; общие для пространства не меняются." />
+      </div>
     {:else if group.title === NAV_GROUP}
       <NavEditor />
     {:else}
@@ -199,19 +207,19 @@
         {#each group.items.filter((i) => !i.hidden) as item (item.key)}
           {@const inactive = !!item.when && !item.when.values.includes(values[item.when.key])}
           {#if item.type === 'toggle'}
-            <!-- a switch: the name and its hint, the switch on the right; the whole row toggles -->
+            <!-- a switch: the name and its ⓘ, the switch on the right; the whole row toggles (not by the ⓘ) -->
+            {@const tip = tipOf(item, inactive)}
             <label class="set-item set-switch" class:inactive>
               <span class="set-item-text">
-                <b>{item.label}</b>
-                {#if item.hint}<span>{item.hint}</span>{/if}
-                {#if inactive && item.whenHint}<span>{item.whenHint}</span>{/if}
+                <b class="set-item-name">{item.label}{#if tip}<InfoTip text={tip} />{/if}</b>
               </span>
               <input type="checkbox" class="ui-switch" checked={values[item.key]} disabled={inactive} onchange={(e) => set(item.key, e.currentTarget.checked)} />
             </label>
           {:else}
+            {@const tip = tipOf(item, inactive)}
             <div class="set-item" class:set-text={item.type === 'text'} class:inactive>
               {#if item.type === 'choice' && item.swatches}
-                <b class="set-item-label">{item.label}<span class="set-swatch-name">{shown(item)}</span></b>
+                <b class="set-item-label">{item.label}{#if tip}<InfoTip text={tip} />{/if}<span class="set-swatch-name">{shown(item)}</span></b>
                 <div class="set-swatches" role="radiogroup" aria-label={item.label}>
                   {#each item.options as [value, label] (value)}
                     <button class="set-swatch" data-swatch="{item.key}-{value}" class:on={values[item.key] === value} role="radio"
@@ -219,7 +227,7 @@
                   {/each}
                 </div>
               {:else if item.type === 'choice'}
-                <b class="set-item-label">{item.label}</b>
+                <b class="set-item-label set-item-name">{item.label}{#if tip}<InfoTip text={tip} />{/if}</b>
                 <div class="ui-chips set-chips" role="radiogroup" aria-label={item.label}>
                   {#each item.options as [value, label] (value)}
                     <button class="ui-chip" class:on={values[item.key] === value} role="radio" aria-checked={values[item.key] === value}
@@ -228,20 +236,18 @@
                 </div>
               {:else if item.type === 'range'}
                 <label class="set-item-label set-range-head" for="set-{item.key}">
-                  <b>{item.label}</b><output>{item.valueLabels?.[values[item.key]] ?? `${fmt(values[item.key], item.step)}${item.unit}`}</output>
+                  <b class="set-item-name">{item.label}{#if tip}<InfoTip text={tip} />{/if}</b><output>{item.valueLabels?.[values[item.key]] ?? `${fmt(values[item.key], item.step)}${item.unit}`}</output>
                 </label>
                 <input id="set-{item.key}" class="set-range" type="range" min={item.min} max={item.max} step={item.step}
                   value={values[item.key]} disabled={inactive}
                   oninput={(e) => set(item.key, Math.round(Number(e.currentTarget.value) * 100) / 100)} />
               {:else}
                 <label class="set-item-label" for="set-{item.key}">
-                  <b>{#if item.swatch}<span class="dot" data-color={item.swatch}></span>{/if}{item.label}</b>
+                  <b class="set-item-name">{#if item.swatch}<span class="dot" data-color={item.swatch}></span>{/if}{item.label}{#if tip}<InfoTip text={tip} />{/if}</b>
                 </label>
                 <input id="set-{item.key}" class="ui-input" maxlength={item.maxLength} value={values[item.key]}
                   onchange={(e) => set(item.key, e.currentTarget.value.trim())} />
               {/if}
-              {#if item.hint}<span class="set-item-hint">{item.hint}</span>{/if}
-              {#if inactive && item.whenHint}<span class="set-item-hint">{item.whenHint}</span>{/if}
             </div>
           {/if}
         {/each}

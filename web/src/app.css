@@ -10188,8 +10188,22 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   opacity: 0.45;
   cursor: default;
 }
-.set-reset-hint {
-  margin: var(--space-2) var(--space-3) 0;
+/* «Сбросить мои настройки» and its ⓘ */
+.set-reset-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}
+.set-reset-row .set-reset {
+  flex: 1;
+  margin: 0;
+}
+/* a setting's name and its ⓘ right after its last word (the explanations are in ⓘ, not as text under the settings) */
+.set-item-name .info-tip,
+.set-section .info-tip {
+  margin-left: 6px;
+  vertical-align: -3px;
 }
 /* a group's page */
 .set-card {
@@ -10285,9 +10299,6 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   white-space: nowrap;
 }
 /* «Панели» */
-.nav-only {
-  margin: 0 var(--space-3);
-}
 .nav-rule {
   margin: 0 var(--space-3) var(--space-3);
 }

@@ -2,6 +2,7 @@
   import { aliases, loadAliases, addAlias, updateAlias, deleteAlias } from '../lib/aliases.svelte.js';
   import { session } from '../lib/session.svelte.js';
   import Icon from './Icon.svelte';
+  import InfoTip from './InfoTip.svelte';
 
   /**
    * Настройки → Словарь названий: names the translation transliterates and their renderings by
@@ -45,7 +46,8 @@
 
 <div class="aliases-page">
   <section class="voice-dict">
-    <p class="ui-hint">Окончание переносится: «Салвингтона» → «Спасограда». Формы, которые склоняются иначе, — строками «Декаполиса = Десятиградия».</p>
+    <!-- (how it works: in ⓘ, not as text) -->
+    <div class="set-section">Словарь названий<InfoTip text="Окончание переносится: «Салвингтона» → «Спасограда». Формы, которые склоняются иначе, — строками «Декаполиса = Десятиградия»." /></div>
     {#if coordinator}
       <form class="voice-add voice-add-card" onsubmit={add}>
         <input class="ui-input" bind:value={draft.written} placeholder="Как в переводе" aria-label="Как в переводе" />
