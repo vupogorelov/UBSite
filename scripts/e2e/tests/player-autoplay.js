@@ -61,6 +61,17 @@ export default {
     await listen(); // (stops and closes)
     await until(async () => (await page.locator('.tts-panel').count()) === 0, { timeout: 3000 });
 
+    // on, ▶ within the 2 s — the wait and the reading cancelled, the player stays
+    const atPlay = await spoken();
+    await listen();
+    await page.waitForTimeout(500);
+    await page.locator('.tts-play').dispatchEvent('click');
+    await page.waitForTimeout(2600);
+    t.check('▶ во время отсчёта — отмена: не читает, кольца нет, плеер открыт', (await spoken()) === atPlay && (await reading()) === 0
+      && (await page.locator('.tts-play.auto').count()) === 0 && (await page.locator('.tts-panel').count()) === 1);
+    await listen(); // (closed)
+    await until(async () => (await page.locator('.tts-panel').count()) === 0, { timeout: 3000 });
+
     // on, but closed within the 2 s — nothing read
     const before = await spoken();
     await listen();

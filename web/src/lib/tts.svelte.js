@@ -615,6 +615,8 @@ export function pause() {
 }
 
 export function toggle() {
+  // (▶ while the reading is about to begin by itself: not now — neither the wait nor the reading)
+  if (tts.autoStart) return cancelAuto();
   if (tts.playing) pause();
   else play();
 }
