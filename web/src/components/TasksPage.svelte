@@ -286,6 +286,8 @@
         </ul>
       {/if}
     </div>
+    <!-- its number, small and pale at the bottom right (once the server has numbered it) -->
+    {#if t.id > 0}<span class="task-num" aria-label="Задача номер {t.id}">#{t.id}</span>{/if}
   </li>
 {/snippet}
 
@@ -415,6 +417,7 @@
                     <div class="kanban-foot">
                       {@render meta(t)}
                       {#if t.subtasks.length}<span class="kanban-subs"><Icon name="check-square" size={13} />{t.subtasks.filter((s) => s.done).length}/{t.subtasks.length}</span>{/if}
+                      {#if t.id > 0}<span class="task-num" aria-label="Задача номер {t.id}">#{t.id}</span>{/if}
                     </div>
                   </article>
                 {/each}

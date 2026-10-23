@@ -4,6 +4,7 @@
   import Icon from './Icon.svelte';
   import TagInput from './TagInput.svelte';
   import { titleTags } from '../../../shared/tasktags.js';
+  import { copyText } from '../lib/notes.svelte.js';
 
   /** Full editing of one task. @type {{ task: import('../lib/api.js').Task, onclose?: () => void }} */
   let { task, onclose } = $props();
@@ -43,18 +44,45 @@
     onclose?.();
   }
   const STATUS = /** @type {const} */ ([['todo', 'Нужно сделать'], ['doing', 'В работе'], ['done', 'Готово']]);
+
+  /** The title's field grows with its text: the whole title in sight. @param {HTMLTextAreaElement} el */
+  function grow(el) {
+    // (its borders too: scrollHeight leaves them out)
+    const fit = () => ((el.style.height = 'auto'), (el.style.height = `${el.scrollHeight + el.offsetHeight - el.clientHeight}px`));
+    fit();
+    el.addEventListener('input', fit);
+    return { destroy: () => el.removeEventListener('input', fit) };
+  }
+  /** The description folded (opened by a tap, or while being written). */
+  let notesOpen = $state(false);
+  /** The task as text: its title, description and subtasks. */
+  const asText = () =>
+    [task.title, task.notes ?? '', ...task.subtasks.map((s) => `${s.done ? '☑' : '☐'} ${s.title}`)].filter(Boolean).join('\n');
 </script>
 
 <div class="task-editor">
-  <input class="text-input task-editor-title" value={task.title} aria-label="Задача"
-    onchange={(e) => value(e).trim() && save({ title: value(e).trim() })} />
+  <div class="task-editor-head">
+    <!-- the title: one paragraph, as long as it is (Enter saves) -->
+    <textarea class="text-input task-editor-title" rows="1" value={task.title} aria-label="Задача" use:grow
+      onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.currentTarget.blur())}
+      onchange={(e) => value(e).trim() && save({ title: value(e).replace(/\s*\n\s*/g, ' ').trim() })}></textarea>
+    <button class="icon-btn small-btn task-copy" onclick={() => copyText(asText())} aria-label="Копировать текст задачи" title="Копировать текст задачи"><Icon name="copy" size={16} /></button>
+  </div>
   <!-- All the task's tags: the title's #words and the added ones; a removed #word leaves the title too -->
   <div class="task-tags">
     <TagInput value={taskTags(task)} fromTitle={titleTags(task.title)} source={tagCounts()} placeholder="Добавить метку"
       onchange={(names) => setTaskTags(task, names)} />
   </div>
-  <textarea class="text-area" rows="3" placeholder="Описание, мысли, план…" value={task.notes ?? ''}
-    onchange={(e) => save({ notes: value(e).trim() || null })}></textarea>
+  {#if notesOpen}
+    <textarea class="text-area" rows="3" placeholder="Описание, мысли, план…" value={task.notes ?? ''} autofocus
+      onchange={(e) => save({ notes: value(e).trim() || null })}></textarea>
+  {:else}
+    <!-- folded: its first line, a tap opens it -->
+    <button class="task-notes-fold" class:empty={!task.notes} onclick={() => (notesOpen = true)} aria-expanded="false">
+      <span class="ellipsis">{task.notes ? task.notes.split('\n')[0] : 'Описание, мысли, план…'}</span>
+      <Icon name="chevron" size={14} />
+    </button>
+  {/if}
 
   <div class="task-fields">
     <label>
@@ -108,4 +136,6 @@
     </button>
     {#if onclose}<button class="ui-btn primary" onclick={onclose}>Готово</button>{/if}
   </div>
+  <!-- its number, once the server has numbered it -->
+  {#if task.id > 0}<div class="task-id">#{task.id}</div>{/if}
 </div>

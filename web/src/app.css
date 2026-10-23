@@ -2821,6 +2821,24 @@ select.text-input:focus-visible {
 .task-row[draggable='true'] {
   cursor: grab;
 }
+/* a task's number: small and pale at the card's bottom right (a list row; the kanban: at the end of its foot) */
+.task-num {
+  color: var(--muted);
+  font: 10px/12px var(--sans);
+  font-variant-numeric: tabular-nums;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.task-row > .task-num {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+}
+.kanban-foot .task-num {
+  flex: none;
+  margin-left: auto;
+  align-self: flex-end;
+}
 .task-row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -8066,6 +8084,60 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 .task-editor-title.text-input {
   font: 600 16px var(--sans);
+}
+/* the title grows with its text (a textarea, sized by TaskEditor's grow); ⧉ at its top right */
+.task-editor-head {
+  position: relative;
+}
+.task-editor-head .task-editor-title {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 44px 11px var(--space-3);
+  line-height: 22px;
+  overflow: hidden;
+  resize: none;
+}
+.task-editor-head .task-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  color: var(--muted);
+}
+/* the description folded: its first line, a tap opens it */
+.task-notes-fold {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--ui-line);
+  border-radius: 16px;
+  background: var(--ui-card);
+  color: var(--text);
+  font: 14px var(--sans);
+  text-align: left;
+  cursor: pointer;
+}
+.task-notes-fold > .ellipsis {
+  flex: 1;
+  min-width: 0;
+}
+.task-notes-fold.empty {
+  color: var(--muted);
+}
+.task-notes-fold > svg {
+  flex: none;
+  transform: rotate(90deg);
+  color: var(--muted);
+}
+/* its number: small and pale, at the bottom right */
+.task-id {
+  justify-self: end;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--muted);
+  font: 11px var(--sans);
+  opacity: 0.6;
 }
 .task-editor .ui-label {
   margin: var(--space-1) var(--space-1) 0;
