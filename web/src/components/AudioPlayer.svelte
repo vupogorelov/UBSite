@@ -341,10 +341,11 @@
       aria-label="Язык чтения: {tts.lang === 'ru' ? 'русский' : 'английский'}. Переключить" title="Язык чтения">{tts.lang.toUpperCase()}</button>
     <button class="icon-btn" onclick={() => paragraph(-1)} aria-label="Предыдущий абзац" title="Предыдущий абзац"><Icon name="skip-back" /></button>
     <button class="icon-btn" onclick={() => sentence(-1)} aria-label={recording ? `Назад на ${SKIP} секунд` : 'Предыдущее предложение'} title={recording ? `Назад на ${SKIP} с` : 'Предыдущее предложение'}><Icon name="rewind" /></button>
-    <!-- (auto: «Читать сразу при открытии» — a ring fills while the reading is about to begin) -->
+    <!-- (auto: «Читать сразу при открытии» — a ring round ▶ runs down while the reading is about to begin) -->
     <button class="tts-play" class:auto={tts.autoStart} onclick={playClick} onpointerdown={pressStart} onpointerup={pressEnd} onpointerleave={pressEnd}
       onpointercancel={pressEnd} oncontextmenu={(e) => e.preventDefault()}
-      aria-label={tts.playing ? 'Остановить' : 'Читать'} title="Читать / остановить · долгое нажатие — с начала сессии"><Icon name={tts.playing ? 'stop' : 'play'} size={24} /></button>
+      aria-label={tts.playing ? 'Остановить' : 'Читать'} title="Читать / остановить · долгое нажатие — с начала сессии"><Icon name={tts.playing ? 'stop' : 'play'} size={24} />{#if tts.autoStart}<svg
+        class="tts-auto-ring" viewBox="0 0 60 60" aria-hidden="true"><circle cx="30" cy="30" r="28" pathLength="100" /></svg>{/if}</button>
     <button class="icon-btn" onclick={() => sentence(1)} aria-label={recording ? `Вперёд на ${SKIP} секунд` : 'Следующее предложение'} title={recording ? `Вперёд на ${SKIP} с` : 'Следующее предложение'}><Icon name="fast-forward" /></button>
     <button class="icon-btn" onclick={() => paragraph(1)} aria-label="Следующий абзац" title="Следующий абзац"><Icon name="skip-forward" /></button>
     <button class="icon-btn" class:on={tts.settingsOpen} onclick={() => (tts.settingsOpen = !tts.settingsOpen)}
