@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { session, refreshWorkspaces } from '../lib/session.svelte.js';
   import { navigate, lastPath } from '../lib/router.svelte.js';
+  import PasswordInput from './PasswordInput.svelte';
 
   /** @type {{ token: string }} */
   let { token } = $props();
@@ -65,9 +66,9 @@
     {/if}
     {#if info}
       <label class="setting-label" for="inv-pass">Пароль (не короче 8 символов)</label>
-      <input id="inv-pass" class="text-input" type="password" bind:value={password} autocomplete="new-password" minlength="8" required />
+      <PasswordInput id="inv-pass" bind:value={password} autocomplete="new-password" minlength={8} />
       <label class="setting-label" for="inv-pass2">Пароль ещё раз</label>
-      <input id="inv-pass2" class="text-input" type="password" bind:value={password2} autocomplete="new-password" minlength="8" required />
+      <PasswordInput id="inv-pass2" bind:value={password2} autocomplete="new-password" minlength={8} />
       {#if error}<div class="search-error" role="alert">{error}</div>{/if}
       <button class="btn primary wide" type="submit" disabled={busy}>{info.kind === 'reset' ? 'Сохранить пароль' : 'Создать и войти'}</button>
     {/if}

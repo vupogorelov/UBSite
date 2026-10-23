@@ -3,6 +3,7 @@
   import { api } from '../lib/api.js';
   import { login, register } from '../lib/session.svelte.js';
   import { showToast } from '../lib/toast.svelte.js';
+  import PasswordInput from './PasswordInput.svelte';
 
   /**
    * Sign-in; sign-up while the admin keeps registration open; "Забыли пароль?" when the platform can
@@ -74,7 +75,7 @@
       <!-- svelte-ignore a11y_autofocus -->
       <input id="login-user" class="text-input" bind:value={username} autocomplete="username" autofocus required />
       <label class="setting-label" for="login-pass">Пароль</label>
-      <input id="login-pass" class="text-input" type="password" bind:value={password} autocomplete="current-password" required />
+      <PasswordInput id="login-pass" bind:value={password} />
     {:else if mode === 'forgot'}
       {#if sent}
         <p>Если такая учётная запись есть и у неё подтверждена почта, мы отправили на неё письмо со ссылкой для нового
@@ -96,9 +97,9 @@
         <input id="reg-email" class="text-input" type="email" bind:value={email} maxlength="254" autocomplete="email" />
       {/if}
       <label class="setting-label" for="reg-pass">Пароль (не короче 8 символов)</label>
-      <input id="reg-pass" class="text-input" type="password" bind:value={password} autocomplete="new-password" minlength="8" required />
+      <PasswordInput id="reg-pass" bind:value={password} autocomplete="new-password" minlength={8} />
       <label class="setting-label" for="reg-pass2">Пароль ещё раз</label>
-      <input id="reg-pass2" class="text-input" type="password" bind:value={password2} autocomplete="new-password" minlength="8" required />
+      <PasswordInput id="reg-pass2" bind:value={password2} autocomplete="new-password" minlength={8} />
       <input class="hp-field" name="website" bind:value={website} tabindex="-1" autocomplete="off" aria-hidden="true" />
     {/if}
     {#if error}<div class="search-error" role="alert">{error}</div>{/if}

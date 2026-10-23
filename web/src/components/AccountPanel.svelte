@@ -5,6 +5,7 @@
   import { showToast } from '../lib/toast.svelte.js';
   import Drawer from './Drawer.svelte';
   import Icon from './Icon.svelte';
+  import PasswordInput from './PasswordInput.svelte';
   import { outbox } from '../lib/outbox.svelte.js';
   import { plural } from '../lib/format.js';
 
@@ -115,7 +116,7 @@
           <label class="acc-field" for="acc-email">Адрес (пусто — удалить)</label>
           <input id="acc-email" class="ui-input" type="email" bind:value={email} maxlength="254" autocomplete="email" />
           <label class="acc-field" for="acc-email-pass">Текущий пароль</label>
-          <input id="acc-email-pass" class="ui-input" type="password" bind:value={emailPassword} autocomplete="current-password" required />
+          <PasswordInput id="acc-email-pass" cls="ui-input" bind:value={emailPassword} />
           {#if emailError}<div class="search-error" role="alert">{emailError}</div>{/if}
           <div class="acc-actions">
             <button type="button" class="ui-btn" onclick={() => (editingEmail = false)}>Отмена</button>
@@ -144,11 +145,11 @@
   <div class="ui-label acc-label">Смена пароля</div>
   <form class="ui-card acc-card" onsubmit={change}>
     <label class="acc-field" for="acc-cur">Текущий пароль</label>
-    <input id="acc-cur" class="ui-input" type="password" bind:value={currentPassword} autocomplete="current-password" required />
+    <PasswordInput id="acc-cur" cls="ui-input" bind:value={currentPassword} />
     <label class="acc-field" for="acc-new">Новый пароль (не короче 8 символов)</label>
-    <input id="acc-new" class="ui-input" type="password" bind:value={next} autocomplete="new-password" minlength="8" required />
+    <PasswordInput id="acc-new" cls="ui-input" bind:value={next} autocomplete="new-password" minlength={8} />
     <label class="acc-field" for="acc-new2">Новый пароль ещё раз</label>
-    <input id="acc-new2" class="ui-input" type="password" bind:value={next2} autocomplete="new-password" minlength="8" required />
+    <PasswordInput id="acc-new2" cls="ui-input" bind:value={next2} autocomplete="new-password" minlength={8} />
     {#if error}<div class="search-error" role="alert">{error}</div>{/if}
     <div class="acc-actions"><button class="ui-btn primary" type="submit">Сменить</button></div>
   </form>
