@@ -3,7 +3,7 @@
 // 40 ms. Reading queues the paper ahead and goes on into the next paper by itself; the system player's
 // buttons work; opening and closing the player without reading sends the app nothing (a service started
 // only to be stopped makes Android close the app).
-import { openControlled } from '../lib.js';
+import { openControlled, until } from '../lib.js';
 
 /** (also the player's autoplay check: player-autoplay.js) @param {number} DUR */
 export function fakeApp(DUR) {
@@ -62,7 +62,9 @@ export default {
 
     await listen.click();
     await page.waitForTimeout(400);
-    await page.locator('.tts-panel button[aria-label="Читать"]').click();
+    // (the copy's person may have «Читать сразу» on: then the reading begins by itself — ▶ would cancel it)
+    if ((await page.locator('.tts-play.auto').count()) === 0) await page.locator('.tts-panel button[aria-label="Читать"]').click();
+    await until(async () => (await page.locator('.tts-play[aria-label="Остановить"]').count()) === 1, { timeout: 5000 });
     await page.waitForTimeout(1500);
     const speaks = (await calls()).filter((c) => c[0] === 'speak').length;
     t.check('чтение: весь Текст сразу в очереди движка', speaks > 100, `${speaks} предложений`);
