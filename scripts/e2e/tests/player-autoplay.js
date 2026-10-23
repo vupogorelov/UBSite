@@ -23,6 +23,17 @@ export default {
     await autoSwitch.waitFor({ state: 'attached', timeout: 5000 }).catch(() => {});
     const was = await autoSwitch.isChecked();
     t.check('в настройках плеера — «Читать сразу», выключено', (await autoSwitch.count()) === 1 && !was);
+
+    // its ⓘ: a tap shows how it works (the switch beside it untouched), a tap again hides it
+    const info = page.locator('.tts-auto .info-tip');
+    const tip = page.locator('.tts-auto .info-tip-text');
+    await info.tap();
+    await until(async () => await tip.isVisible(), { timeout: 3000 });
+    const words = ((await tip.textContent()) ?? '').trim();
+    t.check('ⓘ — подсказка, как это работает; переключатель не тронут', (await tip.isVisible()) && words.startsWith('Плеер начнёт читать сам') && (await autoSwitch.isChecked()) === was, words);
+    await info.tap();
+    await until(async () => !(await tip.isVisible()), { timeout: 3000 });
+    t.check('ⓘ ещё раз — подсказка закрыта', !(await tip.isVisible()));
     await page.waitForTimeout(2600); // (off: nothing begins by itself)
     t.check('выключено — плеер ждёт ▶', (await spoken()) === 0 && (await reading()) === 0, await spoken());
     await autoSwitch.dispatchEvent('click');

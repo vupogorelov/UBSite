@@ -14,6 +14,7 @@
   import { settings, setSetting } from '../lib/settings.svelte.js';
   import Icon from './Icon.svelte';
   import UiSelect from './UiSelect.svelte';
+  import InfoTip from './InfoTip.svelte';
   import { plural } from '../lib/format.js';
   import { dict, loadDict } from '../lib/pronunciations.svelte.js';
 
@@ -386,8 +387,11 @@
             </button>
           {/if}
           <!-- «Слушать» opens the player and it begins reading by itself, 2 s later -->
-          <label class="tts-list-row tts-auto" title="«Слушать» открывает плеер и через 2 секунды начинает читать">
+          <label class="tts-list-row tts-auto">
             <span class="tts-label">Читать сразу</span>
+            <!-- (a no-break space keeps "2 секунды" together) -->
+            <InfoTip text={'Плеер начнёт читать сам через 2 секунды после нажатия «Слушать». Чтобы отменить, нажмите ▶ или закройте плеер.'} />
+            <span class="spacer"></span>
             <input type="checkbox" class="ui-switch small" checked={settings.listenAutoplay}
               onchange={(e) => setSetting('listenAutoplay', e.currentTarget.checked)} />
           </label>
