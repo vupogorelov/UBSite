@@ -18,7 +18,7 @@ export default {
     t.check('три способа над полем', (await modes.allTextContents()).join('|') === 'По словам|По смыслу|Гибридный');
     // (the copy's person may have chosen another way: it is put back at the end; the default for a new
     // person — by the words — is the settings' unit test)
-    const was = (await modes.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-checked') === 'true')));
+    const was = await modes.evaluateAll((/** @type {Element[]} */ els) => els.findIndex((e) => e.getAttribute('aria-checked') === 'true'));
     await modes.nth(0).click();
     t.check('выбор «По словам» отмечен', (await modes.nth(0).getAttribute('aria-checked')) === 'true');
 

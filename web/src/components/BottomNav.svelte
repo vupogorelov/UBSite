@@ -74,14 +74,11 @@
     if (ui.sidebarOpen && ui.tab === tab) ui.sidebarOpen = false;
     else setTab(tab);
   }
+  /** Back to the reading: from a page or a panel; already reading — nothing (the contents: ☰ in the header). */
   function book() {
     more = false;
-    if (!bookRoute) {
-      navigate(lastPath(), { root: true });
-      ui.sidebarOpen = false;
-    } else if (ui.sidebarOpen && ui.tab !== 'toc') ui.sidebarOpen = false;
-    else if (ui.sidebarOpen) ui.sidebarOpen = false;
-    else setTab('toc');
+    if (!bookRoute) navigate(lastPath(), { root: true });
+    ui.sidebarOpen = false;
   }
   /** Reading aloud: opens the player over the book and starts from the text on screen; again — stops. */
   function listen() {
@@ -94,9 +91,10 @@
   function notes() {
     openTab(NOTES_TABS.includes(ui.tab) ? ui.tab : 'notes');
   }
-  /** What a section's button does. @param {NavId} id */
+  /** What a section's button does; tapped again in its open section — back to the reading. @param {NavId} id */
   function go(id) {
     more = false;
+    if (current === id && id !== 'listen') return book(); // (Слушать again stops the player — back to the reading too)
     if (id === 'search') openTab('search');
     else if (id === 'notes') notes();
     else if (id === 'listen') listen();
