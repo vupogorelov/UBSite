@@ -67,7 +67,8 @@ export default {
     const speaks = (await calls()).filter((c) => c[0] === 'speak').length;
     t.check('чтение: весь Текст сразу в очереди движка', speaks > 100, `${speaks} предложений`);
     t.check('подсветка предложения идёт за чтением', (await page.evaluate(() => /** @type {any} */ (CSS).highlights?.get('tts')?.size ?? 0)) === 1);
-    await page.waitForTimeout(25000);
+    // (until the reading has gone on to the next paper — not a fixed time)
+    await page.waitForFunction(() => !location.pathname.endsWith('/1'), null, { timeout: 40000 }).catch(() => {});
     t.check('конец Текста — чтение само продолжается в следующих', !page.url().endsWith('/1'), page.url());
 
     await page.evaluate(() => /** @type {any} */ (window).__ubNative('cmd', 'pause'));

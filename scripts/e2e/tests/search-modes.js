@@ -16,7 +16,11 @@ export default {
     await page.waitForTimeout(400);
     const modes = page.locator('.search-modes [role="radio"]');
     t.check('три способа над полем', (await modes.allTextContents()).join('|') === 'По словам|По смыслу|Гибридный');
-    t.check('по умолчанию — по словам', (await modes.nth(0).getAttribute('aria-checked')) === 'true');
+    // (the copy's person may have chosen another way: it is put back at the end; the default for a new
+    // person — by the words — is the settings' unit test)
+    const was = (await modes.evaluateAll((els) => els.findIndex((e) => e.getAttribute('aria-checked') === 'true')));
+    await modes.nth(0).click();
+    t.check('выбор «По словам» отмечен', (await modes.nth(0).getAttribute('aria-checked')) === 'true');
 
     const input = page.locator('input[aria-label="Поисковый запрос"]');
     await input.fill('Бог');
@@ -40,7 +44,7 @@ export default {
     await page.locator('.more-row', { hasText: 'Поиск' }).click();
     await page.waitForTimeout(400);
     t.check('выбор сохранён', (await page.locator('.search-modes [role="radio"]').nth(1).getAttribute('aria-checked')) === 'true');
-    await page.locator('.search-modes [role="radio"]').nth(0).click(); // (back as it was: the next browser's user is the same)
+    await page.locator('.search-modes [role="radio"]').nth(Math.max(0, was)).click(); // (back as it was: the next browser's user is the same)
     await page.waitForTimeout(1000);
     t.check('без ошибок на странице', errors.filter((/** @type {string} */ e) => !/503/.test(e)).length === 0, errors.slice(0, 2));
   },

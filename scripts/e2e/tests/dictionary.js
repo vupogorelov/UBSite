@@ -2,7 +2,7 @@
 // The dictionary of the book: a coordinator begins an article from the glossary's name, writes what it
 // is and publishes it; the article shows its places in the text; «Что это?» on the selected name opens
 // its card and leads to it; a guest reads it by a link (a draft not); it is in the book's copy.
-import { BASE } from '../lib.js';
+import { BASE, until } from '../lib.js';
 
 export default {
   name: 'Словарь книги',
@@ -11,14 +11,17 @@ export default {
     const { page, errors } = await t.computer();
     // (the first person of the test database is an administrator: a coordinator's rights)
     await page.goto(BASE + '/d?q=Мелхиседек', { waitUntil: 'load' });
-    await page.waitForTimeout(2500);
-    await page.locator('.dict-tabs .ui-chip', { hasText: 'Заготовки' }).click();
-    await page.waitForTimeout(1500);
-    const row = page.locator('.dict-candidates .set-row', { hasText: 'Мелхиседек' }).first();
+    const tab = page.locator('.dict-tabs .ui-chip', { hasText: 'Заготовки' });
+    await tab.waitFor({ timeout: 15000 }).catch(() => {});
+    await tab.click();
+    // (the list drawn and narrowed to the name — under load it takes a while)
+    const rows = page.locator('.dict-candidates .set-row', { hasText: 'Мелхиседек' });
+    await until(async () => (await rows.count()) === 1, { timeout: 10000 });
+    const row = rows.first();
     t.check('заготовки: имя из глоссария с числом абзацев', (await row.count()) === 1, (await row.textContent())?.replace(/\s+/g, ' ').trim());
     await row.locator('.dict-begin').click();
     await page.waitForURL(/\/d\/\d+/, { timeout: 10000 });
-    await page.waitForTimeout(1500);
+    await page.locator('.art-edit').waitFor({ timeout: 10000 }).catch(() => {});
     const id = Number(new URL(page.url()).pathname.split('/')[2]);
     t.check('статья начата и открыта для правки', (await page.locator('.art-edit').count()) === 1, page.url());
     const brief = 'Сын Божий, служивший на Урантии во времена Авраама.';
@@ -28,7 +31,7 @@ export default {
     await page.locator('.art-edit .ui-btn', { hasText: 'Опубликовать' }).click();
     await page.waitForTimeout(800);
     await page.locator('.art-edit .link-btn', { hasText: 'Готово' }).click();
-    await page.waitForTimeout(500);
+    await until(async () => /впервые/.test((await page.locator('.art-count').textContent({ timeout: 500 })) ?? ''), { timeout: 10000 });
     const count = (await page.locator('.art-count').textContent())?.replace(/\s+/g, ' ').trim() ?? '';
     t.check('опубликована; в тексте книги — абзацы и первое упоминание', (await page.locator('.art-brief').textContent())?.trim() === brief && /\d+ абзац.* в \d+ Текст.*впервые/.test(count), count);
 
@@ -77,10 +80,13 @@ export default {
     t.check('черновик гостю не виден', draftStatus === 404, draftStatus);
 
     // in the book's copy on the device
-    const listed = await page.evaluate(async (/** @type {number} */ a) => {
-      const m = await (await fetch('/api/offline/manifest')).json();
+    // (the copy's list follows the publication soon, not at once)
+    const inCopy = () => page.evaluate(async (/** @type {number} */ a) => {
+      const m = await (await fetch('/api/offline/manifest', { cache: 'no-store' })).json();
       return m.files.some((/** @type {{ url: string }} */ f) => f.url === `/api/dict/${a}`);
     }, id);
+    await until(inCopy, { timeout: 10000, every: 400 });
+    const listed = await inCopy();
     t.check('опубликованная статья — в копии книги для чтения без сети', listed);
     t.check('без ошибок на страницах', errors.length === 0 && g.errors.length === 0, [...errors, ...g.errors].slice(0, 2));
   },

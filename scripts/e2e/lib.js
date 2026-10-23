@@ -14,12 +14,17 @@ export const BASE = `http://localhost:${PORT}`;
 /** Chromium 114, outside the project (it is on a synced disk). */
 export const BROWSERS = process.env.E2E_BROWSERS ?? `${process.env.LOCALAPPDATA ?? process.env.HOME}/ubsite-e2e/browsers`;
 
-/** Copies the database (only read) and signs in its first person on the copy. @returns {Promise<string>} the session */
-export async function prepareDb() {
+/**
+ * Copies the database (only read) and signs in its first person on the copy. `name`: a copy of its own (a
+ * worker's: the workers run side by side, each with its own copy, server and Laboratory file).
+ * @param {string} [name] @returns {Promise<string>} the session
+ */
+export async function prepareDb(name = 'test') {
   const tmp = `${here}.tmp/`;
   mkdirSync(tmp, { recursive: true });
-  const copy = `${tmp}test.db`;
+  const copy = `${tmp}${name}.db`;
   for (const f of [copy, `${copy}-wal`, `${copy}-shm`]) rmSync(f, { force: true });
+  process.env.UB_LAB_DB = `${tmp}${name}-lab.db`;
   const live = new DatabaseSync(process.env.UB_DB ?? `${root}data/ub.db`, { readOnly: true });
   live.exec(`VACUUM INTO '${copy.replace(/'/g, "''")}'`);
   live.close();
@@ -89,6 +94,22 @@ export async function computer(browser, token) {
   const errors = [];
   page.on('pageerror', (/** @type {Error} */ e) => errors.push(String(e)));
   return { ctx, page, errors };
+}
+
+/**
+ * Waits until `ok` holds (asked every `every` ms), at most `timeout` ms — not a fixed time: a check goes on as
+ * soon as what it waits for is there. Never throws: the check after it says what was found.
+ * @param {() => Promise<unknown> | unknown} ok @param {{ timeout?: number, every?: number }} [opts]
+ */
+export async function until(ok, { timeout = 10000, every = 150 } = {}) {
+  const end = Date.now() + timeout;
+  while (Date.now() < end) {
+    try {
+      if (await ok()) return true;
+    } catch {}
+    await new Promise((r) => setTimeout(r, every));
+  }
+  return false;
 }
 
 /** Opens a path under the service worker (the second load is controlled by it). @param {any} page @param {string} path */

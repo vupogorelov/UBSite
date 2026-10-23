@@ -3,7 +3,7 @@
 // survive a reload and go by themselves when the network is back (once each, in order); an answer lost on
 // the way does not double a message; a refusal stays with "!" and «Удалить» takes it away.
 // E2E_SLOW=1: also waits 65 s offline — the message keeps the time it was written.
-import { openControlled } from '../lib.js';
+import { openControlled, until } from '../lib.js';
 
 const KEY = process.env.E2E_CHAT ?? 'chan:1';
 
@@ -13,7 +13,7 @@ export default {
   async run(t) {
     const { ctx, page, errors } = await t.page();
     await openControlled(page, `/chat?c=${encodeURIComponent(KEY)}`);
-    await page.waitForTimeout(2500);
+    await page.locator('textarea').last().waitFor({ timeout: 15000 }).catch(() => {});
     const stamp = `${t.kind}-${Date.now().toString(36)}`;
     const say = async (/** @type {string} */ text) => {
       await page.locator('textarea').last().fill(text);
@@ -32,7 +32,7 @@ export default {
     t.check('чат открыт по ссылке во весь экран, поле ввода видно', (await page.locator('.bottom-nav').count()) === 0 || !(await page.locator('.bottom-nav').isVisible()));
 
     await say(`онлайн ${stamp}`);
-    await page.waitForTimeout(800);
+    await until(async () => count(await server(), `онлайн ${stamp}`) >= 1 && (await clocks()) === 0, { timeout: 5000 });
     t.check('с сетью — уходит сразу, один раз', count(await server(), `онлайн ${stamp}`) === 1 && (await clocks()) === 0);
 
     await ctx.setOffline(true);
@@ -40,12 +40,13 @@ export default {
     await say(`офлайн-2 ${stamp}`);
     t.check('без сети — сразу на экране, с часиками', (await clocks()) === 2);
     await page.reload({ waitUntil: 'load' }).catch(() => {});
-    await page.waitForTimeout(2500);
+    await until(async () => (await clocks()) === 2, { timeout: 8000 });
     t.check('часики переживают перезагрузку', (await clocks()) === 2);
 
     if (process.env.E2E_SLOW) await page.waitForTimeout(65000);
     await ctx.setOffline(false);
-    await page.waitForTimeout(4000);
+    // (the queue sent and empty: both on the server, no clock left)
+    await until(async () => (await clocks()) === 0 && count(await server(), `офлайн-2 ${stamp}`) >= 1, { timeout: 12000 });
     const s = await server();
     const i1 = s.findIndex((m) => m.body === `офлайн-1 ${stamp}`);
     const i2 = s.findIndex((m) => m.body === `офлайн-2 ${stamp}`);
@@ -62,11 +63,12 @@ export default {
     await page.waitForTimeout(400);
     t.check('без сети: реакция сразу на сообщении', (await page.locator(`#msg-${online?.id} .tg-reaction.mine`).count()) === 1, emoji);
     await ctx.setOffline(false);
-    await page.waitForTimeout(4000);
-    const reacted = await page.evaluate(async (/** @type {any} */ a) => {
+    const reactions = () => page.evaluate(async (/** @type {any} */ a) => {
       const r = await fetch(`/api/chat/c/${encodeURIComponent(a.k)}/messages`, { cache: 'no-store' }).then((x) => x.json());
       return r.find((/** @type {any} */ m) => m.id === a.id)?.reactions ?? [];
     }, { k: KEY, id: online?.id });
+    await until(async () => (await reactions()).some((/** @type {any} */ r) => r.emoji === emoji && r.mine), { timeout: 12000 });
+    const reacted = await reactions();
     t.check('связь вернулась: реакция на сервере', reacted.some((/** @type {any} */ r) => r.emoji === emoji && r.mine), reacted);
 
     let n = 0;
@@ -76,7 +78,8 @@ export default {
       await route.abort('connectionreset'); // (its answer never arrives)
     });
     await say(`обрыв ${stamp}`);
-    await page.waitForTimeout(6000);
+    // (sent again after the lost answer and the queue empty — nothing more will go)
+    await until(async () => (await clocks()) === 0 && count(await server(), `обрыв ${stamp}`) >= 1, { timeout: 15000 });
     t.check('ответ потерялся — на сервере всё равно одно сообщение', count(await server(), `обрыв ${stamp}`) === 1 && (await clocks()) === 0);
 
     await page.unroute('**/api/chat/c/*/messages');
@@ -86,7 +89,7 @@ export default {
         : route.continue(),
     );
     await say(`отказ ${stamp}`);
-    await page.waitForTimeout(1500);
+    await until(async () => (await page.locator('.tg-failed').count()) === 1, { timeout: 8000 });
     const line = await page.locator('.tg-failed-row span').first().textContent().catch(() => null);
     t.check('отказ — «!» и причина', (await page.locator('.tg-failed').count()) === 1 && !!line?.includes('Писать в этот чат нельзя'), line);
     await page.locator('.tg-failed-row button', { hasText: 'Удалить' }).dispatchEvent('click');
