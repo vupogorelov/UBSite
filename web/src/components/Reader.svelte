@@ -93,7 +93,10 @@
   if (session.user) void loadTasks();
   const taskCounts = $derived(data ? tasksPerParagraph(data.paragraphs, tasks.items) : new Map());
   const markers = $derived(marginMarks(paperNotes));
-  const railFits = $derived(scrollerWidth >= settings.columnWidth + 360);
+  // The notes' margin fits while the text beside it keeps a comfortable width (the column shrinks to it: the
+  // contents open on a computer, the text, the comments — all three in sight); narrower — under the text
+  const RAIL_TEXT_MIN = 480; // (≈55 characters a line: within the comfortable 45–75)
+  const railFits = $derived(scrollerWidth >= Math.min(settings.columnWidth, RAIL_TEXT_MIN) + 360);
   const showRail = $derived(settings.showRail && railFits && (railItems.length > 0 || notes.draft !== null));
   const activeNote = $derived(paperNotes.find((n) => n.id === notes.activeId) ?? null);
   /**
