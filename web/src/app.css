@@ -4023,6 +4023,17 @@ fieldset.group:disabled {
   gap: 0.4rem;
   position: relative;
 }
+/* A conversation opens at its end: the messages off screen are not styled or laid out until scrolled to
+   (content-visibility; "auto" remembers each one's height once seen) — a long conversation opened late, its
+   every message laid out first. (Nothing inside a row is position: fixed: the message's menu is outside.) */
+.tg-scroll .tg-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
+}
+/* (the Book's post: guessed taller — guessed short, a dozen of them would seem on screen and be laid out at once) */
+.tg-scroll .tg-row.post {
+  contain-intrinsic-size: auto 360px;
+}
 .tg-row.first {
   margin-top: 6px;
 }

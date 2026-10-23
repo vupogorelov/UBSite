@@ -69,6 +69,7 @@
    */
   async function showQuote(text) {
     const k = key;
+    tail = 0; // (all drawn: the paragraph's post is at the top)
     while (hasMore && messages.length) {
       const older = await api.chatMessages(k, messages[0].id).catch(() => null);
       if (!older || k !== key) return;
@@ -98,6 +99,7 @@
       setTimeout(() => addEventListener('pointerdown', () => CSS.highlights.delete('chat-quote'), { once: true }), 300);
     }
     const target = range?.startContainer.parentElement ?? post;
+    stick = false;
     target.scrollIntoView({ block: 'center', behavior: 'smooth' });
     if (!range) {
       post.classList.remove('flash');
@@ -155,6 +157,9 @@
     const n = chat.list.find((c) => c.key === k)?.unread ?? 0;
     const mem = keptChat(k);
     let shown = false;
+    // opened at its end: its last messages drawn first, the rest a moment later (not when it opens at a message
+    // asked for, at the unread beyond them, or at a place above the end)
+    tail = !focus && n < TAIL - 5 && (!mem || mem.atBottom) ? TAIL : 0;
     if (mem) {
       info = mem.info;
       messages = mem.messages;
@@ -164,9 +169,10 @@
       else {
         await tick();
         if (mem.atBottom) scrollToBottom();
-        else if (scroller) scroller.scrollTop = mem.top;
+        else if (scroller) ((stick = false), (scroller.scrollTop = mem.top));
         atBottom = mem.atBottom;
       }
+      drawRest();
     } else {
       const [i, list] = await Promise.all([api.seenChatInfo(k), api.seenChatMessages(k)]);
       if (k !== key) return;
@@ -176,6 +182,7 @@
         hasMore = list.length >= 60;
         shown = true;
         await place(k, n);
+        drawRest();
       }
     }
     try {
@@ -186,10 +193,13 @@
         messages = list;
         hasMore = list.length >= 60;
         await place(k, n);
+        drawRest();
         if (chatUi.reply?.key === k) chatUi.reply = null;
         return;
       }
-      // the network's answer over the copy: the older pages seen stay, unless there is a gap
+      // the network's answer over the copy: the older pages seen stay, unless there is a gap. The same as the
+      // copy — nothing redrawn (every message made anew otherwise)
+      if (JSON.stringify(list) === JSON.stringify($state.snapshot(messages.slice(-list.length)))) return;
       const wasBottom = atBottom;
       const lastBefore = messages.filter((m) => m.id > 0).at(-1)?.id ?? 0;
       const first = list[0]?.id ?? Infinity;
@@ -213,7 +223,7 @@
       unreadAfter = unreadFrom(list, n);
       await tick();
       const divider = scroller?.querySelector('.tg-unread');
-      if (divider) divider.scrollIntoView({ block: 'center' });
+      if (divider) ((stick = false), divider.scrollIntoView({ block: 'center' }));
       else scrollToBottom();
       readIfAtBottom();
     } catch (err) {
@@ -250,9 +260,10 @@
     if (wanted) {
       // a message taller than the screen (the Book's post) — from its beginning
       const tall = scroller && wanted.offsetHeight > scroller.clientHeight * 0.8;
+      stick = false;
       wanted.scrollIntoView({ block: tall ? 'start' : 'center' });
       wanted.classList.add('flash');
-    } else if (divider && !draft) divider.scrollIntoView({ block: 'center' });
+    } else if (divider && !draft) ((stick = false), divider.scrollIntoView({ block: 'center' }));
     else scrollToBottom();
     if (draft) composer?.fill(draft);
     readIfAtBottom();
@@ -260,6 +271,8 @@
   /** The message asked for (`focus`) was found and shown. */
   let focusShown = false;
 
+  /** Stuck to the end (as messengers are): it stays there as messages grow; set by going to the end, unset by scrolling up. */
+  let stick = true;
   // The conversation keeps its bottom edge when its height changes — the keyboard comes up (the
   // viewport shrinks, interactive-widget=resizes-content), the field grows a line: what was just
   // above the field stays just above it, as in Telegram (overflow-anchor does not cover a resize)
@@ -271,21 +284,36 @@
     const below = () => el.scrollHeight - el.scrollTop - el.clientHeight;
     let height = el.clientHeight;
     let fromBottom = below();
+    /** When the person last scrolled it themselves (a finger, the wheel, keys, the scrollbar). */
+    let lastUser = 0;
+    const user = () => (lastUser = performance.now());
     const ro = new ResizeObserver(() => {
       const now = el.clientHeight;
       // (0 — hidden under the search's results: its place is kept as it was)
-      if (height && now && now !== height) el.scrollTop = el.scrollHeight - now - fromBottom;
+      if (height && now && now !== height) el.scrollTop = el.scrollHeight - now - (stick ? 0 : fromBottom);
+      // the messages grew (a long one's «Показать полностью», the rest drawn, an off-screen one's real height)
+      // while stuck to the end — still at the end; read above it — the browser keeps the view
+      else if (now && stick) el.scrollTop = el.scrollHeight - now;
       if (now) height = now;
       fromBottom = below();
     });
     ro.observe(el);
     ro.observe(column);
-    const onscroll = () => el.clientHeight === height && (fromBottom = below());
+    const onscroll = () => {
+      if (el.clientHeight !== height) return;
+      fromBottom = below();
+      // (only the person's own scrolling unsticks it from the end — not the browser's own corrections, whose
+      // scroll comes before the resize is told)
+      if (performance.now() - lastUser < 1000) stick = fromBottom < 4;
+    };
+    const USER = /** @type {const} */ (['wheel', 'touchstart', 'touchmove', 'keydown', 'pointerdown']);
     el.addEventListener('scroll', onscroll, { passive: true });
-    return () => (ro.disconnect(), el.removeEventListener('scroll', onscroll));
+    for (const t of USER) el.addEventListener(t, user, { passive: true });
+    return () => (ro.disconnect(), el.removeEventListener('scroll', onscroll), USER.forEach((t) => el.removeEventListener(t, user)));
   });
 
   function scrollToBottom() {
+    stick = true;
     if (scroller) scroller.scrollTop = scroller.scrollHeight;
     newBelow = 0;
   }
@@ -423,12 +451,15 @@
   /** To a message: older pages are loaded until it is there. @param {number} id */
   async function goTo(id) {
     const k = key;
+    tail = 0; // (all drawn: the message may be above the last ones)
+    await tick();
     while (!messages.some((m) => m.id === id) && hasMore && messages.length) {
       const older = await api.chatMessages(k, messages[0].id).catch(() => []);
       if (k !== key) return;
       messages = [...older, ...messages];
       hasMore = older.length >= 60;
     }
+    stick = false;
     list?.reveal(id);
   }
 
@@ -476,6 +507,28 @@
       .filter((p) => !messages.slice(-20).some((x) => x.authorId === me && x.body === p.body.trim() && x.createdAt >= p.createdAt.slice(0, 17))),
   );
   const shown = $derived(waiting.length ? [...messages, ...waiting] : messages);
+  /**
+   * The messages drawn: a long conversation opens with its last TAIL (on screen at once), the rest drawn a
+   * moment later above them (the view stays: the browser's scroll anchoring) — every message made at once
+   * made a long conversation open late. 0 — all.
+   */
+  const TAIL = 20;
+  let tail = $state(0);
+  const drawn = $derived(tail && shown.length > tail ? shown.slice(-tail) : shown);
+  const partial = $derived(drawn.length < shown.length);
+  let restTimer = 0;
+  /** The rest of the messages, once the last ones are on screen — above them, the view kept (before it is painted). */
+  function drawRest() {
+    clearTimeout(restTimer);
+    if (!tail) return;
+    restTimer = window.setTimeout(async () => {
+      const below = scroller ? scroller.scrollHeight - scroller.scrollTop : 0;
+      tail = 0;
+      await tick();
+      if (scroller) scroller.scrollTop = scroller.scrollHeight - below;
+    }, 150);
+  }
+  $effect(() => () => clearTimeout(restTimer));
   /** @param {any} m @param {string} emoji */
   async function react(m, emoji) {
     const was = m.reactions ?? [];
@@ -666,12 +719,12 @@
     use:pinchFont={{ get: () => settings.chatFontSize, set: (px) => setSetting('chatFontSize', px), min: 12, max: 24, anchor: '.tg-row, .tg-post' }}>
     <!-- The conversation is as wide as the book's column (the reader's "Ширина колонки"). -->
     <div class="tg-column">
-      {#if info?.kind === 'para' && info.post && !hasMore}
+      {#if info?.kind === 'para' && info.post && !hasMore && !partial}
         <!-- A paragraph thread starts with the paragraph itself, as a channel post; messages are its comments. -->
         <ChatPost ref={key} paperId={info.post.paperId} paperTitle={book.main === 'en' ? info.post.paperTitleEn || info.post.paperTitle : info.post.paperTitle} pageRef={info.post.pageRef}
           ru={info.post.ru} en={info.post.en} comments={messages.filter((m) => m.kind === 'message').length} />
         {#if messages.length}<div class="tg-service"><span>Обсуждение</span></div>{/if}
-      {:else if !hasMore && messages.length}
+      {:else if !hasMore && !partial && messages.length}
         <div class="tg-service"><span>Начало переписки</span></div>
       {/if}
       {#if info && !messages.length && info.kind === 'dm'}
@@ -683,7 +736,7 @@
           Этот разговор видите только вы.
         </span></div>
       {:else if info && !messages.length}<div class="tg-empty" class:after-post={info.kind === 'para'}><span>Сообщений пока нет — напишите первое.</span></div>{/if}
-      <ChatMessages bind:this={list} messages={shown} {me} {unreadAfter} reactions={REACTIONS} chatKey={key}
+      <ChatMessages bind:this={list} messages={drawn} {me} {unreadAfter} reactions={REACTIONS} chatKey={key}
         solo={info?.kind === 'dm'} readUpTo={info?.readUpTo ?? 0}
         onretry={(m) => m.op && retry(m.op)} ondiscard={(m) => m.op && discard(m.op)}
         onreply={(m) => (reply = { id: m.id, authorName: m.authorName, body: plainBody(m.body).slice(0, 200) })}

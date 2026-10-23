@@ -1,3 +1,21 @@
+<script module>
+  /**
+   * One observer for every folded text: its callback comes after the layout, for all the texts at once — a
+   * text measured on its own as it is made forced the layout per message (a long conversation opened late).
+   * @type {Map<Element, () => void>}
+   */
+  const watched = new Map();
+  /** @type {ResizeObserver | null} */
+  let observer = null;
+  /** @param {Element} el @param {() => void} fn */
+  function watch(el, fn) {
+    observer ??= new ResizeObserver((entries) => entries.forEach((e) => watched.get(e.target)?.()));
+    watched.set(el, fn);
+    observer.observe(el);
+    return () => (watched.delete(el), observer?.unobserve(el));
+  }
+</script>
+
 <script>
   /**
    * A long text folded to its first lines (Settings → «Чаты»: «Сворачивать длинные сообщения»): the last of them
@@ -17,11 +35,8 @@
   $effect(() => {
     if (!on || open || !box) return;
     const el = box;
-    const check = () => (over = el.scrollHeight > el.clientHeight + 2);
-    const ro = new ResizeObserver(check);
-    ro.observe(el);
-    check();
-    return () => ro.disconnect();
+    // (measured by the observer only: its first call comes after the layout — no measuring as it is made)
+    return watch(el, () => (over = el.scrollHeight > el.clientHeight + 2));
   });
 </script>
 

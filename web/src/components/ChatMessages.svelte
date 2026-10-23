@@ -264,7 +264,8 @@
     {#if m.kind === 'event'}
       <div class="tg-service" id="msg-{m.id}"><span>{m.body}</span></div>
     {:else}
-      <div class="tg-row" class:own class:first class:last id="msg-{m.id}"
+      <!-- (post: the Book's post — a taller row; app.css: its height guessed before it is laid out) -->
+      <div class="tg-row" class:own class:first class:last class:post={!!m.post} id="msg-{m.id}"
         use:swipeReply={onreply && editingId !== m.id && !m.pending ? () => onreply?.(m) : undefined}>
         {#if onreply}<span class="tg-swipe-icon" aria-hidden="true"><Icon name="back" size={16} /></span>{/if}
         {#if !own && !compact && !solo}
