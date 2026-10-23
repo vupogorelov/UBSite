@@ -68,6 +68,8 @@ export const tts = $state({
   open: false,
   playing: false,
   settingsOpen: false,
+  /** «Читать сразу при открытии»: the reading is about to begin by itself (▶ shows the wait). */
+  autoStart: false,
   /**
    * Voices of the engine: id (voiceURI — names repeat: iOS has "Eddy", "Flo"… in every English
    * region), the name shown (with the region when the name repeats), language, online (network voices).
@@ -592,6 +594,7 @@ function start() {
 
 /** ▶: what I see is what I hear — the paused sentence if it is on screen, else the screen's first sentence. */
 export function play() {
+  cancelAuto();
   onlyKey = null; // the player's own ▶ reads on
   resumeExact = true; // (a recording: from the remembered second, if it is this paragraph)
   if (!synth && !wantsRecording()) return showToast('Этот браузер не умеет синтезировать речь');
@@ -601,6 +604,7 @@ export function play() {
 }
 
 export function pause() {
+  cancelAuto();
   if (tts.playing) log('tts', 'пауза', { at: pos?.key, hidden: document.visibilityState === 'hidden' });
   tts.playing = false;
   run++;
@@ -659,6 +663,7 @@ export function playParagraph(ref, lang) {
   if (!host) return;
   if (paragraphPlaying(ref, lang)) return pause();
   if (!synth && !(tts[lang].source === 'audio' && tts.recorded.includes(lang))) return showToast('Этот браузер не умеет синтезировать речь');
+  cancelAuto();
   if (!tts.open) openPlayer();
   if (tts.lang !== lang) {
     tts.lang = lang;
@@ -679,12 +684,32 @@ export function playParagraph(ref, lang) {
 /** This paragraph in this language is being read now (its ▶ shows ■). @param {string} ref @param {'ru' | 'en'} lang */
 export const paragraphPlaying = (ref, lang) => tts.playing && tts.lang === lang && tts.place?.key === ref;
 
-/** "Слушать": opens the player — a new session; the book stays where it is. */
-export function openPlayer() {
+/**
+ * "Слушать": opens the player — a new session; the book stays where it is. `auto` («Читать сразу при
+ * открытии»): the reading begins by itself AUTO_MS later, from the text on screen — unless ▶, a pause or the
+ * player's closing comes first. (Within the tap's user activation, ≈5 s in Chrome: speech may begin.)
+ * @param {{ auto?: boolean }} [opts]
+ */
+export function openPlayer({ auto = false } = {}) {
   tts.open = true;
   session = null;
   loadBook();
   loadRecordings();
+  cancelAuto();
+  if (!auto) return;
+  tts.autoStart = true;
+  autoTimer = window.setTimeout(() => {
+    tts.autoStart = false;
+    if (tts.open && !tts.playing) play();
+  }, AUTO_MS);
+}
+
+const AUTO_MS = 2000;
+let autoTimer = 0;
+/** The reading about to begin by itself — not now. */
+function cancelAuto() {
+  clearTimeout(autoTimer);
+  tts.autoStart = false;
 }
 
 /** Long press on ▶: back to where this session started (opening that paper if needed). */

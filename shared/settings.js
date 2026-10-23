@@ -49,6 +49,7 @@
  *   phoneNav: string,
  *   whatsNewSeen: string,
  *   searchMode: 'words' | 'meaning' | 'hybrid',
+ *   listenAutoplay: boolean,
  *   glassBars: boolean,
  *   navLabels: boolean,
  *   barsAutoHide: boolean,
@@ -262,6 +263,8 @@ export const SETTINGS_GROUPS = [
         key: 'searchMode', label: 'Поиск', type: 'choice', default: 'words', hidden: true,
         options: [['words', 'По словам'], ['meaning', 'По смыслу'], ['hybrid', 'Гибридный']],
       },
+      // «Слушать» opens the player and it begins reading by itself 2 s later (its switch: in the player's settings)
+      { key: 'listenAutoplay', label: 'Читать сразу при открытии', type: 'toggle', default: false, hidden: true },
       // the tasks' kanban: its cards' size, changed by pinching two fingers over it (TasksPage)
       { key: 'kanbanFontSize', label: 'Размер карточек канбана', type: 'range', min: 10, max: 20, step: 1, unit: 'px', default: 14, hidden: true },
       // …and of the tasks' list

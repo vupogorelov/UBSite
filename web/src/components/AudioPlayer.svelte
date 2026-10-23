@@ -11,7 +11,7 @@
   import Playlist from './Playlist.svelte';
   import { onBack } from '../lib/router.svelte.js';
   import { setTab } from '../lib/ui.svelte.js';
-  import { settings } from '../lib/settings.svelte.js';
+  import { settings, setSetting } from '../lib/settings.svelte.js';
   import Icon from './Icon.svelte';
   import UiSelect from './UiSelect.svelte';
   import { plural } from '../lib/format.js';
@@ -340,7 +340,8 @@
       aria-label="Язык чтения: {tts.lang === 'ru' ? 'русский' : 'английский'}. Переключить" title="Язык чтения">{tts.lang.toUpperCase()}</button>
     <button class="icon-btn" onclick={() => paragraph(-1)} aria-label="Предыдущий абзац" title="Предыдущий абзац"><Icon name="skip-back" /></button>
     <button class="icon-btn" onclick={() => sentence(-1)} aria-label={recording ? `Назад на ${SKIP} секунд` : 'Предыдущее предложение'} title={recording ? `Назад на ${SKIP} с` : 'Предыдущее предложение'}><Icon name="rewind" /></button>
-    <button class="tts-play" onclick={playClick} onpointerdown={pressStart} onpointerup={pressEnd} onpointerleave={pressEnd}
+    <!-- (auto: «Читать сразу при открытии» — a ring fills while the reading is about to begin) -->
+    <button class="tts-play" class:auto={tts.autoStart} onclick={playClick} onpointerdown={pressStart} onpointerup={pressEnd} onpointerleave={pressEnd}
       onpointercancel={pressEnd} oncontextmenu={(e) => e.preventDefault()}
       aria-label={tts.playing ? 'Остановить' : 'Читать'} title="Читать / остановить · долгое нажатие — с начала сессии"><Icon name={tts.playing ? 'stop' : 'play'} size={24} /></button>
     <button class="icon-btn" onclick={() => sentence(1)} aria-label={recording ? `Вперёд на ${SKIP} секунд` : 'Следующее предложение'} title={recording ? `Вперёд на ${SKIP} с` : 'Следующее предложение'}><Icon name="fast-forward" /></button>
@@ -384,6 +385,12 @@
               <Icon name="chevron" size={16} />
             </button>
           {/if}
+          <!-- «Слушать» opens the player and it begins reading by itself, 2 s later -->
+          <label class="tts-list-row tts-auto" title="«Слушать» открывает плеер и через 2 секунды начинает читать">
+            <span class="tts-label">Читать сразу</span>
+            <input type="checkbox" class="ui-switch small" checked={settings.listenAutoplay}
+              onchange={(e) => setSetting('listenAutoplay', e.currentTarget.checked)} />
+          </label>
         </div>
 
 

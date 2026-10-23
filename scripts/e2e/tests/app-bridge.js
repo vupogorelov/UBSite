@@ -5,8 +5,8 @@
 // only to be stopped makes Android close the app).
 import { openControlled } from '../lib.js';
 
-/** @param {number} DUR */
-function fakeApp(DUR) {
+/** (also the player's autoplay check: player-autoplay.js) @param {number} DUR */
+export function fakeApp(DUR) {
   const w = /** @type {any} */ (window);
   w.__calls = [];
   /** @type {{ id: string }[]} */ let queue = [];

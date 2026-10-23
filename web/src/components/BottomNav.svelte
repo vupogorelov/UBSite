@@ -86,7 +86,8 @@
     if (tts.open && bookRoute && !ui.sidebarOpen) return stop();
     ui.sidebarOpen = false;
     if (!bookRoute) navigate(lastPath(), { root: true });
-    if (!tts.open) openPlayer(); // (if open, it was only covered by a section screen)
+    // (if open, it was only covered by a section screen; «Читать сразу при открытии» — it begins 2 s later)
+    if (!tts.open) openPlayer({ auto: settings.listenAutoplay });
   }
   function notes() {
     openTab(NOTES_TABS.includes(ui.tab) ? ui.tab : 'notes');

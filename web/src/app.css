@@ -6177,6 +6177,34 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   color: var(--accent-fg);
   cursor: pointer;
 }
+/* «Читать сразу при открытии»: a ring grows round ▶ for the 2 s before the reading begins (lib/tts.svelte.js) */
+.tts-play.auto {
+  position: relative;
+}
+.tts-play.auto::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: tts-auto 2s linear forwards;
+}
+@keyframes tts-auto {
+  from {
+    opacity: 0.15;
+    transform: scale(0.86);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tts-play.auto::after {
+    animation: none;
+  }
+}
 .tts-lang {
   color: var(--text);
   font: 600 14px/1 var(--sans);
@@ -7390,6 +7418,21 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .ui-switch:checked::after {
   transform: translateX(18px);
 }
+/* small: where a row is to stay low (the player's «Читать сразу») */
+.ui-switch.small {
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+}
+.ui-switch.small::after {
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+}
+.ui-switch.small:checked::after {
+  transform: translateX(16px);
+}
 /* buttons */
 .ui-btn {
   display: flex;
@@ -8434,6 +8477,11 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 .tts-list-row .tts-label {
   flex: none;
+}
+/* «Читать сразу»: a low row, its small switch at the end */
+.tts-list-row.tts-auto {
+  min-height: 40px;
+  justify-content: space-between;
 }
 .tts-list-value {
   flex: 1;
