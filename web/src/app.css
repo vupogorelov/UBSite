@@ -2943,6 +2943,18 @@ select.text-input:focus-visible {
   opacity: 1 !important;
   background: none;
 }
+/* ⧉ at a task card's top right: pale, always there (a touch screen has no hover) */
+.task-copy-row {
+  flex: none;
+  align-self: flex-start;
+  margin: -2px -4px 0 0;
+  color: var(--muted);
+  opacity: 0.6;
+}
+.task-copy-row svg {
+  width: 14px;
+  height: 14px;
+}
 .task-star.on svg,
 .task-star-mark svg,
 .tasks-star.on svg {

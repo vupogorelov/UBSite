@@ -1,7 +1,8 @@
 <script>
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { tasks, loadTasks, createTask, patchTask, patchSubtask, deleteTask, orderTasks, placeLabel, openTaskMessage, taskTags, tagCounts, localTaskId } from '../lib/tasks.svelte.js';
+  import { copyText } from '../lib/notes.svelte.js';
+  import { taskText, tasks, loadTasks, createTask, patchTask, patchSubtask, deleteTask, orderTasks, placeLabel, openTaskMessage, taskTags, tagCounts, localTaskId } from '../lib/tasks.svelte.js';
   import { swipeRow } from '../lib/swipe.js';
   import { showToast } from '../lib/toast.svelte.js';
   import { titleTags, titleParts } from '../../../shared/tasktags.js';
@@ -272,6 +273,8 @@
         <span class="spacer"></span>
         <button class="icon-btn small-btn task-star" class:on={t.important} onclick={() => patchTask(t.id, { important: !t.important })}
           aria-label={t.important ? 'Убрать из важных' : 'Важная'} title={t.important ? 'Убрать из важных' : 'Важная'}><Icon name="star" size={14} /></button>
+        <!-- ⧉ at the card's top right: the task's text copied -->
+        <button class="icon-btn small-btn task-copy-row" onclick={() => copyText(taskText(t))} aria-label="Копировать текст задачи" title="Копировать текст задачи"><Icon name="copy" size={14} /></button>
       </div>
       {@render meta(t)}
       {#if subsOpen}

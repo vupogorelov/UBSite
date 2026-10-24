@@ -1,5 +1,5 @@
 <script>
-  import { patchTask, taskTags, tagCounts, setTaskTags, deleteTask, addSubtask, patchSubtask, deleteSubtask, placeLabel, openTaskMessage } from '../lib/tasks.svelte.js';
+  import { taskText, patchTask, taskTags, tagCounts, setTaskTags, deleteTask, addSubtask, patchSubtask, deleteSubtask, placeLabel, openTaskMessage } from '../lib/tasks.svelte.js';
   import { navigate } from '../lib/router.svelte.js';
   import Icon from './Icon.svelte';
   import TagInput from './TagInput.svelte';
@@ -55,9 +55,6 @@
   }
   /** The description folded (opened by a tap, or while being written). */
   let notesOpen = $state(false);
-  /** The task as text: its title, description and subtasks. */
-  const asText = () =>
-    [task.title, task.notes ?? '', ...task.subtasks.map((s) => `${s.done ? '☑' : '☐'} ${s.title}`)].filter(Boolean).join('\n');
 </script>
 
 <div class="task-editor">
@@ -66,7 +63,7 @@
     <textarea class="text-input task-editor-title" rows="1" value={task.title} aria-label="Задача" use:grow
       onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), e.currentTarget.blur())}
       onchange={(e) => value(e).trim() && save({ title: value(e).replace(/\s*\n\s*/g, ' ').trim() })}></textarea>
-    <button class="icon-btn small-btn task-copy" onclick={() => copyText(asText())} aria-label="Копировать текст задачи" title="Копировать текст задачи"><Icon name="copy" size={16} /></button>
+    <button class="icon-btn small-btn task-copy" onclick={() => copyText(taskText(task))} aria-label="Копировать текст задачи" title="Копировать текст задачи"><Icon name="copy" size={16} /></button>
   </div>
   <!-- All the task's tags: the title's #words and the added ones; a removed #word leaves the title too -->
   <div class="task-tags">

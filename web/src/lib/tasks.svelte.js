@@ -230,5 +230,8 @@ export function openTaskMessage(t) {
   navigate(`/chat?c=${encodeURIComponent(t.messageChat)}&m=${t.messageId ?? ''}`);
 }
 
+/** The task as text, to copy: its title, description and subtasks (☐ / ☑). @param {Task} t */
+export const taskText = (t) =>
+  [t.title, t.notes ?? '', ...t.subtasks.map((s) => `${s.done ? '☑' : '☐'} ${s.title}`)].filter(Boolean).join('\n');
 /** "5:1.2" or "5:1.2–1.4". @param {Task} t */
 export const placeLabel = (t) => (t.ref ? (t.refEnd ? `${t.ref}–${t.refEnd.split(':')[1]}` : t.ref) : '');
