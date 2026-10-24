@@ -508,8 +508,8 @@ export const api = {
   deleteTask: (id) => request('DELETE', `/api/tasks/${id}`),
   /** @param {number[]} ids */
   orderTasks: (ids) => request('PUT', '/api/tasks/order', { ids }),
-  /** @param {number} id @param {string} title @returns {Promise<Task>} */
-  addSubtask: (id, title) => request('POST', `/api/tasks/${id}/subtasks`, { title }),
+  /** @param {number} id @param {string} title @param {boolean} [done] (ticked already: a task dropped into another) @returns {Promise<Task>} */
+  addSubtask: (id, title, done = false) => request('POST', `/api/tasks/${id}/subtasks`, done ? { title, done } : { title }),
   /** @param {number} id @param {number} sid @param {{ title?: string, done?: boolean }} patch @returns {Promise<Task>} */
   patchSubtask: (id, sid, patch) => request('PATCH', `/api/tasks/${id}/subtasks/${sid}`, patch),
   /** @param {number} id @param {number} sid @returns {Promise<Task>} */

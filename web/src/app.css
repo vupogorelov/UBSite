@@ -2721,9 +2721,6 @@ select.text-input:focus-visible {
 .tag-chip.from-title {
   border-style: dashed;
 }
-.task-tags {
-  position: relative;
-}
 .tasks-main {
   min-width: 0;
   overflow: auto;
@@ -2834,34 +2831,16 @@ select.text-input:focus-visible {
   right: 10px;
   bottom: 4px;
 }
-.kanban-foot .task-num {
-  flex: none;
-  margin-left: auto;
-  align-self: flex-end;
-}
 .task-row:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
   border-radius: var(--radius-xs);
-}
-.task-grip {
-  position: absolute;
-  left: -1.4rem;
-  top: 1rem;
-  color: var(--muted);
-  opacity: 0;
-}
-.task-row:hover .task-grip {
-  opacity: 0.7;
 }
 .task-row.dragging {
   opacity: 0.4;
 }
 .task-row.drop-before {
   box-shadow: inset 0 2px 0 var(--accent);
-}
-.task-group.drop-end {
-  box-shadow: inset 0 -2px 0 var(--accent);
 }
 .task-fold {
   display: inline-flex;
@@ -2928,8 +2907,11 @@ select.text-input:focus-visible {
   color: var(--muted);
   text-decoration: line-through;
 }
+/* (always there, pale: a phone has no hover) */
 .task-star {
-  opacity: 0;
+  align-self: flex-start; /* (at the top, beside ⧉) */
+  margin-top: -2px;
+  opacity: 0.35;
 }
 .task-star svg {
   width: 14px;
@@ -2956,14 +2938,9 @@ select.text-input:focus-visible {
   height: 14px;
 }
 .task-star.on svg,
-.task-star-mark svg,
 .tasks-star.on svg {
   fill: currentColor;
   color: var(--danger);
-}
-.task-star-mark {
-  display: inline-flex;
-  flex: none;
 }
 .task-meta {
   display: flex;
@@ -3015,6 +2992,105 @@ select.text-input:focus-visible {
   margin: 0;
   accent-color: var(--accent);
 }
+/* ---- A task's card has everything (TaskCard): the title written in place, #, subtasks, dragging ---- */
+.task-title-edit {
+  flex: 1;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  background: var(--ui-card);
+  color: var(--text);
+  font: inherit;
+  line-height: inherit;
+  resize: none;
+  overflow: hidden;
+}
+.task-meta > .task-tags-btn,
+.task-meta > .task-subs-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 24px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+}
+.task-meta > .task-tags-btn::before,
+.task-meta > .task-subs-btn::before {
+  content: none;
+}
+.task-meta > .task-tags-btn {
+  margin-left: 0.25rem;
+  font-weight: 600;
+}
+.task-tags-btn.on {
+  background: var(--ui-fill);
+  color: var(--text);
+}
+.task-subs-chev {
+  display: inline-flex;
+  transition: transform 0.15s;
+}
+.task-subs-chev.open {
+  transform: rotate(90deg);
+}
+.task-tags-edit {
+  margin-top: 0.4rem;
+}
+.task-sub {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 6px;
+}
+.task-sub > label {
+  flex: 1;
+  min-width: 0;
+}
+.task-sub-x {
+  flex: none;
+  color: var(--muted);
+  opacity: 0.6;
+}
+/* held to be dragged: no text selection, no system menu */
+.task-row,
+.kanban-card,
+.task-sub {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+/* dragging (lib/taskdrag.js): the copy at the finger, the place it left dimmed; the target — where it goes */
+.drag-ghost {
+  border-radius: 12px;
+  background: var(--ui-card);
+  box-shadow: 0 12px 28px -8px rgb(0 0 0 / 0.35);
+  opacity: 0.95;
+  list-style: none;
+}
+.drag-source {
+  opacity: 0.35;
+}
+.drop-into {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.drop-before {
+  box-shadow: inset 0 3px 0 var(--accent);
+}
+.drop-after {
+  box-shadow: inset 0 -3px 0 var(--accent);
+}
+.kanban-col.drop-col {
+  outline: 2px dashed var(--accent);
+  outline-offset: -4px;
+}
 .task-add-btn,
 .task-done-toggle {
   display: flex;
@@ -3048,45 +3124,7 @@ select.text-input:focus-visible {
   font: 500 15px var(--sans);
 }
 /* Editor (side drawer) */
-.task-editor {
-  display: grid;
-}
-.task-editor-title {
-  font-weight: 600;
-}
-.task-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.5rem 0.75rem;
-}
-.task-fields label {
-  display: grid;
-  gap: 0.2rem;
-  font-size: 12px;
-  color: var(--muted);
-}
-.task-place-input {
-  display: flex;
-  gap: 0.25rem;
-}
 /* a task made from a message: the way back to it */
-.task-from-msg {
-  display: grid;
-  gap: 0.2rem;
-  align-content: start;
-  font-size: 12px;
-  color: var(--muted);
-}
-.task-from-msg .link-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  justify-self: start;
-  font-size: 14px;
-}
-.field-error {
-  color: var(--danger);
-}
 .subtasks {
   display: grid;
   gap: 0.15rem;
@@ -3099,23 +3137,6 @@ select.text-input:focus-visible {
 }
 .subtask input[type='checkbox'] {
   accent-color: var(--accent);
-}
-.subtask-title {
-  flex: 1;
-  height: 28px;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: none;
-  color: var(--text);
-  font: 13px var(--sans);
-}
-.subtask-title:focus {
-  outline: none;
-  border-bottom-color: var(--accent);
-}
-.subtask-title.done {
-  color: var(--muted);
-  text-decoration: line-through;
 }
 /* Kanban */
 .kanban {
@@ -3156,41 +3177,7 @@ select.text-input:focus-visible {
 .kanban-card.dragging {
   opacity: 0.4;
 }
-.kanban-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
 
-.kanban-notes {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin: 0;
-  font: 12px/1.45 var(--sans);
-  color: var(--muted);
-}
-.kanban-foot {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-.kanban-foot .task-meta {
-  margin: 0;
-}
-.kanban-subs {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  margin-left: auto;
-  font: 12px var(--sans);
-  color: var(--muted);
-  white-space: nowrap;
-}
 .add-task-menu {
   left: 0;
   right: auto;
@@ -8014,18 +8001,23 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 /* A row swiped aside (a phone, lib/swipe.js swipeRow): it follows the finger; behind it, on the side it
    leaves, what the swipe will do — «Готово» (green) to the right, «Удалить» (red) to the left — bright
    once far enough. */
-.task-list {
+.task-list,
+.kanban-cards {
   overflow-x: clip;
 }
-.task-row.swipe-r,
-.task-row.swipe-l {
+/* (a kanban card the same: swiped left — «Удалить») */
+.kanban-card {
+  position: relative;
+}
+:is(.task-row, .kanban-card).swipe-r,
+:is(.task-row, .kanban-card).swipe-l {
   transform: translateX(var(--swipe-x, 0px));
 }
-.task-row.swipe-back {
+:is(.task-row, .kanban-card).swipe-back {
   transition: transform 0.2s ease;
 }
 .task-row.swipe-r::before,
-.task-row.swipe-l::after {
+:is(.task-row, .kanban-card).swipe-l::after {
   position: absolute;
   top: 0;
   bottom: 0;
@@ -8044,14 +8036,20 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   justify-content: flex-end;
   background: #15803d;
 }
-.task-row.swipe-l::after {
+:is(.task-row, .kanban-card).swipe-l::after {
   content: 'Удалить';
   left: calc(100% + 6px);
   background: #b42318;
 }
-.task-row.swipe-ready::before,
-.task-row.swipe-ready::after {
+:is(.task-row, .kanban-card).swipe-ready::before,
+:is(.task-row, .kanban-card).swipe-ready::after {
   opacity: 1;
+}
+/* a kanban card's number: at its bottom right */
+.kanban-num {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
 }
 .task-circle {
   width: 22px;
@@ -8087,99 +8085,9 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   box-shadow: none;
 }
 /* the editor */
-.task-editor {
-  gap: var(--space-3);
-}
-.task-editor :is(.text-input, .text-area),
-.task-editor .tag-input .tag-chips {
-  border-color: var(--ui-line);
-  border-radius: 16px;
-  background: var(--ui-card);
-}
-.task-editor .text-input {
-  height: 48px;
-  padding: 0 var(--space-4);
-  font-size: 15px;
-}
-.task-editor .text-area {
-  padding: var(--space-3) var(--space-4);
-  font-size: 15px;
-}
-.task-editor-title.text-input {
-  font: 600 16px var(--sans);
-}
 /* the title grows with its text (a textarea, sized by TaskEditor's grow); ⧉ at its top right */
-.task-editor-head {
-  position: relative;
-}
-.task-editor-head .task-editor-title {
-  display: block;
-  width: 100%;
-  min-height: 44px;
-  padding: 11px 44px 11px var(--space-3);
-  line-height: 22px;
-  overflow: hidden;
-  resize: none;
-}
-.task-editor-head .task-copy {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  color: var(--muted);
-}
 /* the description folded: its first line, a tap opens it */
-.task-notes-fold {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-height: 44px;
-  padding: 0 var(--space-3);
-  border: 1px solid var(--ui-line);
-  border-radius: 16px;
-  background: var(--ui-card);
-  color: var(--text);
-  font: 14px var(--sans);
-  text-align: left;
-  cursor: pointer;
-}
-.task-notes-fold > .ellipsis {
-  flex: 1;
-  min-width: 0;
-}
-.task-notes-fold.empty {
-  color: var(--muted);
-}
-.task-notes-fold > svg {
-  flex: none;
-  transform: rotate(90deg);
-  color: var(--muted);
-}
 /* its number: small and pale, at the bottom right */
-.task-id {
-  justify-self: end;
-  margin-top: calc(-1 * var(--space-2));
-  color: var(--muted);
-  font: 11px var(--sans);
-  opacity: 0.6;
-}
-.task-editor .ui-label {
-  margin: var(--space-1) var(--space-1) 0;
-}
-.task-editor .subtasks {
-  padding: var(--space-2) var(--space-3);
-  border-radius: 16px;
-  background: var(--ui-fill);
-}
-.task-editor-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--space-2);
-  margin-top: var(--space-2);
-}
-.task-editor-actions .ui-btn {
-  height: 48px;
-  font-size: 15px;
-}
 .ui-btn.danger-text {
   border-color: var(--danger);
   color: var(--danger);
@@ -8226,12 +8134,6 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 .task-row {
   padding-left: var(--space-3);
-}
-.task-editor .task-fields label > span:first-child,
-.task-editor .task-from-msg > span {
-  margin: 0 var(--space-1);
-  color: var(--muted);
-  font: 500 13px/18px var(--sans);
 }
 .tasks-search:focus-within {
   border-color: color-mix(in srgb, var(--text) 30%, transparent);
@@ -12900,15 +12802,6 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 }
 .kanban-card .task-title {
   font: 400 1em/1.4 var(--sans);
-}
-.kanban-notes,
-.kanban-foot .task-meta,
-.kanban-subs {
-  font-size: 0.86em;
-}
-.kanban-foot .task-meta .kanban-subs,
-.kanban-foot .task-meta * {
-  font-size: inherit;
 }
 
 /* The tasks' list in one size, --task-list-font-size (pinched with two fingers, TasksPage): the title,

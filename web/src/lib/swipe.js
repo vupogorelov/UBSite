@@ -149,6 +149,8 @@ export function swipeRow(node, opts) {
   /** @param {TouchEvent} e */
   function move(e) {
     if (mine === false) return;
+    // (a task being dragged — lib/taskdrag.js: not a swipe)
+    if (document.documentElement.dataset.dragging === '1') return void (mine = false);
     const dx = e.touches[0].clientX - x0;
     const dy = e.touches[0].clientY - y0;
     if (mine === null) {

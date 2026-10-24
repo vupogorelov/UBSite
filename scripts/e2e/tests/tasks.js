@@ -1,8 +1,8 @@
 // @ts-check
-// Tasks without a network: a task, a subtask made and ticked before it was sent; after a reload still
-// there; back online — on the server once, the subtask done; another device of the person gets the
-// task through the feed.
-import { openControlled } from '../lib.js';
+// Tasks without a network: two tasks, the second dragged into the first — its subtask — and ticked in the
+// card, all before anything was sent; after a reload still there; back online — on the server once, the
+// subtask done, the second task gone; another device of the person gets the task through the feed.
+import { openControlled, until } from '../lib.js';
 
 export default {
   name: 'Задачи без сети',
@@ -13,41 +13,51 @@ export default {
     await openControlled(a.page, '/tasks');
     await openControlled(b.page, '/tasks');
     await a.page.waitForTimeout(2000);
-    const title = `Задача без сети ${t.kind} ${Date.now().toString(36)}`;
-    const sub = 'Шаг первый';
+    const stamp = `${t.kind} ${Date.now().toString(36)}`;
+    const title = `Задача без сети ${stamp}`;
+    const sub = `Шаг первый ${stamp}`;
+    /** A new task, at the top of the list. @param {string} text */
+    const add = async (text) => {
+      // (after a task is added its field stays open for the next one)
+      if (!(await a.page.locator('input[aria-label="Новая задача"]').count())) await a.page.locator('.task-add-btn').click();
+      await a.page.locator('input[aria-label="Новая задача"]').fill(text);
+      await a.page.locator('input[aria-label="Новая задача"]').press('Enter');
+      await until(async () => (await a.page.getByText(text).count()) > 0, { timeout: 5000 });
+    };
+    const row = (/** @type {string} */ text) => a.page.locator('.task-list .task-row', { has: a.page.locator('.task-title', { hasText: text }) });
 
     await a.ctx.setOffline(true);
-    await a.page.locator('.task-add-btn').click();
-    await a.page.locator('input[aria-label="Новая задача"]').fill(title);
-    await a.page.locator('input[aria-label="Новая задача"]').press('Enter');
-    await a.page.waitForTimeout(500);
+    await add(title);
     t.check('без сети: задача сразу в списке', (await a.page.getByText(title).count()) > 0);
-    await a.page.getByText(title).first().click();
-    await a.page.waitForTimeout(500);
-    await a.page.locator('input[aria-label="Новая подзадача"]').fill(sub);
-    await a.page.locator('input[aria-label="Новая подзадача"]').press('Enter');
-    await a.page.waitForTimeout(500);
-    await a.page.locator('.drawer input[aria-label="Готово"]').first().check();
-    await a.page.waitForTimeout(500);
-    t.check('без сети: подзадача отмечена', await a.page.locator('.drawer input[aria-label="Готово"]').first().isChecked());
+    await add(sub);
+    // the second dragged onto the first's middle (a mouse: press, move, release — lib/taskdrag.js)
+    const from = await row(sub).boundingBox();
+    const to = await row(title).boundingBox();
+    if (from && to) {
+      await a.page.mouse.move(from.x + from.width / 2, from.y + from.height * 0.6);
+      await a.page.mouse.down();
+      for (let i = 1; i <= 10; i++) await a.page.mouse.move(from.x + from.width / 2, from.y + from.height * 0.6 + ((to.y + to.height / 2) - (from.y + from.height * 0.6)) * (i / 10));
+      await a.page.mouse.up();
+    }
+    const tick = () => row(title).locator('.task-sub input[type="checkbox"]').first();
+    await until(async () => (await tick().count()) === 1, { timeout: 5000 });
+    t.check('без сети: перетащенная задача — подзадача первой, второй задачи больше нет', (await tick().count()) === 1 && (await row(sub).count()) === 0);
+    await tick().check();
+    await until(async () => await tick().isChecked(), { timeout: 3000 });
+    t.check('без сети: подзадача отмечена в карточке', await tick().isChecked());
 
     await a.page.reload({ waitUntil: 'load' }).catch(() => {});
-    await a.page.waitForTimeout(2500);
-    await a.page.getByText(title).first().click();
-    await a.page.waitForTimeout(500);
-    t.check('после перезагрузки: задача и отмеченная подзадача на месте',
-      (await a.page.locator('.drawer').getByText(title).count()) + (await a.page.locator('.drawer input[aria-label="Подзадача"]').count()) >= 1 &&
-        (await a.page.locator('.drawer input[aria-label="Готово"]').first().isChecked().catch(() => false)));
-    await a.page.keyboard.press('Escape');
+    await until(async () => (await tick().count()) === 1, { timeout: 10000 });
+    t.check('после перезагрузки: задача и отмеченная подзадача на месте', (await tick().isChecked().catch(() => false)) === true);
 
     await a.ctx.setOffline(false);
-    await a.page.waitForTimeout(5000);
-    const onServer = await a.page.evaluate(async (/** @type {string} */ ti) => {
-      const r = await fetch('/api/tasks', { cache: 'no-store' }).then((x) => x.json());
-      return r.tasks.filter((/** @type {any} */ x) => x.title === ti).map((/** @type {any} */ x) => ({ uid: x.uid, subtasks: x.subtasks }));
-    }, title);
-    t.check('связь вернулась: на сервере одна задача со своим uid, подзадача выполнена',
-      onServer.length === 1 && !!onServer[0].uid && onServer[0].subtasks.length === 1 && onServer[0].subtasks[0].done === true, onServer);
+    /** @returns {Promise<{ uid: string, title: string, subtasks: { title: string, done: boolean }[] }[]>} */
+    const server = () => a.page.evaluate(async () => (await fetch('/api/tasks', { cache: 'no-store' }).then((x) => x.json())).tasks);
+    await until(async () => (await server()).some((x) => x.title === title && x.subtasks.length === 1 && x.subtasks[0].done), { timeout: 15000, every: 500 });
+    const all = await server();
+    const onServer = all.filter((x) => x.title === title);
+    t.check('связь вернулась: на сервере одна задача со своим uid, подзадача выполнена, второй задачи нет',
+      onServer.length === 1 && !!onServer[0].uid && onServer[0].subtasks.length === 1 && onServer[0].subtasks[0].done === true && !all.some((x) => x.title === sub), onServer);
 
     await b.page.evaluate(() => dispatchEvent(new Event('online')));
     await b.page.waitForTimeout(1500);

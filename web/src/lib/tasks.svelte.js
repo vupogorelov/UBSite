@@ -156,12 +156,52 @@ export async function deleteTask(id) {
   const a = addr(id);
   change(op('DELETE', `/api/tasks/${a}`, null), () => api.deleteTask(/** @type {any} */ (a)));
 }
-/** @param {number} id @param {string} title */
-export const addSubtask = async (id, title) => {
+/** @param {number} id @param {string} title @param {boolean} [done] ticked already */
+export const addSubtask = async (id, title, done = false) => {
   const a = addr(id);
-  change(op('POST', `/api/tasks/${a}/subtasks`, { title }), () => api.addSubtask(/** @type {any} */ (a), title));
+  change(op('POST', `/api/tasks/${a}/subtasks`, done ? { title, done } : { title }), () => api.addSubtask(/** @type {any} */ (a), title, done));
   return found(id);
 };
+
+// ---- Subtasks by dragging (TasksPage): a task dropped onto another, a subtask dragged out ----
+// (made of the changes there are — each goes through the queue, with or without a network)
+
+/**
+ * A task dropped onto another: it and its own subtasks become the other's subtasks (one level: done ones
+ * stay ticked), and it goes.
+ * @param {number} childId @param {number} parentId
+ */
+export async function nestTask(childId, parentId) {
+  const child = found(childId);
+  if (!child || childId === parentId || !found(parentId)) return;
+  await addSubtask(parentId, child.title, child.status === 'done');
+  for (const s of child.subtasks) await addSubtask(parentId, s.title, s.done);
+  await deleteTask(childId);
+}
+
+/** A subtask dropped onto another task: it goes there. @param {number} from @param {number} sid @param {number} to */
+export async function moveSubtask(from, sid, to) {
+  const s = found(from)?.subtasks.find((x) => x.id === sid);
+  if (!s || from === to || !found(to)) return;
+  await addSubtask(to, s.title, s.done);
+  await deleteSubtask(from, sid);
+}
+
+/**
+ * A subtask dragged out of its task: a task of its own (done if it was ticked; `status` — the kanban column
+ * it was dropped in). The new task is returned (its place in the order is the caller's).
+ * @param {number} from @param {number} sid @param {import('./api.js').TaskStatus} [status]
+ */
+export async function unnestSubtask(from, sid, status) {
+  const parent = found(from);
+  const s = parent?.subtasks.find((x) => x.id === sid);
+  if (!parent || !s) return null;
+  const t = await createTask({ title: s.title });
+  const want = s.done ? 'done' : (status ?? 'todo');
+  if (want !== 'todo') await patchTask(t.id, { status: want });
+  await deleteSubtask(from, sid);
+  return t;
+}
 /** The change that made a subtask not sent yet (its local id), if any. @param {number} id @param {number} sid */
 const waitingSubtask = (id, sid) => (sid < 0 ? /** @type {any} */ (found(id)?.subtasks.find((s) => s.id === sid))?.op : undefined);
 /** @param {number} id @param {number} sid @param {{ title?: string, done?: boolean }} patch */

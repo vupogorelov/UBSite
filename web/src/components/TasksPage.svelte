@@ -1,17 +1,16 @@
 <script>
   import { onMount } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { copyText } from '../lib/notes.svelte.js';
-  import { taskText, tasks, loadTasks, createTask, patchTask, patchSubtask, deleteTask, orderTasks, placeLabel, openTaskMessage, taskTags, tagCounts, localTaskId } from '../lib/tasks.svelte.js';
+  import { tasks, loadTasks, createTask, patchTask, deleteTask, orderTasks, taskTags, tagCounts, nestTask, moveSubtask, unnestSubtask } from '../lib/tasks.svelte.js';
   import { swipeRow } from '../lib/swipe.js';
+  import { taskDrag } from '../lib/taskdrag.js';
   import { showToast } from '../lib/toast.svelte.js';
-  import { titleTags, titleParts } from '../../../shared/tasktags.js';
+  import { titleTags } from '../../../shared/tasktags.js';
   import { navigate, route, lastPath } from '../lib/router.svelte.js';
   import Icon from './Icon.svelte';
   import { pinchFont } from '../lib/pinch.js';
   import { settings, setSetting } from '../lib/settings.svelte.js';
-  import Drawer from './Drawer.svelte';
-  import TaskEditor from './TaskEditor.svelte';
+  import TaskCard from './TaskCard.svelte';
 
   /** @typedef {import('../lib/api.js').Task} Task */
 
@@ -31,7 +30,6 @@
     if (!searching) query = '';
   }
   let refFilter = $state(/** @type {string | null} */ (null));
-  let expanded = $state(/** @type {number | null} */ (null));
   let showDone = $state(false);
   /** The star by the search: only the important ones (with a tag chosen, among its tasks). */
   let onlyImportant = $state(false);
@@ -46,7 +44,6 @@
   /** @param {'list' | 'kanban'} v */
   function setView(v) {
     view = v;
-    expanded = null;
     try {
       localStorage.setItem(VIEW_KEY, v);
     } catch {}
@@ -87,8 +84,6 @@
 
   // Counters in the navigation.
   const open = $derived(tasks.items.filter((t) => t.status !== 'done'));
-  /** The chat's marks as tags (a marked message is its marker's task): drawn in the marks' colors. */
-  const MARKS = ['take', 'work', 'done'];
   /** A tag's section: "tag:<name>". */
   const sectionTag = $derived(section.startsWith('tag:') ? section.slice(4) : null);
   const sectionTitle = $derived(sectionTag ? `#${sectionTag}` : 'Задачи');
@@ -100,7 +95,6 @@
   /** A tag's tasks; the chosen tag again — all the tasks. @param {string} tag */
   function showTag(tag) {
     section = section === `tag:${tag}` ? 'all' : `tag:${tag}`;
-    expanded = null;
   }
 
   // ---- Quick add: the new task takes the section's context (in a tag's section — the tag) ----
@@ -121,30 +115,40 @@
   /** Kanban: the column whose "+ Добавить задачу" is open. */
   let addingIn = $state(/** @type {import('../lib/api.js').TaskStatus | null} */ (null));
 
-  // ---- Kanban: drag between columns (status) and within one (order) ----
+  // ---- Kanban: its columns (a task dragged to one takes its status) ----
   const COLUMNS = /** @type {const} */ ([['todo', 'Нужно сделать'], ['doing', 'В работе'], ['done', 'Готово']]);
   /** @param {import('../lib/api.js').TaskStatus} s */
   const column = (s) => shown.filter((t) => t.status === s).sort(s === 'done' ? (a, b) => (b.doneAt ?? '').localeCompare(a.doneAt ?? '') : byOrder);
-  let dragId = $state(/** @type {number | null} */ (null));
-  let overCol = $state(/** @type {string | null} */ (null));
-  /** @param {import('../lib/api.js').TaskStatus} status @param {number | null} beforeId */
-  async function dropTo(status, beforeId) {
-    const id = dragId;
-    dragId = overCol = null;
-    if (id === null) return;
-    const t = tasks.items.find((x) => x.id === id);
-    if (!t) return;
-    if (t.status !== status) await patchTask(id, { status });
-    if (status === 'done') return;
-    const ids = column(status).map((x) => x.id).filter((x) => x !== id);
-    ids.splice(beforeId === null ? ids.length : Math.max(0, ids.indexOf(beforeId)), 0, id);
+
+  // ---- Dragging (lib/taskdrag.js), in the list and on the kanban alike ----
+  // A task onto another's middle — its subtask (with its own subtasks); near its top / bottom — before / after
+  // it (on the kanban: in its column); onto a column — there, at its end. A subtask out of its card — a task
+  // of its own, there; onto another task — that task's subtask.
+  /**
+   * The open tasks in order with `id` put before / after `near` (null — at the end): the list's, or a column's.
+   * @param {number} id @param {import('../lib/api.js').TaskStatus} status @param {number | null} near @param {'before' | 'after' | 'into'} [zone]
+   */
+  async function place(id, status, near, zone = 'before') {
+    if (status === 'done') return; // (the done ones go by when they were done)
+    const ids = (view === 'list' ? active : column(status)).map((x) => x.id).filter((x) => x !== id);
+    const i = near === null ? ids.length : ids.indexOf(near);
+    ids.splice(i < 0 ? ids.length : zone === 'after' ? i + 1 : i, 0, id);
     await orderTasks(ids);
   }
-  // The editor opens in a side drawer from both views.
-  // (a task made here keeps its card open when the server numbers it: found by its own id then)
-  const editing = $derived(expanded !== null ? tasks.items.find((t) => t.id === expanded || (!!t.uid && localTaskId(t.uid) === expanded)) ?? null : null);
-  /** Tasks whose subtasks are folded (by default they are shown, as in the reference). */
-  const folded = new SvelteSet();
+  /** @param {import('../lib/taskdrag.js').DragWhat} what @param {import('../lib/taskdrag.js').DropAt} at */
+  async function dropped(what, at) {
+    const target = at.type === 'task' ? tasks.items.find((x) => x.id === at.id) : null;
+    const status = /** @type {import('../lib/api.js').TaskStatus} */ (at.type === 'col' ? at.status : (target?.status ?? 'todo'));
+    if (what.kind === 'task') {
+      if (at.type === 'task' && at.zone === 'into') return nestTask(what.id, at.id);
+      const t = tasks.items.find((x) => x.id === what.id);
+      if (t && t.status !== status) await patchTask(t.id, { status });
+      return place(what.id, status, at.type === 'task' ? at.id : null, at.type === 'task' ? at.zone : 'before');
+    }
+    if (at.type === 'task' && at.zone === 'into') return moveSubtask(what.parent, what.id, at.id);
+    const made = await unnestSubtask(what.parent, what.id, status);
+    if (made) await place(made.id, status, at.type === 'task' ? at.id : null, at.type === 'task' ? at.zone : 'before');
+  }
   let adding = $state(false);
   /** @param {Task} t */
   const toggleDone = (t) => patchTask(t.id, { status: t.status === 'done' ? 'todo' : 'done' });
@@ -164,30 +168,6 @@
     }, 6500);
   }
 
-  // ---- List: drag to reorder ----
-  let dragRow = $state(/** @type {{ id: number, group: string } | null} */ (null));
-  let overRow = $state(/** @type {string | null} */ (null)); // "group:id" or "group:end"
-  /** @param {string} group */
-  const canDrop = (group) => dragRow !== null && dragRow.group === group;
-  /** @param {DragEvent} e @param {string} group @param {number | 'end'} at */
-  function dragOverRow(e, group, at) {
-    if (!canDrop(group)) return;
-    e.preventDefault();
-    e.stopPropagation();
-    overRow = `${group}:${at}`;
-  }
-  /** @param {string} group @param {number | null} beforeId */
-  async function dropRow(group, beforeId) {
-    const d = dragRow;
-    const allowed = canDrop(group);
-    dragRow = null;
-    overRow = null;
-    if (!d || !allowed || d.id === beforeId) return;
-    const target = groups.find((g) => g[0] === group)?.[2] ?? [];
-    const ids = target.map((t) => t.id).filter((id) => id !== d.id);
-    ids.splice(beforeId === null ? ids.length : Math.max(0, ids.indexOf(beforeId)), 0, d.id);
-    await orderTasks(ids);
-  }
   /** Alt+↑/↓ on a focused row moves it within its group. @param {KeyboardEvent} e @param {Task} t @param {string} group */
   async function moveByKey(e, t, group) {
     if (!e.altKey || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
@@ -209,85 +189,20 @@
   </button>
 {/snippet}
 
-{#snippet title(/** @type {Task} */ t)}
-  <!-- the title with its #tags drawn in place; a tag opens its section (the rest of the title — the details) -->
-  <button class="task-title" onclick={() => (expanded = t.id)}>
-    {#each titleParts(t.title) as p, i (i)}
-      {#if p.tag}
-        {@const tag = p.tag}
-        <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
-        <span class="task-tag" data-mark={MARKS.includes(tag) ? tag : undefined} title="Задачи с меткой #{tag}" onclick={(e) => (e.stopPropagation(), showTag(tag))}>{p.text}</span>
-      {:else}{p.text}{/if}
-    {/each}
-  </button>
-{/snippet}
-
-{#snippet meta(/** @type {Task} */ t)}
-  <!-- the tags added in the details (the title's are in the title already) -->
-  {@const added = t.tags.filter((x) => !titleTags(t.title).includes(x))}
-  {#if t.ref || t.collectionId || t.messageChat || added.length}
-    <div class="task-meta">
-      {#if t.messageChat}
-        <a class="task-place" href="/chat?c={encodeURIComponent(t.messageChat)}" onclick={(e) => (e.preventDefault(), openTaskMessage(t))}
-          title="Открыть сообщение, из которого сделана задача"><Icon name="discuss" size={12} />{t.messageChatTitle ?? 'сообщение'}</a>
-      {/if}
-      {#if t.ref}
-        <a class="task-place" href="/{t.ref}" onclick={(e) => (e.preventDefault(), navigate(`/${t.ref}`))} title={t.paperTitle ?? 'Открыть в книге'}>
-          <Icon name="book-open" size={12} />{placeLabel(t)}
-        </a>
-      {/if}
-      {#if t.collectionId}
-        <a class="task-place" href="/c/{t.collectionId}" onclick={(e) => (e.preventDefault(), navigate(`/c/${t.collectionId}`))}><Icon name="layers" size={12} />{t.collectionTitle ?? 'подборка'}</a>
-      {/if}
-      {#each added as tag (tag)}<button class="task-tag" data-mark={MARKS.includes(tag) ? tag : undefined} onclick={() => showTag(tag)} title="Задачи с меткой #{tag}">#{tag}</button>{/each}
-    </div>
-  {/if}
-{/snippet}
-
 {#snippet row(/** @type {Task} */ t, /** @type {string | null} */ group)}
-  {@const subsOpen = t.subtasks.length > 0 && !folded.has(t.id)}
   <!-- (a row is focused on purpose: Alt+arrows move it in the list — a keyboard reorder) -->
+  <!-- An open task's row: held and dragged — another place, or into another task; a target for both
+       (data-drop: lib/taskdrag.js). A done one: neither. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
   <li class="task-row" class:is-done={t.status === 'done'} id="task-{t.id}" tabindex={group !== null ? 0 : -1}
     use:swipeRow={{ onright: () => toggleDone(t), onleft: () => removeSoon(t) }}
     data-swipe-right={t.status === 'done' ? 'Вернуть' : 'Готово'}
-    class:dragging={dragRow?.id === t.id} class:drop-before={group !== null && overRow === `${group}:${t.id}`}
-    draggable={group !== null}
-    ondragstart={(e) => group !== null && ((dragRow = { id: t.id, group }), e.dataTransfer?.setData('text/plain', String(t.id)))}
-    ondragend={() => ((dragRow = null), (overRow = null))}
-    ondragover={(e) => group !== null && dragOverRow(e, group, t.id)}
-    ondrop={(e) => group !== null && (e.preventDefault(), e.stopPropagation(), dropRow(group, t.id))}
+    data-drop={group !== null ? `task:${t.id}` : undefined}
+    use:taskDrag={{ what: { kind: 'task', id: t.id }, ondrop: dropped, enabled: group !== null }}
     onkeydown={(e) => group !== null && e.target === e.currentTarget && moveByKey(e, t, group)}>
-    {#if group !== null}<span class="task-grip" aria-hidden="true" title="Перетащите, чтобы изменить порядок"><Icon name="grip" size={14} /></span>{/if}
-    {#if t.subtasks.length}
-      <span class="task-fold">
-        <button class="icon-btn small-btn" class:open={subsOpen} onclick={() => (folded.has(t.id) ? folded.delete(t.id) : folded.add(t.id))}
-          aria-label={subsOpen ? 'Свернуть подзадачи' : 'Показать подзадачи'} aria-expanded={subsOpen}><Icon name="chevron" size={14} /></button>
-      </span>
-    {/if}
     {@render check(t)}
     <div class="task-body">
-      <div class="task-line">
-        {@render title(t)}
-        {#if t.status === 'doing'}<span class="status-badge" data-status="voting">в работе</span>{/if}
-        <span class="spacer"></span>
-        <button class="icon-btn small-btn task-star" class:on={t.important} onclick={() => patchTask(t.id, { important: !t.important })}
-          aria-label={t.important ? 'Убрать из важных' : 'Важная'} title={t.important ? 'Убрать из важных' : 'Важная'}><Icon name="star" size={14} /></button>
-        <!-- ⧉ at the card's top right: the task's text copied -->
-        <button class="icon-btn small-btn task-copy-row" onclick={() => copyText(taskText(t))} aria-label="Копировать текст задачи" title="Копировать текст задачи"><Icon name="copy" size={14} /></button>
-      </div>
-      {@render meta(t)}
-      {#if subsOpen}
-        <ul class="task-subs">
-          {#each t.subtasks as s (s.id)}
-            <li>
-              <label class:done={s.done}>
-                <input type="checkbox" checked={s.done} onchange={(e) => patchSubtask(t.id, s.id, { done: e.currentTarget.checked })} />{s.title}
-              </label>
-            </li>
-          {/each}
-        </ul>
-      {/if}
+      <TaskCard task={t} onshowtag={showTag} ondrop={dropped} />
     </div>
     <!-- its number, small and pale at the bottom right (once the server has numbered it) -->
     {#if t.id > 0}<span class="task-num" aria-label="Задача номер {t.id}">#{t.id}</span>{/if}
@@ -298,7 +213,7 @@
   <nav class="tasks-nav" aria-label="Разделы задач">
     <button class="link-btn tasks-back" onclick={() => navigate(lastPath().startsWith('/tasks') ? '/0' : lastPath(), { root: true })}><Icon name="back" size={16} />К книге</button>
     <!-- (the phone's strip: only the tags — the chosen one again shows all) -->
-    <button class="tasks-nav-item tasks-nav-all" class:active={section === 'all'} onclick={() => ((section = 'all'), (expanded = null))}>
+    <button class="tasks-nav-item tasks-nav-all" class:active={section === 'all'} onclick={() => (section = 'all')}>
       <Icon name="inbox" size={16} /><span>Все задачи</span>{#if open.length}<span class="tasks-count">{open.length}</span>{/if}
     </button>
     <!-- Tags as sections: #words in the titles and the tags of the details -->
@@ -370,8 +285,7 @@
           </p>
         {/if}
         {#each groups as [key, , list] (key)}
-          <section class="task-group" role="group" aria-label="Задачи" class:drop-end={overRow === `${key}:end`}
-            ondragover={(e) => dragOverRow(e, key, 'end')} ondrop={(e) => (e.preventDefault(), dropRow(key, null))}>
+          <section class="task-group" role="group" aria-label="Задачи">
             <ol class="task-list">{#each list as t (t.id)}{@render row(t, key)}{/each}</ol>
           </section>
         {/each}
@@ -387,9 +301,8 @@
         <div class="kanban" use:pinchFont={{ get: () => settings.kanbanFontSize, set: (px) => setSetting('kanbanFontSize', px), min: 10, max: 20, anchor: '.kanban-card' }}>
           {#each COLUMNS as [status, label] (status)}
             {@const cards = column(status)}
-            <section class="kanban-col" class:over={overCol === status}
-              ondragover={(e) => (e.preventDefault(), (overCol = status))} ondragleave={(e) => e.currentTarget === e.target && (overCol = null)}
-              ondrop={(e) => (e.preventDefault(), dropTo(status, null))} aria-label={label}>
+            <!-- (a task dropped onto a column — there, at its end: data-drop, lib/taskdrag.js) -->
+            <section class="kanban-col" data-drop="col:{status}" aria-label={label}>
               <header class="kanban-title"><span>{label}</span><span class="muted">{cards.length}</span></header>
               <div class="kanban-cards">
                 <!-- a new task goes first: the field is above the cards, as in the list -->
@@ -409,19 +322,12 @@
                   {/if}
                 {/if}
                 {#each cards as t (t.id)}
-                  <article class="kanban-card" class:dragging={dragId === t.id} draggable="true"
-                    ondragstart={(e) => ((dragId = t.id), e.dataTransfer?.setData('text/plain', String(t.id)))} ondragend={() => (dragId = overCol = null)}
-                    ondrop={(e) => (e.preventDefault(), e.stopPropagation(), dropTo(status, t.id))}>
-                    <div class="kanban-card-head">
-                      {@render title(t)}
-                      {#if t.important}<span class="task-star-mark" title="Важная"><Icon name="star" size={14} /></span>{/if}
-                    </div>
-                    {#if t.notes}<p class="kanban-notes">{t.notes}</p>{/if}
-                    <div class="kanban-foot">
-                      {@render meta(t)}
-                      {#if t.subtasks.length}<span class="kanban-subs"><Icon name="check-square" size={13} />{t.subtasks.filter((s) => s.done).length}/{t.subtasks.length}</span>{/if}
-                      {#if t.id > 0}<span class="task-num" aria-label="Задача номер {t.id}">#{t.id}</span>{/if}
-                    </div>
+                  <!-- the same card as in the list: held and dragged, swiped left — deleted -->
+                  <article class="kanban-card" data-drop="task:{t.id}"
+                    use:taskDrag={{ what: { kind: 'task', id: t.id }, ondrop: dropped }}
+                    use:swipeRow={{ onleft: () => removeSoon(t) }}>
+                    <TaskCard task={t} onshowtag={showTag} ondrop={dropped} />
+                    {#if t.id > 0}<span class="task-num kanban-num" aria-label="Задача номер {t.id}">#{t.id}</span>{/if}
                   </article>
                 {/each}
               </div>
@@ -432,9 +338,3 @@
     </div>
   </main>
 </div>
-
-{#if editing}
-  <Drawer title="Задача" subtitle={editing.status === 'done' ? 'Выполнена' : ''} onclose={() => (expanded = null)}>
-    <TaskEditor task={editing} onclose={() => (expanded = null)} />
-  </Drawer>
-{/if}
