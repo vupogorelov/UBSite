@@ -54,7 +54,8 @@
 <div class="task-line">
   {#if editing}
     <!-- (Enter saves, Esc leaves it as it was) -->
-    <textarea bind:this={field} class="task-title-edit" rows="1" value={t.title} use:grow aria-label="Название задачи"
+    <!-- (cols 1: no width of its own — it takes the title's place, not its 20 characters' width) -->
+    <textarea bind:this={field} class="task-title-edit" rows="1" cols="1" value={t.title} use:grow aria-label="Название задачи"
       onkeydown={(e) => (e.key === 'Enter' ? (e.preventDefault(), save()) : e.key === 'Escape' && (editing = false))} onblur={save}></textarea>
   {:else}
     <!-- the title with its #tags drawn in place: a tag — its tasks, the rest — written anew -->
@@ -68,8 +69,9 @@
       {/each}
     </button>
   {/if}
-  {#if t.status === 'doing'}<span class="status-badge" data-status="voting">в работе</span>{/if}
-  <span class="spacer"></span>
+  {#if t.status === 'doing' && !editing}<span class="status-badge" data-status="voting">в работе</span>{/if}
+  <!-- (written: the field itself takes the room) -->
+  {#if !editing}<span class="spacer"></span>{/if}
   <button class="icon-btn small-btn task-star" class:on={t.important} onclick={() => patchTask(t.id, { important: !t.important })}
     aria-pressed={t.important} aria-label={t.important ? 'Убрать из важных' : 'Важная'} title={t.important ? 'Убрать из важных' : 'Важная'}><Icon name="star" size={14} /></button>
   <!-- ⧉ at the card's top right: the task's text copied -->
