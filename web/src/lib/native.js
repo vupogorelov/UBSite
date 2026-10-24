@@ -14,8 +14,9 @@ const w = typeof window === 'undefined' ? {} : window;
 /**
  * @typedef {{ version(): number, voices(): string, speak(id: string, text: string, lang: string, voice: string, rate: number, pitch: number, volume: number): void,
  *   cancel(): void, player(playing: boolean): void, meta(title: string, album: string): void, end(): void, bars(top: string, bottom: string): void,
- *   server(): string, setServer(url: string): void, appVersion?(): string }} Bridge
- * (version 2 and later: appVersion, and a download — the app's APK — goes to the system browser)
+ *   server(): string, setServer(url: string): void, appVersion?(): string, installApp?(url: string): void }} Bridge
+ * (version 2 and later: appVersion, and a download — the app's APK — goes to the system browser; 5: installApp —
+ * the app downloads its update itself and hands it to the system's installer)
  */
 /** @type {Bridge | null} */
 export const native = w.UBNative ?? null;
@@ -53,6 +54,12 @@ let onCommand = null;
 /** @param {(cmd: 'play' | 'pause' | 'next' | 'prev' | 'close') => void} fn */
 export function setCommandHandler(fn) {
   onCommand = /** @type {(cmd: string) => void} */ (fn);
+}
+/** The app's update being downloaded: "<percent>", "install", "error:<why>". @type {((state: string) => void) | null} */
+let onUpdate = null;
+/** @param {(state: string) => void} fn */
+export function setUpdateHandler(fn) {
+  onUpdate = fn;
 }
 
 export const nativeSynth = native && {
@@ -95,6 +102,7 @@ if (native && nativeSynth) {
   /** @param {string} type @param {string} id */
   w.__ubNative = (type, id) => {
     if (type === 'cmd') return onCommand?.(id);
+    if (type === 'update') return onUpdate?.(id);
     if (type === 'voices') {
       voiceList = null;
       for (const fn of voicesChanged) fn();

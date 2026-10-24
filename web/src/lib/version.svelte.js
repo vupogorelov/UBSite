@@ -5,7 +5,7 @@
 // - the Android app (android/): the site serves its APK and /app/version.json with its version; the app
 //   tells its own (native.appVersion) — a newer one is installed (`install`), the system asks.
 // Both are checked with the bell's polling (a minute, and on coming back to the app).
-import { native } from './native.js';
+import { native, setUpdateHandler } from './native.js';
 import { showToast } from './toast.svelte.js';
 
 /* global __BUILD_ID__ */
@@ -42,8 +42,20 @@ export function restart() {
   location.reload();
 }
 
-/** Installs the newest Android app: its APK is downloaded, the system offers to install it over this one. */
+/**
+ * Installs the newest Android app over this one. The app 1.8 and later downloads it itself and opens the
+ * system's installer (no browser between; how much is downloaded — in a toast); older ones — through the browser.
+ */
 export function install() {
-  if (canInstall) location.href = '/app/upexplorer.apk';
+  if (native?.installApp && native.version() >= 5) {
+    showToast('Загружается обновление…');
+    native.installApp(`${location.origin}/app/upexplorer.apk`);
+  } else if (canInstall) location.href = '/app/upexplorer.apk';
   else showToast('Один раз — через Chrome: Ещё → Android приложение');
 }
+setUpdateHandler((state) => {
+  if (state === 'install') showToast('Установка…');
+  else if (state === 'error:cancelled') showToast('Установка отменена');
+  else if (state.startsWith('error:')) showToast(`Обновление не установлено: ${state.slice(6)}`);
+  else showToast(`Загружается обновление · ${state} %`);
+});

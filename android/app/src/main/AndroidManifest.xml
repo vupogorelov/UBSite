@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Its own update: the newer APK handed to the system's installer (Updater) -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- The engines of speech synthesis (Android 11+ shows an app only the apps it declares). -->
     <queries>
@@ -42,6 +44,11 @@
             android:authorities="ubsite.app.share"
             android:exported="false"
             android:grantUriPermissions="true" />
+
+        <!-- The installer's answer to the app's own update (Updater) -->
+        <receiver
+            android:name=".Updater$Result"
+            android:exported="false" />
 
         <service
             android:name=".PlayerService"

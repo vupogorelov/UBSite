@@ -23,11 +23,21 @@ final class Bridge {
 
     /**
      * The bridge's version: the page can check what it may ask
-     * (2: appVersion, downloads go to the browser; 3: takeLog; 4: shareImage).
+     * (2: appVersion, downloads go to the browser; 3: takeLog; 4: shareImage; 5: installApp).
      */
     @JavascriptInterface
     public int version() {
-        return 4;
+        return 5;
+    }
+
+    /**
+     * The app's update: the APK at `url` downloaded here and handed to the system's installer — no browser
+     * (Updater; its progress comes back as "update" events). Only from the site's own address.
+     */
+    @JavascriptInterface
+    public void installApp(String url) {
+        if (url == null || !url.startsWith(app.server() + "/app/") || !url.endsWith(".apk")) return;
+        Updater.start(app, url);
     }
 
     /**

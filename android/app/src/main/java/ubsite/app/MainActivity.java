@@ -52,6 +52,12 @@ public final class MainActivity extends Activity {
     private View bottomBar;
     private SharedPreferences prefs;
 
+    /** The installer did not install the update (Updater.Result): the page says so. */
+    static void updateFailed(String why) {
+        MainActivity a = instance;
+        if (a != null) a.runOnUiThread(() -> a.emit("update", "error:" + why));
+    }
+
     /** A button of the system player (or headphones) for the page. */
     static void command(String action) {
         MainActivity a = instance;
