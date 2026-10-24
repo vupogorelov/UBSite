@@ -5,10 +5,13 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
+import android.media.AudioManager;
 import android.media.MediaMetadata;
 import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
@@ -32,6 +35,19 @@ public final class PlayerService extends Service {
     private static PlayerService instance;
 
     private MediaSession session;
+
+    /**
+     * The sound is about to go to the phone's speaker — headphones out, put in their case, Bluetooth gone:
+     * reading pauses, as players do (Android's ACTION_AUDIO_BECOMING_NOISY), not to read aloud to the room.
+     */
+    private final BroadcastReceiver noisy = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            if (!AudioManager.ACTION_AUDIO_BECOMING_NOISY.equals(i.getAction()) || !playing) return;
+            NativeLog.add("info", "Наушники отключены — чтение на паузе");
+            MainActivity.command(PAUSE);
+        }
+    };
 
     /**
      * The page's state changed: refresh the notification, or start the service — only for reading that
@@ -78,6 +94,10 @@ public final class PlayerService extends Service {
         });
         session.setSessionActivity(openApp());
         session.setActive(true);
+        // (the system's own broadcast: received with the receiver not exported)
+        IntentFilter f = new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY);
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(noisy, f, Context.RECEIVER_NOT_EXPORTED);
+        else registerReceiver(noisy, f);
     }
 
     @Override
@@ -158,6 +178,7 @@ public final class PlayerService extends Service {
     @Override
     public void onDestroy() {
         instance = null;
+        unregisterReceiver(noisy);
         session.setActive(false);
         session.release();
         stopForeground(STOP_FOREGROUND_REMOVE);
