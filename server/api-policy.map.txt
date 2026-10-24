@@ -1,5 +1,6 @@
 DELETE /api/ai/app direct
 DELETE /api/ai/me direct
+DELETE /api/ai/me/rules direct
 DELETE /api/aliases/:id direct
 DELETE /api/collections/:cid direct
 DELETE /api/collections/:cid/items/:iid direct
@@ -26,6 +27,7 @@ GET /api/admin/voting last
 GET /api/ai/app live
 GET /api/ai/callback/:provider live
 GET /api/ai/me live
+GET /api/ai/me/rules live
 GET /api/aliases last
 GET /api/audio last
 GET /api/audio/:lang/:file live
@@ -171,6 +173,7 @@ POST /api/workspaces/:id/tags/delete direct
 POST /api/workspaces/:id/tags/rename direct
 PUT /api/admin/registration direct
 PUT /api/admin/voting direct
+PUT /api/ai/me/rules direct
 PUT /api/auth/email direct
 PUT /api/auth/profile direct
 PUT /api/chat/c/:key/mute queue mute (replace)

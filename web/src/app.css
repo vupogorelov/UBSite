@@ -10950,6 +10950,60 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
   padding-top: var(--space-4);
   border-top: 1px solid var(--ui-line);
 }
+/* ⚙ in the menu's head (computer): the title between back and the gear */
+.book-ai-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.book-ai-head > span {
+  flex: 1;
+}
+.book-ai-head .ui-round.on,
+.notif-sheet .ui-sheet-head .ui-round.on {
+  color: var(--accent);
+}
+/* how the AI answers: the rules written by the reader */
+.book-ai-rules {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-2) var(--space-3);
+}
+.book-ai-rules p {
+  margin: 0;
+}
+.book-ai-rules-state {
+  font: 600 13px var(--sans);
+  color: var(--muted);
+}
+.book-ai-rules textarea {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 12lh;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--ui-card);
+  color: var(--text);
+  font: 400 14px/1.45 var(--sans);
+  resize: vertical;
+}
+.book-ai-rules textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.book-ai-rules-btns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.book-ai-rules-btns .ui-chip:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.notif-menu:has(.book-ai-rules) {
+  width: min(440px, calc(100vw - 32px));
+}
 
 /* ==== A conversation as in Telegram: fewer lines and frames ==== */
 /* a calm plain background (the dots were noise under the text) */

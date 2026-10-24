@@ -1,6 +1,7 @@
 // @ts-check
 import { HttpError, STREAM, readJson } from '../http.js';
 import { publicOrigin } from '../auth.js';
+import { RULES_MAX } from '../bookwords.js';
 
 /**
  * The AI's connections (server/ai.js). The application's own — the administrator's to connect and let go: the
@@ -28,6 +29,16 @@ export function registerAiRoutes(router, ai, words, voice) {
   router.on('DELETE', '/api/ai/me', ({ user }) => (ai.disconnect(`user:${signedIn(user).id}`), words.state(signedIn(user).id)));
   // «Новая тема» in one's «Я и Книга»: the Book's next answer begins a conversation anew (a line in the chat marks it)
   router.on('POST', '/api/ai/me/new-topic', ({ user }) => voice.newTopic(`dm:${signedIn(user).id}`));
+  // how the AI answers in one's «Я и Книга»: { rules, default, own } — one's own rules kept, or (DELETE) the default again
+  router.on('GET', '/api/ai/me/rules', ({ user }) => words.rules(signedIn(user).id));
+  router.on('PUT', '/api/ai/me/rules', async ({ req, user }) => {
+    const u = signedIn(user);
+    const b = /** @type {any} */ ((await readJson(req)) ?? {});
+    const text = String(b.rules ?? '');
+    if (text.trim().length > RULES_MAX) throw new HttpError(400, `Не длиннее ${RULES_MAX} знаков`);
+    return words.setRules(u.id, text);
+  });
+  router.on('DELETE', '/api/ai/me/rules', ({ user }) => words.setRules(signedIn(user).id, ''));
 
   /** @param {import('../auth.js').User | null} user */
   const requireAdmin = (user) => {

@@ -837,4 +837,12 @@ export const MIGRATIONS = [
     refs       TEXT NOT NULL
   );
   `,
+  // 41: «Я и Книга»: how a reader wants the AI to answer — their own rules in place of the default ones
+  // (server/reply.js); none — the default
+  `
+  CREATE TABLE ai_rules (
+    user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    rules   TEXT NOT NULL
+  );
+  `,
 ];

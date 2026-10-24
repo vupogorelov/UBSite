@@ -47,6 +47,41 @@ export async function newTopic() {
   }
 }
 
+/**
+ * How the AI answers in one's «Я и Книга»: the rules it is given, the default ones, whether these are one's own.
+ * @typedef {{ rules: string, default: string, own: boolean }} AiRules
+ */
+
+/** @returns {Promise<AiRules | null>} */
+export async function loadAiRules() {
+  try {
+    return await request('GET', '/api/ai/me/rules');
+  } catch (e) {
+    showToast(/** @type {Error} */ (e).message);
+    return null;
+  }
+}
+
+/** One's own rules kept (empty or the default's text — the default). @param {string} rules @returns {Promise<AiRules | null>} */
+export async function saveAiRules(rules) {
+  try {
+    return await request('PUT', '/api/ai/me/rules', { rules });
+  } catch (e) {
+    showToast(/** @type {Error} */ (e).message);
+    return null;
+  }
+}
+
+/** Back to the default rules. @returns {Promise<AiRules | null>} */
+export async function resetAiRules() {
+  try {
+    return await request('DELETE', '/api/ai/me/rules');
+  } catch (e) {
+    showToast(/** @type {Error} */ (e).message);
+    return null;
+  }
+}
+
 /** Back from a service's sign-in (?ai=connected, or why not): said, and the address cleaned. */
 export function noticeAiReturn() {
   const how = new URLSearchParams(location.search).get('ai');

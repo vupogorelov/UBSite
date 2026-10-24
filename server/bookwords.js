@@ -3,7 +3,10 @@
 // paragraphs found (server/reply.js: from them alone, each thought with its number): the reader's own connection
 // first — no limit of ours; else the application's shared answers of the day; else none — the paragraphs answer
 // alone, as before. Free models only.
-import { langOf, messagesFor, MAX_TOKENS } from './reply.js';
+import { langOf, messagesFor, MAX_TOKENS, RULES } from './reply.js';
+
+/** How long a reader's own rules may be (characters): room for a page of wishes, not for a book. */
+export const RULES_MAX = 4000;
 
 /**
  * The models the Book writes with, in turn — another when one is busy or failing at its source (free models share
@@ -27,6 +30,11 @@ const AGAIN_AFTER = 3000;
  */
 export function createBookWords(db, ai) {
   const paragraph = db.prepare('SELECT plain_ru AS ru, plain_en AS en FROM paragraphs WHERE ref = ?');
+  const ownRules = db.prepare('SELECT rules FROM ai_rules WHERE user_id = ?');
+  const keepRules = db.prepare('INSERT INTO ai_rules (user_id, rules) VALUES (?, ?) ON CONFLICT (user_id) DO UPDATE SET rules = excluded.rules');
+  const dropRules = db.prepare('DELETE FROM ai_rules WHERE user_id = ?');
+  /** A reader's own rules, or null — the default ones. @param {number} userId @returns {string | null} */
+  const rulesOf = (userId) => /** @type {{ rules: string } | undefined} */ (ownRules.get(userId))?.rules ?? null;
 
   /**
    * The answer through an owner's connection, by the first model that serves — all busy: the list once more a moment
@@ -64,7 +72,7 @@ export function createBookWords(db, ai) {
         .map((ref) => ({ ref, text: /** @type {Record<string, string> | undefined} */ (paragraph.get(ref))?.[lang] ?? '' }))
         .filter((p) => p.text);
       if (!paragraphs.length) return null;
-      const messages = messagesFor(question, paragraphs, history);
+      const messages = messagesFor(question, paragraphs, history, rulesOf(ownerId));
       const own = `user:${ownerId}`;
       if (ai.status(own)) {
         try {
@@ -89,6 +97,26 @@ export function createBookWords(db, ai) {
      */
     state(userId) {
       return { own: ai.status(`user:${userId}`), shared: ai.status('app') ? ai.shared() : null };
+    },
+
+    /**
+     * How the AI answers this reader: the rules it is given, the default ones, and whether these are their own.
+     * @param {number} userId
+     */
+    rules(userId) {
+      const own = rulesOf(userId);
+      return { rules: own ?? RULES.ru, default: RULES.ru, own: own !== null };
+    },
+
+    /**
+     * A reader's own rules kept; empty or the same as the default — the default again.
+     * @param {number} userId @param {string} text
+     */
+    setRules(userId, text) {
+      const t = text.replace(/\r\n?/g, '\n').trim().slice(0, RULES_MAX);
+      if (!t || t === RULES.ru.trim()) dropRules.run(userId);
+      else keepRules.run(userId, t);
+      return this.rules(userId);
     },
   };
 }

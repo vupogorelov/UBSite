@@ -4,8 +4,11 @@
 // paragraph's number (any answer checked against the text in one tap). Not as the Book speaking of itself: no
 // "I", no "in me" — the book is not made out to be a mind (the author's word, 2026-10-22).
 
-/** The rules, per the question's language (the book's languages: more to come — the English then). */
-const RULES = {
+/**
+ * The rules, per the question's language (the book's languages: more to come — the English then). A reader may
+ * write their own in place of them (server/bookwords.js: rulesOf).
+ */
+export const RULES = {
   ru: `Ответь на вопрос читателя по существу, только по приведённым абзацам Книги Урантии. Ничего не добавляй от себя и не выдумывай.
 Не говори от лица книги: никаких «я», «во мне», «книга говорит» — просто отвечай на вопрос.
 Пиши разговорным, живым языком, как человек, который хорошо знает книгу: 2–5 предложений, по-русски. После каждой мысли укажи номер абзаца в скобках, например (47:2.7).
@@ -25,15 +28,17 @@ export const langOf = (text) => (/[а-яё]/i.test(text) ? 'ru' : 'en');
 
 /**
  * The conversation for the model: the rules, the talk so far (`history`: the reader's questions and the answers,
- * oldest first), then the paragraphs (in the question's language) and the question.
+ * oldest first), then the paragraphs (in the question's language) and the question. `own`: a reader's own rules
+ * (one text for both languages: an English question is answered in English all the same).
  * @param {string} question @param {{ ref: string, text: string }[]} paragraphs
- * @param {{ role: 'user' | 'assistant', content: string }[]} [history]
+ * @param {{ role: 'user' | 'assistant', content: string }[]} [history] @param {string | null} [own]
  */
-export function messagesFor(question, paragraphs, history = []) {
+export function messagesFor(question, paragraphs, history = [], own = null) {
   const lang = langOf(question);
   const head = lang === 'ru' ? ['Абзацы:', 'Вопрос:'] : ['Paragraphs:', 'Question:'];
+  const rules = own ? (lang === 'en' ? `${own}\nAnswer in English.` : own) : RULES[lang];
   return [
-    { role: 'system', content: RULES[lang] },
+    { role: 'system', content: rules },
     ...history,
     { role: 'user', content: `${head[0]}\n${paragraphs.map((p) => `[${p.ref}] ${p.text}`).join('\n\n')}\n\n${head[1]} ${question}` },
   ];

@@ -61,3 +61,37 @@ test("«Я и Книга» in the Book's words: the reader's own AI first, then 
   assert.deepEqual(words.state(11).shared, { left: 0, of: 2 });
   delete process.env.UB_AI_SHARED_PER_DAY;
 });
+
+test('«Я и Книга»: a reader\'s own rules of how the AI answers — given to it in place of the default, the default again', async (t) => {
+  const db = openDb(':memory:');
+  db.exec(`
+    INSERT INTO users (id, username, username_key) VALUES (10, 'anna', 'anna');
+    INSERT INTO parts (id, title_ru, title_en) VALUES (1, 'Часть', 'Part');
+    INSERT INTO papers (id, part_id, title_ru, title_en) VALUES (5, 1, 'Текст', 'Paper');
+    INSERT INTO paragraphs (ref, seq, paper_id, section_num, num, page_ref, html_ru, html_en, plain_ru, plain_en) VALUES
+      ('5:1.1', 1, 5, 1, 1, '1', '', '', 'Молитва есть дыхание души.', 'Prayer is the breath of the soul.');
+    INSERT INTO ai_keys (owner, provider, secret) VALUES ('user:10', 'openrouter', 'own-key');
+  `);
+  const words = createBookWords(db, createAi(db));
+  /** @type {string[]} */
+  const system = [];
+  t.mock.method(globalThis, 'fetch', async (/** @type {string} */ _url, /** @type {any} */ init) => {
+    system.push(JSON.parse(init.body).messages[0].content);
+    return new Response(JSON.stringify({ choices: [{ message: { content: 'Да.' } }] }), { status: 200 });
+  });
+
+  assert.equal(words.rules(10).own, false);
+  assert.equal(words.rules(10).rules, words.rules(10).default);
+  await words.write('Что такое молитва?', ['5:1.1'], 10);
+  assert.equal(system.at(-1), words.rules(10).default);
+
+  assert.deepEqual(words.setRules(10, '  Отвечай подробно, 10 предложений.\r\n'), { rules: 'Отвечай подробно, 10 предложений.', default: words.rules(10).default, own: true });
+  await words.write('Что такое молитва?', ['5:1.1'], 10);
+  assert.equal(system.at(-1), 'Отвечай подробно, 10 предложений.');
+  await words.write('What is prayer?', ['5:1.1'], 10);
+  assert.equal(system.at(-1), 'Отвечай подробно, 10 предложений.\nAnswer in English.', 'an English question in English all the same');
+
+  assert.equal(words.setRules(10, '').own, false, 'empty — the default');
+  words.setRules(10, 'Своё');
+  assert.equal(words.setRules(10, words.rules(10).default).own, false, 'the same as the default — the default');
+});
