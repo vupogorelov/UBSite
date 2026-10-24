@@ -11,6 +11,7 @@ import { api, current } from './api.js';
 import { settings } from './settings.svelte.js';
 import { NOTE_COLORS, settingDefaults } from '../../../shared/settings.js';
 import { showToast } from './toast.svelte.js';
+import { writeText } from './clipboard.js';
 import { onChatEvent, toggleReaction } from './chat.svelte.js';
 import { outbox, uuid } from './outbox.svelte.js';
 import { session } from './session.svelte.js';
@@ -317,12 +318,7 @@ export function citation(text, ref, lang) {
 
 /** @param {string} text */
 export async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    showToast('Скопировано');
-  } catch {
-    showToast('Не удалось скопировать');
-  }
+  showToast((await writeText(text)) ? 'Скопировано' : 'Не удалось скопировать');
 }
 
 /** "6 окт., 14:05" from SQLite UTC "2026-10-06 11:05:00". @param {string} sqlTime */

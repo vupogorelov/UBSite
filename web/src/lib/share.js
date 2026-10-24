@@ -3,6 +3,7 @@
 // (the language and the quote's character offsets in the paragraph's text, as notes keep them).
 // Anyone opens them — signed in or not (a guest reads the paper; server/main.js GUEST).
 import { showToast } from './toast.svelte.js';
+import { writeText } from './clipboard.js';
 
 /** @typedef {{ lang: 'ru' | 'en', start: number, end: number }} Quote */
 
@@ -33,10 +34,5 @@ export async function shareLink(url, text, done = 'Ссылка скопиров
       if (/** @type {Error} */ (err).name === 'AbortError') return; // closed by the person
     }
   }
-  try {
-    await navigator.clipboard.writeText(text ? `${text}\n${url}` : url);
-    showToast(done);
-  } catch {
-    showToast(url);
-  }
+  showToast((await writeText(text ? `${text}\n${url}` : url)) ? done : url);
 }
