@@ -27,8 +27,15 @@ export const chatUi = $state({
   reply: /** @type {{ key: string, id: number } | null} */ (null),
 });
 
-/** A message body without its quoted lines' "> " (for previews: the chat list, a reply's quote). @param {string} body */
-export const plainBody = (body) => body.replace(/^> ?/gm, '');
+/**
+ * A message body without its quoted lines' "> " and its **bold** / *italic* marks (for previews: the chat list, a
+ * reply's quote). @param {string} body
+ */
+export const plainBody = (body) =>
+  body
+    .replace(/^> ?/gm, '')
+    .replace(/\*\*(?=\S)([^*]+?)(?<=\S)\*\*/g, '$1')
+    .replace(/(?<![*\p{L}\p{N}])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![*\p{L}\p{N}])/gu, '$1');
 
 /**
  * "Обсудить" from the book: the paragraph's conversation in the chat, a selected fragment already in

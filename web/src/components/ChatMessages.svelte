@@ -102,15 +102,19 @@
     }, /** @type {{ key: string, at: string, rows: typeof rows }[]} */ ([])),
   );
 
-  /** Text with @mentions, paragraph references (5:1.2 → the book) and links. @param {string} text */
+  /**
+   * Text with **bold** and *italic* (as in Telegram; an AI's answers write so — what is inside goes on with its
+   * links), @mentions, paragraph references (5:1.2 → the book) and links. @param {string} text
+   */
   function tokens(text) {
-    /** @type {{ t: 'text' | 'mention' | 'ref' | 'url', v: string }[]} */
+    /** @type {{ t: 'text' | 'b' | 'i' | 'mention' | 'ref' | 'url', v: string }[]} */
     const out = [];
-    const re = /(@[\p{L}\p{N}_.-]{2,40})|(\b\d{1,3}:\d{1,2}\.\d{1,3}\b)|(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)])/gu;
+    const re = /\*\*(?=\S)([^*]+?)(?<=\S)\*\*|(?<![*\p{L}\p{N}])\*(?=\S)([^*\n]+?)(?<=\S)\*(?![*\p{L}\p{N}])|(@[\p{L}\p{N}_.-]{2,40})|(\b\d{1,3}:\d{1,2}\.\d{1,3}\b)|(https?:\/\/[^\s<>"]+[^\s<>".,;:!?)])/gu;
     let at = 0;
     for (const m of text.matchAll(re)) {
       if (m.index > at) out.push({ t: 'text', v: text.slice(at, m.index) });
-      out.push({ t: m[1] ? 'mention' : m[2] ? 'ref' : 'url', v: m[0] });
+      if (m[1] !== undefined || m[2] !== undefined) out.push({ t: m[1] !== undefined ? 'b' : 'i', v: m[1] ?? m[2] });
+      else out.push({ t: m[3] ? 'mention' : m[4] ? 'ref' : 'url', v: m[0] });
       at = m.index + m[0].length;
     }
     if (at < text.length) out.push({ t: 'text', v: text.slice(at) });
@@ -248,7 +252,9 @@
 
 {#snippet rich(/** @type {string} */ text)}
   {#each tokens(text) as tok, i (i)}
-    {#if tok.t === 'mention'}<span class="tg-mention">{tok.v}</span>
+    {#if tok.t === 'b'}<b>{@render rich(tok.v)}</b>
+    {:else if tok.t === 'i'}<i>{@render rich(tok.v)}</i>
+    {:else if tok.t === 'mention'}<span class="tg-mention">{tok.v}</span>
     {:else if tok.t === 'ref'}<a class="tg-link" href="/{tok.v}" onclick={(e) => (e.preventDefault(), navigate(`/${tok.v}`))}>{tok.v}</a>
     {:else if tok.t === 'url'}<a class="tg-link" href={tok.v} target="_blank" rel="noopener noreferrer">{tok.v}</a>
     {:else}{tok.v}{/if}
