@@ -184,7 +184,12 @@ export const voicesFor = (lang) => tts.voices.filter((v) => v.lang.toLowerCase()
 
 // ---- The reader the text comes from ----
 
-/** @type {{ article: () => HTMLElement | null, scroller: () => HTMLElement | null, paper: () => number | null, next: () => boolean } | null} */
+/**
+ * `next`: the next paper opened (false — the end of the book); `open`: a given one (the voice has gone on to
+ * it); `fetch`: a paper's text, not opened (the app's voice reads ahead into it).
+ * @type {{ article: () => HTMLElement | null, scroller: () => HTMLElement | null, paper: () => number | null, next: () => boolean,
+ *   nextPaper: () => number | null, open: (paper: number) => void, fetch: (paper: number) => Promise<import('./api.js').PaperData | null> } | null}
+ */
 let host = null;
 
 // ---- Progress through the whole book and the last place read (remembered on this device) ----
@@ -245,7 +250,7 @@ export function registerReader(h) {
 let pos = null;
 /** The reader scrolled by hand recently: do not pull the text away from them. */
 let userAt = 0;
-/** At the end of a paper the next one is opened and reading continues there. */
+/** At the end of a paper the next one is opened and reading continues there (a number: that paper). @type {boolean | number} */
 let continueNext = false;
 
 const elements = () => /** @type {HTMLElement[]} */ ([...(host?.article()?.querySelectorAll(`[data-tts="${tts.lang}"]`) ?? [])]);
@@ -423,9 +428,53 @@ const failed = (my) => /** @param {{ error: string }} e */ (e) => {
 };
 
 /**
+ * How many papers past the open one go to the app's engine with it. With the screen off the phone freezes the
+ * page (its journal: the end of a paper was heard only once the screen came on) — it cannot hand the engine the
+ * next paper then; so the next ones are handed beforehand: two more — an hour or two of listening.
+ */
+const AHEAD_PAPERS = 2;
+
+/**
+ * A paper's sentences as the reader would read them (its title, each section's title, its paragraphs) — from
+ * its text, not drawn (a variant of the reader's own in place of the text is read when it is open).
+ * @param {import('./api.js').PaperData} d @param {'ru' | 'en'} lang
+ */
+function paperQueue(d, lang) {
+  const parse = document.createElement('template'); // (inert: nothing in it loads or runs)
+  /** @type {{ key: string, s: number, text: string }[]} */
+  const out = [];
+  /** @param {string} key @param {string} text */
+  const add = (key, text) =>
+    sentences(text).forEach(([a, b], s) => {
+      const t = text.slice(a, b).replace(/\s+/g, ' ').trim();
+      if (t) out.push({ key, s, text: t });
+    });
+  for (const sec of d.sections) {
+    add(`h${sec.num}`, sec.num === 0 ? (lang === 'en' ? d.paper.titleEn || d.paper.titleRu : d.paper.titleRu) : (lang === 'en' ? sec.titleEn || sec.titleRu : sec.titleRu) ?? '');
+    for (const p of d.paragraphs) {
+      if (p.sectionNum !== sec.num) continue;
+      parse.innerHTML = lang === 'en' ? p.en : p.ru;
+      add(p.ref, parse.content.textContent ?? '');
+    }
+  }
+  return out;
+}
+
+/** The paper the voice has gone on to, being opened: the reader catches up with it. @type {number | null} */
+let moving = null;
+/** @param {number} paper */
+function moveTo(paper) {
+  if (moving === paper || (moving === null && host?.paper() === paper)) return;
+  moving = paper;
+  log('tts', 'следующий Текст', { paper, hidden: document.visibilityState === 'hidden' });
+  host?.open(paper);
+}
+
+/**
  * The Android app: the sentences from here to the end of the paper (or of the one paragraph asked
  * for) go to the engine at once, and it reads them by itself — with the screen off too, when the
- * page's timers sleep. Each sentence, as it starts, moves the highlight and the place read.
+ * page sleeps; then the next papers' (AHEAD_PAPERS). Each sentence, as it starts, moves the highlight
+ * and the place read; one of the next paper's — the reader to it.
  * @param {NonNullable<ReturnType<typeof current>>} c @param {number} my
  */
 function speakAhead(c, my) {
@@ -441,27 +490,59 @@ function speakAhead(c, my) {
       if (text && (i > c.i || s >= c.s)) queue.push({ key: el.dataset.ttsKey ?? '', s, text });
     });
   }
+  /** The last utterance handed on, and its paper's next one (`null` — this paper's: endOfPaper). */
+  let last = /** @type {SpeechSynthesisUtterance | null} */ (null);
+  let after = /** @type {{ next: number | null } | null} */ (null);
+  let ended = false;
   const done = () => {
+    ended = true;
     if (my !== run || !tts.playing) return;
     if (only !== null) {
       onlyKey = null;
       return pause();
     }
-    endOfPaper();
+    if (!after) return endOfPaper();
+    log('tts', 'конец очереди', { hidden: document.visibilityState === 'hidden' });
+    if (after.next === null) {
+      pause();
+      return showToast('Конец книги');
+    }
+    continueNext = after.next; // (that one: a paper opened on the way to it is passed by)
+    moving = null;
+    host?.open(after.next);
   };
-  if (!queue.length) return done();
-  queue.forEach((q, n) => {
+  /** @param {{ key: string, s: number, text: string }} q @param {number | null} paper (null — the open one) */
+  const hand = (q, paper) => {
     const u = utterance(applyDict(q.text, tts.lang));
     u.onstart = () => {
       if (my !== run) return;
       if (sleepDue()) return; // (the sleep timer, with the screen off too: the app's event comes)
       pos = { key: q.key, s: q.s };
+      if (paper !== null) moveTo(paper);
       showPosition();
     };
-    if (n === queue.length - 1) u.onend = done;
+    u.onend = () => u === last && done();
     u.onerror = failed(my);
-    synth.speak(u);
-  });
+    synth?.speak(u);
+    last = u;
+  };
+  if (!queue.length) return done();
+  queue.forEach((q) => hand(q, null));
+  // the next papers, after this one (none: one paragraph asked for, or the sleep timer at the end of this paper)
+  if (only !== null || tts.sleep.paper) return;
+  const lang = tts.lang;
+  void (async () => {
+    let next = host?.nextPaper() ?? null;
+    for (let n = 0; n < AHEAD_PAPERS && next !== null; n++) {
+      const d = await host?.fetch(next).catch(() => null);
+      // (the open paper's end came while this one was fetched: it went on by itself — endOfPaper)
+      if (my !== run || !tts.playing || !d || ended) return;
+      const paper = next;
+      paperQueue(d, lang).forEach((q) => hand(q, paper));
+      after = { next: d.next };
+      next = d.next;
+    }
+  })();
 }
 
 function endOfPaper() {
@@ -480,6 +561,13 @@ function endOfPaper() {
 
 /** Called by the reader when a paper has been rendered. */
 export function paperReady() {
+  // the voice went on to a paper of those read ahead: the reader caught up with it (one on the way — passed by)
+  if (typeof continueNext === 'number' && host?.paper() !== continueNext) return;
+  if (moving !== null) {
+    if (host?.paper() !== moving) return;
+    moving = null;
+    if (tts.playing && current()) return showPosition();
+  }
   if (resumeTo) {
     const t = resumeTo;
     resumeTo = null;
@@ -608,6 +696,8 @@ export function pause() {
   if (tts.playing) log('tts', 'пауза', { at: pos?.key, hidden: document.visibilityState === 'hidden' });
   tts.playing = false;
   run++;
+  moving = null;
+  if (typeof continueNext === 'number') continueNext = false;
   clearTimeout(timer);
   silence();
   bgStop();

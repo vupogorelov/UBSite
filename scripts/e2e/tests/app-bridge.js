@@ -69,9 +69,16 @@ export default {
     const speaks = (await calls()).filter((c) => c[0] === 'speak').length;
     t.check('чтение: весь Текст сразу в очереди движка', speaks > 100, `${speaks} предложений`);
     t.check('подсветка предложения идёт за чтением', (await page.evaluate(() => /** @type {any} */ (CSS).highlights?.get('tts')?.size ?? 0)) === 1);
+    const cancels = (await calls()).filter((c) => c[0] === 'cancel').length;
     // (until the reading has gone on to the next paper — not a fixed time)
-    await page.waitForFunction(() => !location.pathname.endsWith('/1'), null, { timeout: 40000 }).catch(() => {});
-    t.check('конец Текста — чтение само продолжается в следующих', !page.url().endsWith('/1'), page.url());
+    // (the address follows the sections too: /1:3 is still the first paper)
+    await page.waitForFunction(() => !/^\/1(:|$)/.test(location.pathname), null, { timeout: 40000 }).catch(() => {});
+    t.check('конец Текста — чтение само продолжается в следующих', !/^\/1(:|$)/.test(new URL(page.url()).pathname), page.url());
+    // the next papers were in the engine's queue already: it went on with no word from the page (a phone with the
+    // screen off freezes the page) — nothing cancelled and queued anew at the turn
+    t.check('следующие Тексты уже в очереди движка: переход без новой очереди', (await calls()).filter((c) => c[0] === 'cancel').length === cancels,
+      `${(await calls()).filter((c) => c[0] === 'cancel').length - cancels} отмен`);
+    t.check('подсветка идёт и в следующем Тексте', await until(async () => (await page.evaluate(() => /** @type {any} */ (CSS).highlights?.get('tts')?.size ?? 0)) === 1, { timeout: 3000 }));
 
     await page.evaluate(() => /** @type {any} */ (window).__ubNative('cmd', 'pause'));
     await page.evaluate(() => /** @type {any} */ (window).__ubNative('cmd', 'close'));

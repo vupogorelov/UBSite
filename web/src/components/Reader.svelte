@@ -210,6 +210,14 @@
   });
 
   // Reading aloud takes its text from here and goes on to the next paper at the end of this one.
+  /** The paper the voice has gone on to. @param {number} n */
+  function openForVoice(n) {
+    if (background) {
+      // another page is open: the next paper is opened here, unseen; the way back to the book leads to it
+      void show({ paper: n, section: null, ref: null });
+      rememberBookPath(`/${n}`);
+    } else navigate(`/${n}`, { replace: true }); // no history entry: "back" must not jump
+  }
   $effect(() =>
     registerReader({
       article: () => article ?? null,
@@ -217,13 +225,15 @@
       paper: () => data?.paper.id ?? null,
       next: () => {
         if (data?.next == null) return false;
-        const n = data.next;
-        if (background) {
-          // another page is open: the next paper is opened here, unseen; the way back to the book leads to it
-          void show({ paper: n, section: null, ref: null });
-          rememberBookPath(`/${n}`);
-        } else navigate(`/${n}`, { replace: true }); // no history entry: "back" must not jump
+        openForVoice(data.next);
         return true;
+      },
+      nextPaper: () => data?.next ?? null,
+      open: openForVoice,
+      // (the app's voice reads ahead into the next papers: lib/tts.svelte.js)
+      fetch: (id) => {
+        if (!ahead.has(id)) ahead.set(id, api.paper(id).catch(() => (ahead.delete(id), null)));
+        return /** @type {Promise<import('../lib/api.js').PaperData | null>} */ (ahead.get(id));
       },
     }),
   );
