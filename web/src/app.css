@@ -10015,6 +10015,33 @@ button.tg-mark.on:is([data-mark='work'], [data-mark='done']) {
 .dev-act {
   flex: none;
 }
+.dev-export-choice {
+  display: block;
+}
+.dev-export-choice .ui-chips {
+  flex-wrap: wrap;
+}
+.dev-export-action {
+  gap: var(--space-3);
+}
+.dev-export-progress {
+  height: 3px;
+  margin: 0 var(--space-3) var(--space-3);
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--ui-fill);
+}
+.dev-export-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--text);
+  opacity: 0.55;
+  transition: width 0.3s ease;
+}
+.dev-export-error {
+  margin: var(--space-3);
+  color: var(--danger);
+}
 .ui-btn.dev-act {
   display: inline-flex;
   flex: none;

@@ -42,7 +42,7 @@
   const TEXT_GROUP = 'Текст';
   const names = $derived(page === NAMES);
   /** What this device keeps (DevicePage): a page of its own. */
-  const DEVICE = 'Это устройство';
+  const DEVICE = 'Память';
   const device = $derived(page === DEVICE);
   /** Its row's summary: the book, the recording kept, what waits. */
   const deviceSummary = $derived.by(() => {
@@ -156,7 +156,7 @@
         </div>
       {/each}
       <!-- this device: what is kept here (the book by itself; the recording by choice; what waits) -->
-      <div class="set-section">Это устройство</div>
+      <div class="set-section">Память</div>
       <div class="set-list">
         <button class="set-row" onclick={() => (page = DEVICE)}>
           <span class="ui-tile set-row-icon"><Icon name={outbox.items.some((o) => o.state === 'failed') ? 'alert' : 'cloud-download'} size={18} /></span>

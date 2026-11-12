@@ -14,9 +14,10 @@ const w = typeof window === 'undefined' ? {} : window;
 /**
  * @typedef {{ version(): number, voices(): string, speak(id: string, text: string, lang: string, voice: string, rate: number, pitch: number, volume: number): void,
  *   cancel(): void, player(playing: boolean): void, meta(title: string, album: string): void, end(): void, bars(top: string, bottom: string): void,
- *   server(): string, setServer(url: string): void, appVersion?(): string, installApp?(url: string): void }} Bridge
+ *   server(): string, setServer(url: string): void, appVersion?(): string, installApp?(url: string): void,
+ *   shareFile?(base64: string, name: string, mime: 'text/plain' | 'text/markdown'): boolean }} Bridge
  * (version 2 and later: appVersion, and a download — the app's APK — goes to the system browser; 5: installApp —
- * the app downloads its update itself and hands it to the system's installer)
+ * the app downloads its update itself and hands it to the system's installer; file sharing is checked by method presence)
  */
 /** @type {Bridge | null} */
 export const native = w.UBNative ?? null;

@@ -437,6 +437,8 @@ export const api = {
   guestPaper: (paper) => request('GET', `/api/guest/paper/${paper}`),
   /** @param {string} ref @returns {Promise<{ ref: string, proposals: Proposal[], messages: PublicMessage[], following: boolean }>} */
   thread: (ref) => request('GET', `/api/public/thread/${encodeURIComponent(ref)}`),
+  /** All visible comments on paragraph threads, in book order. @returns {Promise<{ comments: { ref: string, authorName: string | null, body: string }[] }>} */
+  bookComments: () => request('GET', '/api/public/book-comments'),
   /** @param {string} ref @param {boolean} follow @returns {Promise<{ following: boolean }>} */
   follow: (ref, follow) => request('POST', `/api/public/thread/${encodeURIComponent(ref)}/follow`, { follow }),
 

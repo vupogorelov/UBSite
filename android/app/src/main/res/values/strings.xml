@@ -3,7 +3,7 @@
     <string name="app_name">Urantia Papers Explorer</string>
     <string name="server_title">Адрес сайта</string>
     <string name="server_short">Адрес сайта</string>
-    <string name="server_hint">https://upexplorer.ddns.net</string>
+    <string name="server_hint">https://95-31-142-59.broadband.corbina.ru</string>
     <string name="open">Открыть</string>
     <string name="cancel">Отмена</string>
     <string name="channel">Чтение вслух</string>

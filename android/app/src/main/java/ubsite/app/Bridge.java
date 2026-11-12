@@ -23,7 +23,8 @@ final class Bridge {
 
     /**
      * The bridge's version: the page can check what it may ask
-     * (2: appVersion, downloads go to the browser; 3: takeLog; 4: shareImage; 5: installApp).
+     * (2: appVersion, downloads go to the browser; 3: takeLog; 4: shareImage; 5: installApp;
+     * file sharing is checked by method presence).
      */
     @JavascriptInterface
     public int version() {
@@ -65,6 +66,36 @@ final class Bridge {
             return true;
         } catch (Exception e) {
             NativeLog.add("error", "Не удалось поделиться картинкой", "error", String.valueOf(e));
+            return false;
+        }
+    }
+
+    /** A Markdown or text export, offered to the app the person chooses (for example, Files or Drive). */
+    @JavascriptInterface
+    public boolean shareFile(String base64, String name, String mime) {
+        try {
+            if (base64 == null || base64.length() > 24_000_000 || name == null ||
+                    !name.matches("[\\p{L}\\p{N} ._—-]{1,120}\\.(md|txt)")) return false;
+            boolean markdown = name.endsWith(".md") && "text/markdown".equals(mime);
+            boolean plainText = name.endsWith(".txt") && "text/plain".equals(mime);
+            if (!markdown && !plainText) return false;
+
+            File file = new File(ShareProvider.dir(app), name);
+            try (FileOutputStream out = new FileOutputStream(file)) {
+                out.write(Base64.decode(base64, Base64.DEFAULT));
+            }
+            Uri uri = new Uri.Builder().scheme("content").authority(ShareProvider.AUTHORITY).appendPath(name).build();
+            Intent send = new Intent(Intent.ACTION_SEND);
+            send.setType(mime);
+            send.putExtra(Intent.EXTRA_STREAM, uri);
+            send.setClipData(ClipData.newRawUri("", uri));
+            send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent chooser = Intent.createChooser(send, "Экспорт книги");
+            chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            app.runOnUiThread(() -> app.startActivity(chooser));
+            return true;
+        } catch (Exception e) {
+            NativeLog.add("error", "Не удалось экспортировать книгу", "error", String.valueOf(e));
             return false;
         }
     }

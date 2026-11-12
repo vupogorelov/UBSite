@@ -46,6 +46,9 @@ public final class ShareProvider extends ContentProvider {
 
     @Override
     public String getType(Uri uri) {
+        String name = uri.getLastPathSegment();
+        if (name != null && name.endsWith(".md")) return "text/markdown";
+        if (name != null && name.endsWith(".txt")) return "text/plain";
         return "image/png";
     }
 

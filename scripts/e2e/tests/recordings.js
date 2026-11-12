@@ -1,5 +1,5 @@
 // @ts-check
-// The narrator's recording without a network: Settings → «Это устройство» — a paper downloaded by
+// The narrator's recording without a network: Settings → «Память» — a paper downloaded by
 // choice, then played from the device without a network (whole and in parts: seeking); a part's
 // download paused and cancelled with what it had saved removed; a paper removed.
 import { openControlled } from '../lib.js';
@@ -15,7 +15,7 @@ export default {
     await page.waitForTimeout(300);
     await page.locator('.more-row', { hasText: 'Настройки' }).dispatchEvent('click');
     await page.waitForTimeout(500);
-    await page.locator('.set-row', { hasText: 'Это устройство' }).dispatchEvent('click');
+    await page.locator('.set-row', { hasText: 'Память' }).dispatchEvent('click');
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${process.env.LOCALAPPDATA}/ubsite-e2e/device-open-${t.kind}.png` }).catch(() => {});
     if (!(await page.locator('.dev-part').count())) console.log('    (screen:', (await page.locator('.settings-drawer').textContent())?.replace(/\s+/g, ' ').slice(0, 300), ')');

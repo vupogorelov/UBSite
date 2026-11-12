@@ -50,6 +50,13 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
        WHERE pa.paper_id = ? AND p.status IN ('voting', 'approved') GROUP BY p.ref`,
     ),
     messages: db.prepare(`${MESSAGE} WHERE m.ref = ? ORDER BY m.id`),
+    bookComments: db.prepare(`
+      SELECT m.ref, coalesce(u.display_name, u.username) AS authorName, m.body
+      FROM public_messages m
+      JOIN paragraphs pa ON pa.ref = m.ref
+      LEFT JOIN users u ON u.id = m.author_id
+      WHERE m.kind = 'message' AND m.hidden_at IS NULL
+      ORDER BY pa.seq, m.id`),
     message: db.prepare('SELECT id, ref, author_id AS authorId, kind FROM public_messages WHERE id = ?'),
     editMessage: db.prepare("UPDATE public_messages SET body = ?, updated_at = datetime('now') WHERE id = ?"),
     deleteMessage: db.prepare('DELETE FROM public_messages WHERE id = ?'),
@@ -117,6 +124,8 @@ export function registerPublicRoutes(router, db, tr, notifications, glossary, ch
   };
 
   router.on('GET', '/api/public/config', () => tr.config());
+
+  router.on('GET', '/api/public/book-comments', () => ({ comments: q.bookComments.all() }));
 
   // Marks and counters for the reader.
   router.on('GET', '/api/public/paper/:id', ({ params, user }) => {

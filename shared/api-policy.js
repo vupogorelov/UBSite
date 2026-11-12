@@ -31,6 +31,7 @@ const READS = [
   ['live', /^\/api\/audio\//, 'audio'],
   ['live', /^\/api\/export/, 'export'],
   ['live', /^\/api\/search/, 'search'],
+  ['live', /^\/api\/public\/book-comments$/, 'public'],
   // the AI's connections: the way back from a sign-in (a page, not data), what is connected now
   ['live', /^\/api\/ai\//, 'ai'],
   // the feeds of changes and the live stream

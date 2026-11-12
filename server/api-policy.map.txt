@@ -69,6 +69,7 @@ GET /api/papers/:id text
 GET /api/papers/:id/terms book
 GET /api/places last
 GET /api/pronunciations book
+GET /api/public/book-comments live
 GET /api/public/config last
 GET /api/public/paper/:id last
 GET /api/public/proposals last

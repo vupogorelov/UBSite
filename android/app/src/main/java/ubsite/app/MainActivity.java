@@ -40,7 +40,7 @@ import java.util.regex.Pattern;
  * off it goes on getting the engine's events and keeps the place read.
  */
 public final class MainActivity extends Activity {
-    static final String DEFAULT_SERVER = "https://upexplorer.ddns.net";
+    static final String DEFAULT_SERVER = "https://95-31-142-59.broadband.corbina.ru";
     private static final String ACTION_SERVER = "ubsite.app.SERVER";
     private static final String START_PAGE = "file:///android_asset/start.html";
 
