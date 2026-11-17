@@ -17,6 +17,11 @@ function codeBlock(text) {
   return `${fence}\n${text}\n${fence}`;
 }
 
+/** @param {string} text */
+function blockquote(text) {
+  return text.split('\n').map((line) => (line ? `> ${line}` : '>')).join('\n');
+}
+
 /**
  * @param {{
  *   toc: import('./api.js').Toc,
@@ -68,17 +73,20 @@ export function formatBookExport({ toc, papers, notes = [], comments = [], inclu
     const { paper, sections, paragraphs } = data;
     const part = toc.parts.find((p) => p.id === paper.partId);
     if (part && part.id !== currentPart) {
-      lines.push('', `## Часть ${ROMAN[part.id] ?? part.id}. ${part.titleRu} — ${part.titleEn}`);
+      lines.push('', `## Часть ${ROMAN[part.id] ?? part.id}. ${part.titleRu}`);
+      if (part.titleEn) lines.push(blockquote(part.titleEn));
       currentPart = part.id;
     }
     if (paper.partStart && (paper.partIntroRu || paper.partIntroEn)) {
-      lines.push('');
-      if (paper.partIntroRu) lines.push('**Русский**', '', paper.partIntroRu, '');
-      if (paper.partIntroEn) lines.push('**English**', '', paper.partIntroEn, '');
+      const intro = [];
+      if (paper.partIntroRu) intro.push(paper.partIntroRu);
+      if (paper.partIntroEn) intro.push(blockquote(paper.partIntroEn));
+      lines.push('', intro.join('\n\n'));
     }
 
     const title = paper.id === 0 ? 'Предисловие' : `${paper.id}. ${paper.titleRu}`;
-    lines.push('', `### ${title}${paper.titleEn ? ` — ${paper.titleEn}` : ''}`);
+    lines.push('', `### ${title}`);
+    if (paper.titleEn) lines.push(blockquote(paper.titleEn));
     let currentSection = -1;
 
     for (const paragraph of paragraphs) {
@@ -86,11 +94,12 @@ export function formatBookExport({ toc, papers, notes = [], comments = [], inclu
         currentSection = paragraph.sectionNum;
         const section = sections.find((s) => s.num === currentSection);
         if (section && currentSection > 0) {
-          lines.push('', `#### ${section.num}. ${section.titleRu ?? ''}${section.titleEn ? ` — ${section.titleEn}` : ''}`);
+          lines.push('', `#### ${section.num}. ${section.titleRu ?? ''}`);
+          if (section.titleEn) lines.push(blockquote(section.titleEn));
         }
       }
 
-      lines.push('', `**${paragraph.ref}**`, '', `**Русский**`, '', paragraph.ru, '', `**English**`, '', paragraph.en);
+      lines.push('', `**${paragraph.ref}** ${paragraph.ru}`, blockquote(paragraph.en));
 
       if (!includeNotes) continue;
       const entries = [];

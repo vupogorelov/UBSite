@@ -14,6 +14,7 @@
   import { outbox } from '../lib/outbox.svelte.js';
   import { rec } from '../lib/recordings.svelte.js';
   import DevicePage from './DevicePage.svelte';
+  import BookExportPage from './BookExportPage.svelte';
   import InfoTip from './InfoTip.svelte';
 
   /**
@@ -44,6 +45,8 @@
   /** What this device keeps (DevicePage): a page of its own. */
   const DEVICE = 'Память';
   const device = $derived(page === DEVICE);
+  const EXPORT = 'Экспорт книги';
+  const bookExport = $derived(page === EXPORT);
   /** Its row's summary: the book, the recording kept, what waits. */
   const deviceSummary = $derived.by(() => {
     const kept = Object.values(rec.saved).reduce((s, n) => s + n, 0);
@@ -120,13 +123,13 @@
   <button class="drawer-scrim" aria-label="Закрыть настройки" onclick={onclose}></button>
   <div class="drawer settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title" use:swipeClose={{ dirs: ['right', 'down'], onclose }}>
     <header class="drawer-head">
-      {#if group || integration || names || device}
+      {#if group || integration || names || device || bookExport}
         <button class="ui-round plain" onclick={() => (page = names ? TEXT_GROUP : null)} aria-label={names ? TEXT_GROUP : 'Все настройки'} title={names ? TEXT_GROUP : 'Все настройки'}><Icon name="back" /></button>
       {/if}
       <div class="settings-head-text">
-        <h2 id="settings-title">{group ? group.title : integration ? INTEGRATION : names ? NAMES : device ? DEVICE : 'Настройки'}</h2>
+        <h2 id="settings-title">{group ? group.title : integration ? INTEGRATION : names ? NAMES : bookExport ? EXPORT : device ? DEVICE : 'Настройки'}</h2>
         <div class="set-sub">
-          {#if integration}Интеграции · для всей платформы{:else if device}Что хранится здесь и работает без сети{:else if names}Общий для всех · ведут координаторы{:else if group?.scope === 'workspace'}Общие для «{workspace.name || '…'}»{:else}Личные · пространство «{workspace.name || '…'}»{/if}
+          {#if integration}Интеграции · для всей платформы{:else if device}Что хранится здесь и работает без сети{:else if names}Общий для всех · ведут координаторы{:else if bookExport}Markdown книги или русский текст для озвучки{:else if group?.scope === 'workspace'}Общие для «{workspace.name || '…'}»{:else}Личные · пространство «{workspace.name || '…'}»{/if}
         </div>
       </div>
       <button class="ui-round plain" onclick={onclose} aria-label="Закрыть"><Icon name="close" /></button>
@@ -136,6 +139,8 @@
       <IntegrationPage />
     {:else if device}
       <DevicePage />
+    {:else if bookExport}
+      <BookExportPage />
     {:else if names}
       <AliasesPage />
     {:else if !group}
@@ -166,6 +171,14 @@
             {#if offline.state === 'loading' || rec.job}
               <span class="set-progress" role="progressbar" aria-label="Сохраняется"><span style:width="{rec.job ? ((rec.job.bytes + rec.job.fileBytes) / (rec.job.total || 1)) * 100 : (offline.bytes / (offline.total || 1)) * 100}%"></span></span>
             {/if}
+          </span>
+          <Icon name="chevron" size={16} />
+        </button>
+        <button class="set-row" onclick={() => (page = EXPORT)}>
+          <span class="ui-tile set-row-icon"><Icon name="download" size={18} /></span>
+          <span class="set-row-text">
+            <b>{EXPORT}</b>
+            <span class="muted small ellipsis">Markdown книги · текст для озвучки</span>
           </span>
           <Icon name="chevron" size={16} />
         </button>

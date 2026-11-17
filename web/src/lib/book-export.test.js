@@ -23,12 +23,12 @@ const paper = {
 
 test('Markdown alternates Russian and English for each numbered paragraph', () => {
   const result = formatBookExport({ toc, papers: [paper] });
-  assert.ok(result.indexOf('Вступление части') < result.indexOf('Небесный Отец'));
-  assert.ok(result.indexOf('Part introduction') < result.indexOf('The Heavenly Father'));
-  assert.ok(result.indexOf('Русский абзац') < result.indexOf('English paragraph'));
-  assert.ok(result.indexOf('English paragraph') < result.indexOf('Следующий абзац'));
+  assert.match(result, /## Часть I\. Часть первая\n> The First Part/);
+  assert.match(result, /Вступление части\n\n> Part introduction\n\n### 5\. Небесный Отец\n> The Heavenly Father/);
+  assert.match(result, /\*\*5:1\.1\*\* Русский абзац\n> English paragraph/);
+  assert.ok(result.indexOf('> English paragraph') < result.indexOf('Следующий абзац'));
   assert.match(result, /\*\*5:1\.1\*\*/);
-  assert.match(result, /## Часть I\. Часть первая — The First Part/);
+  assert.doesNotMatch(result, /\*\*Русский\*\*|\*\*English\*\*/);
 });
 
 test('notes and paragraph comments follow the translations in code blocks', () => {
@@ -41,7 +41,7 @@ test('notes and paragraph comments follow the translations in code blocks', () =
   }];
   const comments = [{ ref: '5:1.1', authorName: 'Борис', body: 'Обсуждение абзаца' }];
   const result = formatBookExport({ toc, papers: [paper], notes, comments, includeNotes: true });
-  const english = result.indexOf('English paragraph');
+  const english = result.indexOf('\n> English paragraph');
   const firstCodeBlock = result.indexOf('```');
   assert.ok(english < firstCodeBlock);
   assert.match(result, /Заметка · Анна/);
